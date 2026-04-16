@@ -6,7 +6,7 @@ some editors for a writerdeck:
 - writerdeck.lua : lua version
 - writerdeck.py  : python version
 
-Based on https://github.com/lallero7/WriterdeckForCMD, itself based on https://www.reddit.com/user/shmimel/
+Based on https://github.com/lallero7/WriterdeckForCMD, itself based on https://github.com/shmimel/bee-write-back/
 
 Converted to lua with the help of LLM (Claude code)
 
