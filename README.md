@@ -5,6 +5,7 @@ some editors for a writerdeck:
 
 - writerdeck.lua : lua version
 - writerdeck.py  : python version
+- writerdeck.fs : gforth version (uses C bindings)
 
 Based on https://github.com/lallero7/WriterdeckForCMD, itself based on https://github.com/shmimel/bee-write-back/
 

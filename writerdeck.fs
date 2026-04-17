@@ -8,77 +8,61 @@
 
 c-library wr-ext
 s" ncurses" add-lib
+
 \c #include <ncurses.h>
 \c #include <locale.h>
-\c #include <string.h>
 \c #include <stdlib.h>
+\c #include <string.h>
 \c #include <sys/stat.h>
-\c #include <dirent.h>
+\c #include <sys/types.h>
 \c #include <time.h>
-\c #include <stdio.h>
-\c static int wr_rows(void) { return getmaxy(stdscr); }
-\c static int wr_cols(void) { return getmaxx(stdscr); }
-\c static void *wr_stdscr(void) { return (void *)stdscr; }
-\c static int wr_locale(void) { setlocale(LC_ALL, ""); return 0; }
-\c static int wr_print(int y, int x, const char *s, int n)
-\c   { move(y, x); addnstr(s, n); return 0; }
-\c static int wr_A_REVERSE(void)     { return (int)A_REVERSE; }
-\c static int wr_A_BOLD(void)        { return (int)A_BOLD; }
-\c static int wr_A_DIM(void)         { return (int)A_DIM; }
-\c static int wr_KEY_UP(void)        { return KEY_UP; }
-\c static int wr_KEY_DOWN(void)      { return KEY_DOWN; }
-\c static int wr_KEY_LEFT(void)      { return KEY_LEFT; }
-\c static int wr_KEY_RIGHT(void)     { return KEY_RIGHT; }
-\c static int wr_KEY_HOME(void)      { return KEY_HOME; }
-\c static int wr_KEY_END(void)       { return KEY_END; }
-\c static int wr_KEY_PPAGE(void)     { return KEY_PPAGE; }
-\c static int wr_KEY_NPAGE(void)     { return KEY_NPAGE; }
-\c static int wr_KEY_BACKSPACE(void) { return KEY_BACKSPACE; }
-\c static int wr_KEY_DC(void)        { return KEY_DC; }
-\c static int wr_KEY_ENTER(void)     { return KEY_ENTER; }
-\c static const char *wr_getenv(const char *n) {
-\c   const char *v = getenv(n); return v ? v : "."; }
-\c static int wr_mkdirp(const char *p) {
-\c   char cmd[640];
-\c   snprintf(cmd, sizeof cmd, "mkdir -p \"%s\"", p);
-\c   return system(cmd); }
-\c static int wr_fexists(const char *p) {
-\c   struct stat s; return stat(p, &s) == 0; }
-\c static long wr_fmtime(const char *p) {
-\c   struct stat s; return stat(p, &s) ? 0L : (long)s.st_mtime; }
-\c static long wr_fsize(const char *p) {
-\c   struct stat s; return stat(p, &s) ? 0L : (long)s.st_size; }
-\c static int wr_lsdir(const char *dir, char *buf, int bufsz) {
-\c   DIR *d;
-\c   struct dirent *e;
-\c   struct stat s;
-\c   char fp[640];
-\c   int n = 0, pos = 0, l;
-\c   d = opendir(dir);
-\c   if (!d) return 0;
-\c   while ((e = readdir(d)) != NULL) {
-\c     if (e->d_name[0] == '.') continue;
-\c     snprintf(fp, sizeof fp, "%s/%s", dir, e->d_name);
-\c     if (stat(fp, &s) != 0 || !S_ISREG(s.st_mode)) continue;
-\c     l = (int)strlen(e->d_name);
-\c     if (pos + l + 1 >= bufsz) break;
-\c     memcpy(buf + pos, e->d_name, l);
-\c     pos += l; buf[pos++] = '\0'; n++;
-\c   }
-\c   closedir(d); return n; }
-\c static long wr_time(void) { return (long)time(NULL); }
-\c static int wr_strftime(char *buf, long t) {
-\c   time_t tt = (time_t)t;
-\c   struct tm *tp = localtime(&tt);
-\c   strftime(buf, 20, "%b %d %H:%M", tp);
-\c   return 0; }
-\c static int wr_frename(const char *a, const char *b) { return rename(a, b); }
-\c static int wr_fremove(const char *a) { return remove(a); }
-\c #ifdef NCURSES_VERSION
-\c static int wr_escdelay(int d) { set_escdelay(d); return 0; }
-\c #else
-\c static int wr_escdelay(int d) { (void)d; return 0; }
-\c #endif
+\c #include <dirent.h>
+\c #include <errno.h>
+\c #include <unistd.h>
+\c
+\c static Cell wr_rows(void) { return LINES; }
+\c static Cell wr_cols(void) { return COLS; }
+\c static Cell wr_print(Cell row, Cell col, char *s, Cell len) {
+\c   char buf[len+1]; memcpy(buf,s,len); buf[len]=0;
+\c   return mvprintw(row,col,"%s",buf); }
+\c static Cell wr_escdelay(Cell ms) { ESCDELAY=ms; return 0; }
+\c static void *wr_stdscr(void) { return stdscr; }
+\c static Cell wr_locale(void) { setlocale(LC_ALL,""); return 0; }
+\c static Cell wr_A_REVERSE(void) { return A_REVERSE; }
+\c static Cell wr_A_BOLD(void)    { return A_BOLD; }
+\c static Cell wr_A_DIM(void)     { return A_DIM; }
+\c static Cell wr_KEY_UP(void)    { return KEY_UP; }
+\c static Cell wr_KEY_DOWN(void)  { return KEY_DOWN; }
+\c static Cell wr_KEY_LEFT(void)  { return KEY_LEFT; }
+\c static Cell wr_KEY_RIGHT(void) { return KEY_RIGHT; }
+\c static Cell wr_KEY_HOME(void)  { return KEY_HOME; }
+\c static Cell wr_KEY_END(void)   { return KEY_END; }
+\c static Cell wr_KEY_PPAGE(void) { return KEY_PPAGE; }
+\c static Cell wr_KEY_NPAGE(void) { return KEY_NPAGE; }
+\c static Cell wr_KEY_BACKSPACE(void) { return KEY_BACKSPACE; }
+\c static Cell wr_KEY_DC(void)    { return KEY_DC; }
+\c static Cell wr_KEY_ENTER(void) { return KEY_ENTER; }
+\c static char *wr_getenv(char *name) { return getenv(name); }
+\c static Cell wr_mkdirp(char *path) {
+\c   char tmp[4096]; strncpy(tmp,path,4095); tmp[4095]=0;
+\c   for(char *p=tmp+1;*p;p++) if(*p=='/'){*p=0;mkdir(tmp,0755);*p='/';}
+\c   return mkdir(tmp,0755)==0||errno==EEXIST?0:-1; }
+\c static Cell wr_fexists(char *p){struct stat st;return stat(p,&st)==0?-1:0;}
+\c static Cell wr_fmtime(char *p){struct stat st;return stat(p,&st)==0?(Cell)st.st_mtime:0;}
+\c static Cell wr_fsize(char *p){struct stat st;return stat(p,&st)==0?(Cell)st.st_size:0;}
+\c static Cell wr_lsdir(char *path,char *buf,Cell blen){
+\c   DIR *d=opendir(path);if(!d)return 0;
+\c   struct dirent *e;Cell n=0;
+\c   while((e=readdir(d))&&n<blen-1){if(e->d_name[0]=='.')continue;
+\c     Cell l=strlen(e->d_name);if(n+l+1>=blen)break;
+\c     memcpy(buf+n,e->d_name,l);buf[n+l]='\n';n+=l+1;}
+\c   buf[n]=0;closedir(d);return n;}
+\c static Cell wr_time(void){return (Cell)time(NULL);}
+\c static Cell wr_strftime(char *buf,Cell blen){
+\c   time_t t=time(NULL);struct tm *tm=localtime(&t);
+\c   return (Cell)strftime(buf,blen,"%H:%M",tm);}
+\c static Cell wr_frename(char *a,char *b){return rename(a,b);}
+\c static Cell wr_fremove(char *a){return remove(a);}
 
 c-function nc:initscr    initscr              -- a
 c-function nc:endwin     endwin               -- n
@@ -974,13 +958,13 @@ variable _emsg-t
     ch k-up = if
       vic 1 > if
         _tscx @ -1 = if  scxc _tscx !  then
-        vic 1- _tscx @ visual>logical  _cy ! _cx !
+        vic 1- _tscx @ visual>logical  _cx ! _cy !
       then  true to sticky
 
     else ch k-down = if
       vic n-vrows @ < if
         _tscx @ -1 = if  scxc _tscx !  then
-        vic 1+ _tscx @ visual>logical  _cy ! _cx !
+        vic 1+ _tscx @ visual>logical  _cx ! _cy !
       then  true to sticky
 
     else ch k-left = if
@@ -1005,13 +989,13 @@ variable _emsg-t
     else ch k-ppage = if
       vic th - 1 max { tvi }
       _tscx @ -1 = if  scxc _tscx !  then
-      tvi _tscx @ visual>logical  _cy ! _cx !
+      tvi _tscx @ visual>logical  _cx ! _cy !
       true to sticky
 
     else ch k-npage = if
       vic th + n-vrows @ min { tvi }
       _tscx @ -1 = if  scxc _tscx !  then
-      tvi _tscx @ visual>logical  _cy ! _cx !
+      tvi _tscx @ visual>logical  _cx ! _cy !
       true to sticky
 
     else ch k-bs = ch 127 = or ch 8 = or if
@@ -1123,7 +1107,7 @@ variable _emsg-t
   ensure-docs-dir
 
   argc @ 1 > if
-    1 arg s>c-tmp { fpath }
+    1 arg fs>c { fpath }
     fpath os:fexists 0= if
       fpath c>s w/o create-file throw close-file throw
     then
