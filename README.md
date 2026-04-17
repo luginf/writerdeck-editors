@@ -7,7 +7,7 @@ some editors for a writerdeck:
 - writerdeck.py  : python version
 - writerdeck.fs : gforth version (uses C bindings)
 - writerdeck-ansi.fs : gforth version (no C bindings, simpler version)
-- writerdeck-tk.tcl : tcl/tk version 
+- writerdeck-tk.tcl : tcl/tk version  
 
 Based on https://github.com/lallero7/WriterdeckForCMD, itself based on https://github.com/shmimel/bee-write-back/
 
