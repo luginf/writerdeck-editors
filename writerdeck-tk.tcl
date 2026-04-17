@@ -70,7 +70,7 @@ pack .br.mid     -fill both  -expand 1
 
 frame .br.bar -bg $bg_bar
 label .br.bar.help \
-    -text " ↵ ouvrir  n nouveau  d supprimer  r renommer  q quitter" \
+    -text " ↵ open  n new  d delete  r rename  q quit  h help" \
     -bg $bg_bar -fg $fg_bar -font $font_sm -anchor w -padx 4
 label .br.bar.cnt -textvariable ::br_status \
     -bg $bg_bar -fg $fg_bar -font $font_sm -anchor e -padx 8
@@ -209,7 +209,11 @@ scrollbar .ed.sb -orient vertical -command {.ed.t yview} \
 frame .ed.bar -bg $bg_bar
 label .ed.bar.lbl -textvariable ::ed_status \
     -bg $bg_bar -fg $fg_bar -font $font_sm -anchor w -padx 8
-pack .ed.bar.lbl -fill x
+label .ed.bar.help \
+    -text "^S save  ^Q close  ^K kill line  ^G goto  ^H help" \
+    -bg $bg_bar -fg $fg_bar -font $font_sm -anchor e -padx 8
+pack .ed.bar.lbl  -side left
+pack .ed.bar.help -side right
 pack .ed.bar -side bottom -fill x
 pack .ed.sb  -side right  -fill y
 pack .ed.t   -fill both   -expand 1
@@ -266,7 +270,13 @@ proc save-file {} {
 }
 
 proc close-editor {} {
-    if {$::dirty} save-file
+    if {$::dirty} {
+        set r [tk_messageBox \
+            -message "Save \"[file tail $::filename]\" before closing?" \
+            -type yesnocancel -icon question -default yes -parent .]
+        if {$r eq "cancel"} return
+        if {$r eq "yes"}    save-file
+    }
     set ::filename ""
     set ::dirty    0
     set ::msg      ""
