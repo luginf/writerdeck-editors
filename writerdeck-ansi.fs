@@ -4,6 +4,9 @@ decimal
 
 \ ─── compatibility ───────────────────────────────────────────────────────────
 : 2+  2 + ;  : 2-  2 - ;  : nip  swap drop ;
+: >=   < invert ;  : <=   > invert ;  : u>=  u< invert ;
+\ gforth-specific — no ANS equivalent:
+\   stdout system argc arg
 : (u.) ( u -- )  dup 10 u>= if dup 10 / recurse 10 mod then [char] 0 + emit ;
 
 \ ─── string helper ───────────────────────────────────────────────────────────
