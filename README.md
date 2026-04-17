@@ -6,8 +6,8 @@ some editors for a writerdeck:
 - writerdeck.lua : lua version
 - writerdeck.py  : python version
 - writerdeck.fs : gforth version (uses C bindings)
-- writerdeck-ansi.fs : gforth version (no C bindings, simpler version)
-- writerdeck-tk.tcl : tcl/tk version  
+- writerdeck-ansi.fs : gforth version (no C bindings, simpler version) 
+- writerdeck-tk.tcl : tcl/tk version  ("wish writerdeck-tk.tcl file.txt")
 
 Based on https://github.com/lallero7/WriterdeckForCMD, itself based on https://github.com/shmimel/bee-write-back/
 
@@ -21,6 +21,6 @@ Nano and micro are also great tools for simple writerdecks. Simple, yet powerful
 lua writerdeck.lua : writerdeck mode, let you create and restore files from ~/Documents/writerdeck/ folder.
 lua writerdeck.lua file.txt : editor mode, let you edit a file from any folder.
 
-Same usage for the python version.
+Same usage for the python and tcl versions.
 
 
