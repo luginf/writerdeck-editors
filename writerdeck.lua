@@ -14,8 +14,46 @@ local lfs    = require("lfs")
 local HOME        = os.getenv("HOME") or "."
 local DOCS_DIR    = HOME .. "/Documents/writerdeck"
 local CURSOR_FILE = DOCS_DIR .. "/.cursors.json"
+local INI_FILE    = DOCS_DIR .. "/writerdeck.ini"
 local FILE_EXT    = ".txt"
 local TAB_WIDTH   = 4
+
+-- ── INI Config ────────────────────────────────────────────────────────────────
+
+-- margin_cols / margin_rows are in characters/lines (terminal units),
+-- distinct from the Tk version's margin_width/margin_height which are pixels.
+local cfg = {
+  margin_cols     = 0,
+  margin_rows     = 0,
+  heading_marker  = "=",
+  toc_key         = "F11",
+}
+
+local function ini_load()
+  local f = io.open(INI_FILE, "r")
+  if not f then return end
+  for line in f:lines() do
+    line = line:match("^%s*(.-)%s*$")
+    if line ~= "" and not line:match("^[#;%[]") then
+      local key, val = line:match("^([%w_]+)%s*=%s*(.-)%s*$")
+      if key == "margin_cols"    then cfg.margin_cols    = tonumber(val) or cfg.margin_cols end
+      if key == "margin_rows"    then cfg.margin_rows    = tonumber(val) or cfg.margin_rows end
+      if key == "heading_marker" then cfg.heading_marker = val end
+      if key == "toc_key"        then cfg.toc_key        = val end
+    end
+  end
+  f:close()
+end
+
+-- Convert config key name (e.g. "F11", "F1") to curses key code.
+local function key_from_name(name)
+  local n = tonumber(name:match("^[Ff](%d+)$"))
+  if n then
+    if type(curses.KEY_F) == "function" then return curses.KEY_F(n) end
+    if curses.KEY_F0 then return curses.KEY_F0 + n end
+  end
+  return -999  -- unmatchable fallback
+end
 
 -- ── Minimal JSON ──────────────────────────────────────────────────────────────
 
@@ -373,6 +411,90 @@ local function confirm(stdscr, message)
   end
 end
 
+-- ── Headings & TOC ────────────────────────────────────────────────────────────
+
+local function parse_heading(line, marker)
+  -- configurable marker: = title =
+  local m = marker:gsub("[%(%)%.%%%+%-%*%?%[%^%$]", "%%%1")
+  local title = line:match("^%s*" .. m .. "%s*(.-)%s*" .. m .. "%s*$")
+  if title and title ~= "" then return title end
+  -- markdown: # title
+  title = line:match("^%s*#+%s+(.-)%s*$")
+  if title and title ~= "" then return title end
+  return nil
+end
+
+local function collect_headings(lines, marker)
+  local result = {}
+  for i, line in ipairs(lines) do
+    local title = parse_heading(line, marker)
+    if title then result[#result+1] = {ln = i, title = title} end
+  end
+  return result
+end
+
+local function show_toc(stdscr, lines)
+  local headings = collect_headings(lines, cfg.heading_marker)
+  if #headings == 0 then return nil end
+
+  curses.curs_set(0)
+  local sel      = 1
+  local scroll   = 0
+
+  while true do
+    stdscr:erase()
+    local h, w = stdscr:getmaxyx()
+    local usable = h - 3
+
+    -- keep sel in view
+    if sel - 1 < scroll            then scroll = sel - 1 end
+    if sel - 1 >= scroll + usable  then scroll = sel - 1 - usable + 1 end
+    scroll = math.max(0, scroll)
+
+    local header = " Table of contents"
+    stdscr:attron(curses.A_BOLD)
+    pcall(function()
+      stdscr:mvaddstr(0, 0, header .. string.rep(" ", math.max(0, w - #header)))
+    end)
+    stdscr:attroff(curses.A_BOLD)
+
+    for i = 0, usable - 1 do
+      local idx = scroll + i + 1
+      if idx > #headings then break end
+      local e    = headings[idx]
+      local line = string.format("  %4d   %s", e.ln, e.title)
+      line = line:sub(1, w)
+      local attr = (idx == sel) and curses.A_REVERSE or curses.A_NORMAL
+      stdscr:attron(attr)
+      pcall(function()
+        stdscr:mvaddstr(i + 1, 0, line .. string.rep(" ", math.max(0, w - #line)))
+      end)
+      stdscr:attroff(attr)
+    end
+
+    draw_help_bar(stdscr, " [enter] jump  [esc] cancel")
+    local plural = #headings ~= 1 and "s" or ""
+    draw_status(stdscr, string.format(" %d heading%s", #headings, plural))
+
+    stdscr:refresh()
+    local ch = stdscr:getch()
+
+    if ch == 27 then
+      curses.curs_set(1); return nil
+    elseif ch == curses.KEY_UP   or ch == string.byte('k') then
+      sel = math.max(1, sel - 1)
+    elseif ch == curses.KEY_DOWN or ch == string.byte('j') then
+      sel = math.min(#headings, sel + 1)
+    elseif ch == curses.KEY_HOME then
+      sel = 1
+    elseif ch == curses.KEY_END then
+      sel = #headings
+    elseif ch == curses.KEY_ENTER or ch == 10 or ch == 13 then
+      curses.curs_set(1); return headings[sel].ln
+    end
+  end
+end
+
 -- ── File Browser ──────────────────────────────────────────────────────────────
 
 -- Returns a filepath to edit, or nil to quit.
@@ -579,14 +701,17 @@ local function editor(stdscr, filepath)
   while true do
     stdscr:erase()
     local h, w = stdscr:getmaxyx()
-    local text_h = h - 2
+    local row_off = cfg.margin_rows
+    local col_off = cfg.margin_cols
+    local text_w  = math.max(1, w - 2 * col_off)
+    local text_h  = math.max(1, h - 2 - 2 * row_off)
 
     -- Clamp cursor
     cy = math.max(1, math.min(cy, #lines))
     cx = math.max(0, math.min(cx, #lines[cy]))
 
     -- Build wrap map
-    local vrows = build_wrap_map(lines, w)
+    local vrows = build_wrap_map(lines, text_w)
     local vi_cursor, scx_cursor = logical_to_visual(vrows, cy, cx)
 
     -- Scroll to keep cursor visible
@@ -604,11 +729,14 @@ local function editor(stdscr, filepath)
       if vi > #vrows then break end
       local li, scol, ecol = vrows[vi][1], vrows[vi][2], vrows[vi][3]
       local segment = lines[li]:sub(scol+1, ecol)
-      pcall(function() stdscr:mvaddstr(i, 0, segment) end)
+      local is_heading = parse_heading(lines[li], cfg.heading_marker) ~= nil
+      if is_heading then stdscr:attron(curses.A_BOLD) end
+      pcall(function() stdscr:mvaddstr(i + row_off, col_off, segment) end)
+      if is_heading then stdscr:attroff(curses.A_BOLD) end
     end
 
     -- Help bar
-    draw_help_bar(stdscr, " ^S save  ^W save+close  ^G goto line ^Q quit")
+    draw_help_bar(stdscr, " ^S save  ^W save+close  ^G goto  " .. cfg.toc_key .. " toc  ^Q quit")
 
     -- Status bar
     local fname   = basename(filepath)
@@ -624,8 +752,8 @@ local function editor(stdscr, filepath)
     draw_status(stdscr, left_s, right_s)
 
     -- Position cursor on screen
-    local screen_row = vi_cursor - 1 - scroll_y
-    pcall(function() stdscr:move(screen_row, scx_cursor) end)
+    local screen_row = vi_cursor - 1 - scroll_y + row_off
+    pcall(function() stdscr:move(screen_row, scx_cursor + col_off) end)
 
     stdscr:refresh()
     local ch, utf8str = read_char(stdscr)
@@ -724,6 +852,10 @@ local function editor(stdscr, filepath)
     elseif ch == 23 or ch == 17 or ch == 27 then  -- Ctrl+W / Ctrl+Q / Esc
       save_and_close(); return
 
+    elseif ch == key_from_name(cfg.toc_key) then
+      local target = show_toc(stdscr, lines)
+      if target then cy = target; cx = 0 end
+
     elseif ch == 7 then  -- Ctrl+G — goto line
       local num = prompt_input(stdscr, "go to line: ")
       curses.curs_set(1)
@@ -760,6 +892,7 @@ local function main(stdscr)
   curses.curs_set(0)
 
   ensure_docs_dir()
+  ini_load()
 
   -- If a file was passed as argument, open it directly
   if arg and arg[1] then

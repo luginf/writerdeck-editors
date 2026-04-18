@@ -2,14 +2,15 @@
 # writerdeck-tk.tcl — Tk text editor with file browser
 # Usage: wish writerdeck-tk.tcl [filename]
 
-set ::DOCS_DIR [file join $::env(HOME) Documents writerdeck]
-set ::INI_FILE [file join $::DOCS_DIR "writerdeck.ini"]
+set ::DOCS_DIR_DEFAULT [file join $::env(HOME) Documents writerdeck]
+set ::DOCS_DIR         $::DOCS_DIR_DEFAULT
+set ::INI_FILE         [file join $::DOCS_DIR_DEFAULT "writerdeck.ini"]
 set ::FILE_EXT ".txt"
 set ::filename ""
 set ::dirty    0
 set ::msg      ""
 
-file mkdir $::DOCS_DIR
+file mkdir $::DOCS_DIR_DEFAULT
 
 # ─── ini ──────────────────────────────────────────────────────────────────────
 set ::cfg_margin_width   60
@@ -21,6 +22,7 @@ set ::cfg_fg             "#e8e8e8"
 set ::cfg_bg_bar         "#2a2a2a"
 set ::cfg_fg_bar         "#aaaaaa"
 set ::cfg_bg_sel         "#3a5a8a"
+set ::cfg_docs_dir       ""
 set ::cfg_heading_marker "="
 set ::cfg_toc_key        "F11"
 set ::cfg_color_heading  "#c8a060"
@@ -43,6 +45,7 @@ proc ini-load {} {
                 color_fg       { set ::cfg_fg             [string trim $val] }
                 color_bg_bar   { set ::cfg_bg_bar         [string trim $val] }
                 color_fg_bar   { set ::cfg_fg_bar         [string trim $val] }
+                docs_dir         { set ::cfg_docs_dir       [string trim $val] }
                 color_bg_sel     { set ::cfg_bg_sel         [string trim $val] }
                 heading_marker   { set ::cfg_heading_marker [string trim $val] }
                 toc_key          { set ::cfg_toc_key        [string trim $val] }
@@ -58,6 +61,7 @@ proc ini-save {} {
     fconfigure $fh -encoding utf-8
     puts $fh "# WriterDeck — configuration"
     puts $fh "\[editor\]"
+    puts $fh "# docs_dir = ~/Documents/my-writing  (default: ~/Documents/writerdeck)"
     puts $fh "margin_width   = $::cfg_margin_width"
     puts $fh "margin_height  = $::cfg_margin_height"
     puts $fh "font_size      = $::cfg_font_size"
@@ -69,6 +73,10 @@ proc ini-save {} {
     puts $fh "color_bg_bar   = $::cfg_bg_bar"
     puts $fh "color_fg_bar   = $::cfg_fg_bar"
     puts $fh "color_bg_sel   = $::cfg_bg_sel"
+    puts $fh ""
+    puts $fh "# ── terminal version (writerdeck.lua) — values in columns/lines"
+    puts $fh "# margin_cols = 8"
+    puts $fh "# margin_rows = 2"
     puts $fh ""
     puts $fh "# headings / table of contents"
     puts $fh "heading_marker = $::cfg_heading_marker"
@@ -89,6 +97,12 @@ proc ini-save {} {
 
 ini-load
 
+if {$::cfg_docs_dir ne ""} {
+    set ::DOCS_DIR [file normalize $::cfg_docs_dir]
+    if {$::DOCS_DIR eq $::DOCS_DIR_DEFAULT} { set ::DOCS_DIR $::DOCS_DIR_DEFAULT }
+    file mkdir $::DOCS_DIR
+}
+
 # ─── config ───────────────────────────────────────────────────────────────────
 set font    [list Mono $::cfg_font_size]
 set font_sm {Mono 10}
@@ -98,15 +112,21 @@ set bg_bar  $::cfg_bg_bar
 set fg_bar  $::cfg_fg_bar
 set bg_sel  $::cfg_bg_sel
 set fg_dim  "#666666"
+# expose as globals for use in procs
+set ::bg     $bg
+set ::fg     $fg
+set ::bg_bar $bg_bar
+set ::fg_bar $fg_bar
+set ::bg_sel $bg_sel
 
 wm title . "WriterDeck"
 wm minsize . 500 400
 
 # ─── utils ────────────────────────────────────────────────────────────────────
-proc list-docs {} {
+proc list-docs {dir} {
     set pairs {}
-    foreach f [glob -nocomplain -directory $::DOCS_DIR -tails *] {
-        set full [file join $::DOCS_DIR $f]
+    foreach f [glob -nocomplain -directory $dir -tails *] {
+        set full [file join $dir $f]
         if {[file isfile $full] && ![string match .* $f]} {
             lappend pairs [list [file mtime $full] $f]
         }
@@ -117,6 +137,15 @@ proc list-docs {} {
     }
     return $result
 }
+
+proc br-dirs {} {
+    if {$::DOCS_DIR ne $::DOCS_DIR_DEFAULT} {
+        return [list $::DOCS_DIR_DEFAULT $::DOCS_DIR]
+    }
+    return [list $::DOCS_DIR_DEFAULT]
+}
+
+proc br-multi {} { return [expr {[llength [br-dirs]] > 1}] }
 
 proc fmt-meta {path} {
     set sz [file size $path]
@@ -157,37 +186,81 @@ pack .br.bar.help -side left
 pack .br.bar.cnt  -side right
 pack .br.bar -side bottom -fill x
 
-# browser state
-set ::br_files {}
+# browser state — each entry: {type dir name}  (type = header | file)
+set ::br_entries {}
 
 proc br-refresh {} {
-    set ::br_files [list-docs]
+    # remember selection by identity
+    set prev ""
     set sel [.br.mid.lst curselection]
-    set sel [expr {[llength $sel] ? [lindex $sel 0] : 0}]
-
-    .br.mid.lst delete 0 end
-    foreach f $::br_files {
-        set full [file join $::DOCS_DIR $f]
-        set meta [fmt-meta $full]
-        .br.mid.lst insert end [format "  %-36s %s" $f $meta]
+    if {[llength $sel]} {
+        lassign [lindex $::br_entries [lindex $sel 0]] type dir name
+        if {$type eq "file"} { set prev "$dir|$name" }
     }
 
-    set n [llength $::br_files]
-    set s [expr {$n != 1 ? "s" : ""}]
-    set ::br_status " $n fichier${s} "
+    set ::br_entries {}
+    set total 0
+    foreach dir [br-dirs] {
+        if {[br-multi]} { lappend ::br_entries [list header $dir ""] }
+        foreach f [list-docs $dir] {
+            lappend ::br_entries [list file $dir $f]
+            incr total
+        }
+    }
 
-    if {$n > 0} {
-        set sel [expr {min($sel, $n - 1)}]
-        .br.mid.lst selection set $sel
-        .br.mid.lst see $sel
+    .br.mid.lst delete 0 end
+    set new_sel -1
+    set first_file -1
+    for {set i 0} {$i < [llength $::br_entries]} {incr i} {
+        lassign [lindex $::br_entries $i] type dir name
+        if {$type eq "header"} {
+            set label [string map [list $::env(HOME) ~] $dir]
+            .br.mid.lst insert end " $label"
+            .br.mid.lst itemconfigure $i -foreground $::fg_bar \
+                -selectforeground $::fg_bar -selectbackground $::bg_bar
+        } else {
+            set meta [fmt-meta [file join $dir $name]]
+            .br.mid.lst insert end [format "  %-36s %s" $name $meta]
+            if {$first_file < 0} { set first_file $i }
+            if {"$dir|$name" eq $prev} { set new_sel $i }
+        }
+    }
+
+    set s [expr {$total != 1 ? "s" : ""}]
+    set ::br_status " $total file${s} "
+
+    if {$total > 0} {
+        if {$new_sel < 0} { set new_sel $first_file }
+        .br.mid.lst selection set $new_sel
+        .br.mid.lst see $new_sel
     }
 }
 
-proc br-open {} {
+# returns {type dir name} of selected entry, or {} if none/header
+proc br-selected {} {
     set sel [.br.mid.lst curselection]
-    if {![llength $sel]} return
-    set f [lindex $::br_files [lindex $sel 0]]
-    show-editor [file join $::DOCS_DIR $f]
+    if {![llength $sel]} { return {} }
+    set e [lindex $::br_entries [lindex $sel 0]]
+    if {[lindex $e 0] ne "file"} { return {} }
+    return $e
+}
+
+# returns the dir of the section containing the current selection
+proc br-active-dir {} {
+    set sel [.br.mid.lst curselection]
+    set i [expr {[llength $sel] ? [lindex $sel 0] : 0}]
+    while {$i >= 0} {
+        lassign [lindex $::br_entries $i] type dir
+        if {$type eq "header"} { return $dir }
+        incr i -1
+    }
+    return $::DOCS_DIR_DEFAULT
+}
+
+proc br-open {} {
+    set e [br-selected]
+    if {![llength $e]} return
+    show-editor [file join [lindex $e 1] [lindex $e 2]]
 }
 
 # ─── browser dialogs ──────────────────────────────────────────────────────────
@@ -221,13 +294,14 @@ proc input-dialog {title prompt} {
 }
 
 proc br-new {} {
-    set name [input-dialog "Nouveau fichier" "Nom du fichier :"]
+    set dir  [br-active-dir]
+    set name [input-dialog "New file" "File name:"]
     set name [string trim $name]
     if {$name eq ""} return
     if {[file extension $name] eq ""} { append name $::FILE_EXT }
-    set full [file join $::DOCS_DIR $name]
+    set full [file join $dir $name]
     if {[file exists $full]} {
-        tk_messageBox -message "« $name » existe déjà." -icon warning -parent .
+        tk_messageBox -message "\"$name\" already exists." -icon warning -parent .
         return
     }
     close [open $full w]
@@ -235,31 +309,31 @@ proc br-new {} {
 }
 
 proc br-delete {} {
-    set sel [.br.mid.lst curselection]
-    if {![llength $sel]} return
-    set f [lindex $::br_files [lindex $sel 0]]
-    set r [tk_messageBox -message "Supprimer « $f » ?" \
+    set e [br-selected]
+    if {![llength $e]} return
+    lassign $e _ dir name
+    set r [tk_messageBox -message "Delete \"$name\"?" \
            -type yesno -icon question -parent .]
     if {$r eq "yes"} {
-        file delete [file join $::DOCS_DIR $f]
+        file delete [file join $dir $name]
         br-refresh
     }
 }
 
 proc br-rename {} {
-    set sel [.br.mid.lst curselection]
-    if {![llength $sel]} return
-    set f [lindex $::br_files [lindex $sel 0]]
-    set new [input-dialog "Renommer" "Renommer « $f » en :"]
+    set e [br-selected]
+    if {![llength $e]} return
+    lassign $e _ dir name
+    set new [input-dialog "Rename" "Rename \"$name\" to:"]
     set new [string trim $new]
     if {$new eq ""} return
     if {[file extension $new] eq ""} { append new $::FILE_EXT }
-    set new_path [file join $::DOCS_DIR $new]
+    set new_path [file join $dir $new]
     if {[file exists $new_path]} {
-        tk_messageBox -message "« $new » existe déjà." -icon warning -parent .
+        tk_messageBox -message "\"$new\" already exists." -icon warning -parent .
         return
     }
-    file rename [file join $::DOCS_DIR $f] $new_path
+    file rename [file join $dir $name] $new_path
     br-refresh
 }
 
@@ -269,6 +343,22 @@ bind .br.mid.lst <n>           { br-new }
 bind .br.mid.lst <d>           { br-delete }
 bind .br.mid.lst <r>           { br-rename }
 bind .br.mid.lst <q>           { exit }
+
+bind .br.mid.lst <Up> {
+    set i [lindex [concat [.br.mid.lst curselection] 1] 0]
+    incr i -1
+    while {$i >= 0 && [lindex [lindex $::br_entries $i] 0] eq "header"} { incr i -1 }
+    if {$i >= 0} { .br.mid.lst selection clear 0 end; .br.mid.lst selection set $i; .br.mid.lst see $i }
+    break
+}
+bind .br.mid.lst <Down> {
+    set last [expr {[.br.mid.lst size] - 1}]
+    set i [lindex [concat [.br.mid.lst curselection] -1] 0]
+    incr i
+    while {$i <= $last && [lindex [lindex $::br_entries $i] 0] eq "header"} { incr i }
+    if {$i <= $last} { .br.mid.lst selection clear 0 end; .br.mid.lst selection set $i; .br.mid.lst see $i }
+    break
+}
 
 # ─── editor frame ─────────────────────────────────────────────────────────────
 frame .ed -bg $bg
@@ -353,6 +443,23 @@ proc save-file {} {
     set-msg "saved"
 }
 
+proc save-as {} {
+    set dir [expr {$::filename ne "" ? [file dirname $::filename] : $::DOCS_DIR_DEFAULT}]
+    set name [input-dialog "Save as" "Save as:"]
+    set name [string trim $name]
+    if {$name eq ""} return
+    if {[file extension $name] eq ""} { append name $::FILE_EXT }
+    set new_path [file join $dir $name]
+    if {[file exists $new_path] && $new_path ne $::filename} {
+        set r [tk_messageBox -message "\"$name\" already exists. Overwrite?" \
+               -type yesno -icon question -parent .]
+        if {$r ne "yes"} return
+    }
+    set ::filename $new_path
+    wm title . "WriterDeck — [file tail $new_path]"
+    save-file
+}
+
 proc close-editor {} {
     if {$::dirty} {
         set r [tk_messageBox \
@@ -371,6 +478,7 @@ proc close-editor {} {
 
 # ─── editor bindings ──────────────────────────────────────────────────────────
 bind .ed.t <Control-s> { save-file;    break }
+bind .ed.t <Control-S> { save-as;     break }
 bind .ed.t <Control-q> { close-editor; break }
 bind .ed.t <Control-w> { close-editor; break }
 bind .ed.t <Escape>    { close-editor; break }
@@ -505,6 +613,7 @@ proc help-dialog {} {
     set sections [list \
         "EDITOR" [list \
             "Ctrl+S"       "Save" \
+            "Ctrl+Shift+S" "Save as" \
             "Ctrl+Q / ESC" "Save and return to browser" \
             "Ctrl+K"       "Delete to end of line" \
             "Ctrl+G"       "Go to line" \

@@ -13,7 +13,9 @@ Based on https://github.com/lallero7/WriterdeckForCMD, itself based on https://g
 
 Converted to lua and others with the help of LLM (Claude code)
 
-Nano and micro are also great tools for simple writerdecks. Simple, yet powerful. Those simpler editors are some kind of proof-of-concept for alternatives or other usages. 
+Nano and micro are also great tools for simple writerdecks. Simple, yet powerful. 
+
+Those simpler editors are some kind of proof-of-concept for alternatives or other usages. 
 
 
 ## Usage:
@@ -24,3 +26,5 @@ lua writerdeck.lua file.txt : editor mode, let you edit a file from any folder.
 Same usage for the python and tcl versions.
 
 
+Writerdeck Tcl/Tk editor with configurable margins, font size, colors, fullscreen toggle, and chapter navigation via a custom marker or Markdown headings. All options live in                           
+  ~/Documents/writerdeck/writerdeck.ini.
