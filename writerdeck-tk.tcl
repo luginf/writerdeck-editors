@@ -3,6 +3,7 @@
 # Usage: wish writerdeck-tk.tcl [filename]
 
 set ::DOCS_DIR [file join $::env(HOME) Documents writerdeck]
+set ::INI_FILE [file join $::DOCS_DIR "writerdeck.ini"]
 set ::FILE_EXT ".txt"
 set ::filename ""
 set ::dirty    0
@@ -10,14 +11,71 @@ set ::msg      ""
 
 file mkdir $::DOCS_DIR
 
+# ─── ini ──────────────────────────────────────────────────────────────────────
+set ::cfg_margin_width   60
+set ::cfg_margin_height  40
+set ::cfg_font_size      13
+set ::cfg_fullscreen_key Alt-Return
+set ::cfg_bg             "#1a1a1a"
+set ::cfg_fg             "#e8e8e8"
+set ::cfg_bg_bar         "#2a2a2a"
+set ::cfg_fg_bar         "#aaaaaa"
+set ::cfg_bg_sel         "#3a5a8a"
+set ::fullscreen 0
+
+proc ini-load {} {
+    if {![file exists $::INI_FILE]} { ini-save; return }
+    set fh [open $::INI_FILE r]
+    fconfigure $fh -encoding utf-8
+    while {[gets $fh line] >= 0} {
+        set line [string trim $line]
+        if {$line eq "" || [string match "#*" $line] || [string match {\[*} $line]} continue
+        if {[regexp {^(\w+)\s*=\s*(.+)$} $line -> key val]} {
+            switch [string trim $key] {
+                margin_width   { set ::cfg_margin_width   [string trim $val] }
+                margin_height  { set ::cfg_margin_height  [string trim $val] }
+                font_size      { set ::cfg_font_size      [string trim $val] }
+                fullscreen_key { set ::cfg_fullscreen_key [string trim $val] }
+                color_bg       { set ::cfg_bg             [string trim $val] }
+                color_fg       { set ::cfg_fg             [string trim $val] }
+                color_bg_bar   { set ::cfg_bg_bar         [string trim $val] }
+                color_fg_bar   { set ::cfg_fg_bar         [string trim $val] }
+                color_bg_sel   { set ::cfg_bg_sel         [string trim $val] }
+            }
+        }
+    }
+    close $fh
+}
+
+proc ini-save {} {
+    set fh [open $::INI_FILE w]
+    fconfigure $fh -encoding utf-8
+    puts $fh "# WriterDeck — configuration"
+    puts $fh "\[editor\]"
+    puts $fh "margin_width   = $::cfg_margin_width"
+    puts $fh "margin_height  = $::cfg_margin_height"
+    puts $fh "font_size      = $::cfg_font_size"
+    puts $fh "fullscreen_key = $::cfg_fullscreen_key"
+    puts $fh ""
+    puts $fh "# couleurs (format #rrggbb)"
+    puts $fh "color_bg       = $::cfg_bg"
+    puts $fh "color_fg       = $::cfg_fg"
+    puts $fh "color_bg_bar   = $::cfg_bg_bar"
+    puts $fh "color_fg_bar   = $::cfg_fg_bar"
+    puts $fh "color_bg_sel   = $::cfg_bg_sel"
+    close $fh
+}
+
+ini-load
+
 # ─── config ───────────────────────────────────────────────────────────────────
-set font    {Mono 13}
+set font    [list Mono $::cfg_font_size]
 set font_sm {Mono 10}
-set bg      "#1a1a1a"
-set fg      "#e8e8e8"
-set bg_bar  "#2a2a2a"
-set fg_bar  "#aaaaaa"
-set bg_sel  "#3a5a8a"
+set bg      $::cfg_bg
+set fg      $::cfg_fg
+set bg_bar  $::cfg_bg_bar
+set fg_bar  $::cfg_fg_bar
+set bg_sel  $::cfg_bg_sel
 set fg_dim  "#666666"
 
 wm title . "WriterDeck"
@@ -199,7 +257,7 @@ text .ed.t \
     -bg $bg -fg $fg \
     -insertbackground $fg \
     -selectbackground $bg_sel \
-    -borderwidth 0 -padx 12 -pady 8 \
+    -borderwidth 0 -padx $::cfg_margin_width -pady $::cfg_margin_height \
     -undo 1
 
 scrollbar .ed.sb -orient vertical -command {.ed.t yview} \
@@ -305,6 +363,14 @@ bind .ed.t <Control-g> { goto-dialog; break }
 bind .ed.t <Control-h> { help-dialog; break }
 bind .br.mid.lst <h>   { help-dialog }
 
+proc toggle-fullscreen {} {
+    set ::fullscreen [expr {!$::fullscreen}]
+    wm attributes . -fullscreen $::fullscreen
+}
+
+bind .ed.t          <$::cfg_fullscreen_key> { toggle-fullscreen; break }
+bind .br.mid.lst    <$::cfg_fullscreen_key> { toggle-fullscreen }
+
 proc help-dialog {} {
     set w .help
     catch {destroy $w}
@@ -314,25 +380,28 @@ proc help-dialog {} {
     wm transient $w .
     grab $w
 
-    set sections {
-        "EDITOR" {
-            "Ctrl+S"       "Save"
-            "Ctrl+Q / ESC" "Save and return to browser"
-            "Ctrl+K"       "Delete to end of line"
-            "Ctrl+G"       "Go to line"
-            "Ctrl+Z"       "Undo"
-            "Tab"          "Insert 4 spaces"
-            "Ctrl+H"       "This help"
-        }
-        "BROWSER" {
-            "↵ / double-click"  "Open selected file"
-            "n"                 "New file"
-            "d"                 "Delete file"
-            "r"                 "Rename file"
-            "h"                 "This help"
-            "q"                 "Quit"
-        }
-    }
+    set fs_key $::cfg_fullscreen_key
+    set sections [list \
+        "EDITOR" [list \
+            "Ctrl+S"       "Save" \
+            "Ctrl+Q / ESC" "Save and return to browser" \
+            "Ctrl+K"       "Delete to end of line" \
+            "Ctrl+G"       "Go to line" \
+            "Ctrl+Z"       "Undo" \
+            "Tab"          "Insert 4 spaces" \
+            $fs_key        "Toggle fullscreen" \
+            "Ctrl+H"       "This help" \
+        ] \
+        "BROWSER" [list \
+            "↵ / double-click"  "Open selected file" \
+            "n"                 "New file" \
+            "d"                 "Delete file" \
+            "r"                 "Rename file" \
+            $fs_key             "Toggle fullscreen" \
+            "h"                 "This help" \
+            "q"                 "Quit" \
+        ] \
+    ]
 
     text $w.t \
         -font {Mono 11} -state normal \
