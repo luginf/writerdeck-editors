@@ -405,13 +405,27 @@ frame .ed.bar -bg $bg_bar
 label .ed.bar.lbl -textvariable ::ed_status \
     -bg $bg_bar -fg $fg_bar -font $font_sm -anchor w -padx 8
 label .ed.bar.help \
-    -text "^S save  ^Q close  ^K kill line  ^G goto  ^H help" \
+    -text "^S save  ^Q close  ^K kill  ^F find  ^G goto  ^H help" \
     -bg $bg_bar -fg $fg_bar -font $font_sm -anchor e -padx 8
 pack .ed.bar.lbl  -side left
 pack .ed.bar.help -side right
 pack .ed.bar -side bottom -fill x
 pack .ed.sb  -side right  -fill y
 pack .ed.t   -fill both   -expand 1
+
+# ─── search bar (hidden until Ctrl+F) ────────────────────────────────────────
+set ::search_term  ""
+set ::search_count ""
+
+frame .ed.sf -bg $bg_bar
+label .ed.sf.lbl -text " Find: " -bg $bg_bar -fg $fg_bar -font $font_sm
+entry .ed.sf.e   -bg $bg -fg $fg -font $font_sm -insertbackground $fg \
+    -relief flat -bd 1 -width 32 -highlightthickness 0
+label .ed.sf.cnt -textvariable ::search_count \
+    -bg $bg_bar -fg $fg_bar -font $font_sm -width 14 -anchor w
+pack .ed.sf.lbl -side left
+pack .ed.sf.e   -side left -padx 4
+pack .ed.sf.cnt -side left
 
 # ─── editor status ────────────────────────────────────────────────────────────
 proc ed-status {} {
@@ -483,6 +497,58 @@ proc save-as {} {
     save-file
 }
 
+proc search-open {} {
+    if {![winfo ismapped .ed.sf]} {
+        pack .ed.sf -before .ed.bar -side bottom -fill x
+    }
+    .ed.sf.e delete 0 end
+    if {$::search_term ne ""} { .ed.sf.e insert 0 $::search_term }
+    .ed.sf.e selection range 0 end
+    focus .ed.sf.e
+}
+
+proc search-close {} {
+    .ed.t tag remove found 1.0 end
+    catch { pack forget .ed.sf }
+    focus .ed.t
+    set ::search_count ""
+}
+
+proc search-update {} {
+    set term [.ed.sf.e get]
+    .ed.t tag remove found 1.0 end
+    set ::search_count ""
+    if {$term eq ""} return
+    set ::search_term $term
+    set count 0; set pos 1.0
+    while 1 {
+        set pos [.ed.t search -nocase -forwards -count len -- $term $pos end]
+        if {$pos eq ""} break
+        .ed.t tag add found $pos "$pos + $len chars"
+        incr count; set pos "$pos + $len chars"
+    }
+    .ed.t tag configure found -background "#5a3a00" -foreground "#ffdd88"
+    set plural [expr {$count != 1 ? "s" : ""}]
+    set ::search_count " $count match${plural}"
+    set pos [.ed.t search -nocase -forwards -- $term insert end]
+    if {$pos eq ""} { set pos [.ed.t search -nocase -forwards -- $term 1.0 end] }
+    if {$pos ne ""} { .ed.t mark set insert $pos; .ed.t see insert }
+}
+
+proc search-next {} {
+    if {$::search_term eq ""} return
+    set pos [.ed.t search -nocase -forwards -- $::search_term "insert + 1 chars" end]
+    if {$pos eq ""} { set pos [.ed.t search -nocase -forwards -- $::search_term 1.0 end] }
+    if {$pos ne ""} { .ed.t mark set insert $pos; .ed.t see insert }
+}
+
+proc search-prev {} {
+    if {$::search_term eq ""} return
+    set pos [.ed.t search -nocase -backwards -- $::search_term insert 1.0]
+    if {$pos eq ""} { set pos [.ed.t search -nocase -backwards -- $::search_term end 1.0] }
+    if {$pos ne ""} { .ed.t mark set insert $pos; .ed.t see insert }
+}
+
 proc close-editor {} {
     if {$::dirty} {
         set r [tk_messageBox \
@@ -496,6 +562,7 @@ proc close-editor {} {
     set ::msg      ""
     wm title . "Forrdeck"
     .ed.t delete 1.0 end
+    search-close
     show-browser
 }
 
@@ -515,9 +582,16 @@ bind .ed.t <Control-k> {
     break
 }
 
-bind .ed.t <Tab>       { .ed.t insert insert "    "; break }
-bind .ed.t <Control-g> { goto-dialog; break }
-bind .ed.t <Control-h> { help-dialog; break }
+bind .ed.t <Tab>          { .ed.t insert insert "    "; break }
+bind .ed.t <Control-g>   { goto-dialog; break }
+bind .ed.t <Control-h>   { help-dialog; break }
+bind .ed.t <Control-f>   { search-open; break }
+
+bind .ed.sf.e <KeyRelease>   { search-update }
+bind .ed.sf.e <Return>       { search-next }
+bind .ed.sf.e <Shift-Return> { search-prev }
+bind .ed.sf.e <Escape>       { search-close }
+bind .ed.sf.e <Control-f>    { search-next; break }
 bind .br.mid.lst <h>   { help-dialog }
 
 proc toggle-fullscreen {} {
@@ -627,6 +701,7 @@ proc help-dialog {} {
             "Ctrl+Shift+S" "Save as" \
             "Ctrl+Q / ESC" "Save and return to browser" \
             "Ctrl+K"       "Delete to end of line" \
+            "Ctrl+F"       "Find (Enter: next  Shift+Enter: prev)" \
             "Ctrl+G"       "Go to line" \
             "Ctrl+Z"       "Undo" \
             "Tab"          "Insert 4 spaces" \
@@ -1073,6 +1148,7 @@ proc tui-editor {filepath} {
 
     set cy 1; set cx 0; set scroll_y 0
     set dirty 0; set message ""; set msg_time 0; set sticky -1
+    if {![info exists ::tui_search]} { set ::tui_search "" }
 
     while 1 {
         lassign [tui-size] rows cols
@@ -1104,7 +1180,7 @@ proc tui-editor {filepath} {
         }
 
         set wc 0; foreach l $lines { incr wc [llength [split $l]] }
-        tui-help [expr {$rows-2}] "^S save  ^W close  ^G goto  $::cfg_toc_key toc  ^Q quit" $cols
+        tui-help [expr {$rows-2}] "^S save  ^W close  ^F find  ^G goto  $::cfg_toc_key toc  ^Q quit" $cols
         set left " [file tail $filepath][expr {$dirty ? { [+]} : {}}]"
         set right [format "ln %d/%d  col %d  %dw " $cy [llength $lines] [expr {$cx+1}] $wc]
         if {$message ne "" && [clock seconds]-$msg_time < 2} { set left " $message" }
@@ -1189,6 +1265,22 @@ proc tui-editor {filepath} {
                         }
                     }
                     return
+                } elseif {$key eq "\x06"} {
+                    lassign [tui-size] rows cols
+                    set term [string trim [tui-prompt "find: " $rows $cols]]
+                    if {$term ne ""} { set ::tui_search $term }
+                    if {$::tui_search ne ""} {
+                        set found 0; set n [llength $lines]
+                        for {set i 0} {$i < $n} {incr i} {
+                            set li [expr {($cy - 1 + $i) % $n + 1}]
+                            set l  [lindex $lines [expr {$li - 1}]]
+                            set from [expr {$li == $cy && $i == 0 ? $cx + 1 : 0}]
+                            set idx [string first [string tolower $::tui_search] \
+                                         [string tolower $l] $from]
+                            if {$idx >= 0} { set cy $li; set cx $idx; set found 1; break }
+                        }
+                        if {!$found} { set message "not found: $::tui_search"; set msg_time [clock seconds] }
+                    }
                 } elseif {$key eq "\x07"} {
                     lassign [tui-size] rows cols
                     set num [tui-prompt "go to line: " $rows $cols]

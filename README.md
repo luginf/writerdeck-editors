@@ -60,6 +60,14 @@ forrdeck Tcl/Tk editor with configurable margins, font size, colors, fullscreen 
   - Help dialog (Ctrl+H or h in browser)                                                                       
   - Built-in Solarized Light theme (commented out in INI, ready to enable)                                     
   - Optional second docs folder (docs_dir INI key), shown as two labeled sections in the browser               
+  - Ctrl+F : opens an inline search bar just above the status bar                                              
+  - Search is live (matches are highlighted in real time as you type)
+  - Enter : next match (wraps around)                                                                          
+  - Shift+Enter : previous match     
+  - Ctrl+F from the search bar : next match                                                                    
+  - Esc : closes the bar and clears highlights              
+  - Match counter displayed (3 matches)                                                                        
+                                                            
                                                                                                                
   TUI mode (--no-gui flag, pure terminal via ANSI escapes):                                                    
   - Identical feature set to the GUI editor, rendered in the terminal                                          
@@ -68,7 +76,12 @@ forrdeck Tcl/Tk editor with configurable margins, font size, colors, fullscreen 
   - Sticky-column cursor on vertical movement                                                                  
   - Inline prompts (new file, rename, go to line, confirm delete/save)                                         
   - Bold rendering for heading lines                                                                           
-                                                                                                               
+   - Ctrl+F : opens a find: prompt at the bottom of the screen
+  - Type a term, jumps to the first occurrence after the cursor (wraps around)                                 
+  - Press Ctrl+F again without typing a new term (just Enter) to find the next occurrence
+  - Displays not found: … if no match  
+  
+  
   ---                                                       
   forrdeck.lua — Lua TUI (lcurses)                                                                             
                                                                                                                
