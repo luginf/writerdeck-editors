@@ -1,6 +1,13 @@
-#!/usr/bin/env wish
-# writerdeck-tk.tcl — Tk text editor with file browser
-# Usage: wish writerdeck-tk.tcl [filename]
+#!/usr/bin/env tclsh
+# writerdeck-tk.tcl — Tk/TUI text editor with file browser
+# Usage: tclsh writerdeck-tk.tcl [--no-gui] [filename]
+
+set ::no_gui [expr {[lsearch $::argv "--no-gui"] >= 0}]
+if {$::no_gui} {
+    set ::argv [lsearch -all -inline -not $::argv "--no-gui"]
+    set ::argc [llength $::argv]
+}
+if {!$::no_gui} { package require Tk }
 
 set ::DOCS_DIR_DEFAULT [file join $::env(HOME) Documents writerdeck]
 set ::DOCS_DIR         $::DOCS_DIR_DEFAULT
@@ -23,6 +30,8 @@ set ::cfg_bg_bar         "#2a2a2a"
 set ::cfg_fg_bar         "#aaaaaa"
 set ::cfg_bg_sel         "#3a5a8a"
 set ::cfg_docs_dir       ""
+set ::cfg_margin_cols    0
+set ::cfg_margin_rows    0
 set ::cfg_heading_marker "="
 set ::cfg_toc_key        "F11"
 set ::cfg_color_heading  "#c8a060"
@@ -46,6 +55,8 @@ proc ini-load {} {
                 color_bg_bar   { set ::cfg_bg_bar         [string trim $val] }
                 color_fg_bar   { set ::cfg_fg_bar         [string trim $val] }
                 docs_dir         { set ::cfg_docs_dir       [string trim $val] }
+                margin_cols      { set ::cfg_margin_cols    [string trim $val] }
+                margin_rows      { set ::cfg_margin_rows    [string trim $val] }
                 color_bg_sel     { set ::cfg_bg_sel         [string trim $val] }
                 heading_marker   { set ::cfg_heading_marker [string trim $val] }
                 toc_key          { set ::cfg_toc_key        [string trim $val] }
@@ -119,9 +130,6 @@ set ::bg_bar $bg_bar
 set ::fg_bar $fg_bar
 set ::bg_sel $bg_sel
 
-wm title . "WriterDeck"
-wm minsize . 500 400
-
 # ─── utils ────────────────────────────────────────────────────────────────────
 proc list-docs {dir} {
     set pairs {}
@@ -147,12 +155,27 @@ proc br-dirs {} {
 
 proc br-multi {} { return [expr {[llength [br-dirs]] > 1}] }
 
+proc heading-re {} {
+    set m [regsub -all {[\\^$.|?*+()\[\]{}]} $::cfg_heading_marker {\\&}]
+    return "^\\s*${m}\\s*(.+?)\\s*${m}\\s*$"
+}
+
+proc parse-heading {line} {
+    if {[regexp [heading-re] $line -> title]}              { return [string trim $title] }
+    if {[regexp {^\s*(#{1,6})\s+(.+)$} $line -> _ title]} { return [string trim $title] }
+    return ""
+}
+
 proc fmt-meta {path} {
     set sz [file size $path]
     set sz_str [expr {$sz < 1024 ? "${sz}B" : "[expr {$sz/1024}]K"}]
     set mt [clock format [file mtime $path] -format "%d %b %H:%M"]
     return [format "%6s  %s" $sz_str $mt]
 }
+
+if {!$::no_gui} {
+wm title . "WriterDeck"
+wm minsize . 500 400
 
 # ─── browser frame ────────────────────────────────────────────────────────────
 frame .br -bg $bg
@@ -506,18 +529,6 @@ bind .ed.t          <$::cfg_fullscreen_key> { toggle-fullscreen; break }
 bind .br.mid.lst    <$::cfg_fullscreen_key> { toggle-fullscreen }
 
 # ─── headings & TOC ───────────────────────────────────────────────────────────
-proc heading-re {} {
-    set m [regsub -all {[\\^$.|?*+()\[\]{}]} $::cfg_heading_marker {\\&}]
-    return "^\\s*${m}\\s*(.+?)\\s*${m}\\s*$"
-}
-
-proc parse-heading {line} {
-    # returns title string if line is a heading, else ""
-    if {[regexp [heading-re] $line -> title]}          { return [string trim $title] }
-    if {[regexp {^\s*(#{1,6})\s+(.+)$} $line -> _ title]} { return [string trim $title] }
-    return ""
-}
-
 proc highlight-headings {} {
     .ed.t tag remove heading 1.0 end
     set last [lindex [split [.ed.t index end] .] 0]
@@ -713,8 +724,515 @@ proc show-editor {path} {
     focus .ed.t
 }
 
+} ;# end if {!$::no_gui}
+
+# ─── TUI mode ─────────────────────────────────────────────────────────────────
+
+set ::tui_stty ""
+
+proc tui-init {} {
+    catch { set ::tui_stty [exec stty -g <@stdin] }
+    catch { exec stty raw -echo <@stdin }
+    fconfigure stdin  -blocking 1 -translation binary -buffering none
+    fconfigure stdout -encoding utf-8 -buffering none
+    puts -nonewline "\033\[?25l\033\[2J"
+    flush stdout
+}
+
+proc tui-cleanup {} {
+    puts -nonewline "\033\[?25h\033\[2J\033\[H"
+    flush stdout
+    if {$::tui_stty ne ""} { catch {exec stty $::tui_stty <@stdin}
+    } else                 { catch {exec stty sane <@stdin} }
+}
+
+proc tui-size {} {
+    if {[catch {scan [exec stty size <@stdin] "%d %d" r c} ]} { return {24 80} }
+    return [list $r $c]
+}
+
+proc tui-move {row col} { puts -nonewline "\033\[[expr {$row+1}];[expr {$col+1}]H" }
+
+proc tui-attr {a} {
+    switch $a {
+        bold    { puts -nonewline "\033\[1m" }
+        reverse { puts -nonewline "\033\[7m" }
+        dim     { puts -nonewline "\033\[2m" }
+        off     { puts -nonewline "\033\[0m" }
+    }
+}
+
+proc tui-fill {row text cols} {
+    tui-move $row 0
+    set text [string range $text 0 [expr {$cols-1}]]
+    puts -nonewline "${text}[string repeat { } [expr {$cols - [string length $text]}]]"
+}
+
+proc tui-bar {row left right cols} {
+    tui-attr reverse
+    set gap [expr {max(0, $cols - [string length $left] - [string length $right])}]
+    tui-fill $row "[string range $left 0 [expr {$cols-1}]][string repeat { } $gap]$right" $cols
+    tui-attr off
+}
+
+proc tui-help {row text cols} {
+    tui-attr dim; tui-fill $row " $text" $cols; tui-attr off
+}
+
+proc tui-getch {} {
+    set raw [read stdin 1]
+    scan $raw %c b
+    if {$b == 27} {
+        fconfigure stdin -blocking 0
+        set seq [read stdin 20]
+        fconfigure stdin -blocking 1
+        switch -exact -- "\x1b$seq" {
+            "\x1b\[A"   { return UP    }  "\x1b\[B"   { return DOWN  }
+            "\x1b\[C"   { return RIGHT }  "\x1b\[D"   { return LEFT  }
+            "\x1b\[H"   { return HOME  }  "\x1b\[F"   { return END   }
+            "\x1b\[1~"  { return HOME  }  "\x1b\[4~"  { return END   }
+            "\x1b\[3~"  { return DC    }  "\x1b\[5~"  { return PPAGE }
+            "\x1b\[6~"  { return NPAGE }  "\x1b\[23~" { return F11   }
+            "\x1b\[24~" { return F12   }
+        }
+        return ESC
+    }
+    # UTF-8 multi-byte
+    if {$b >= 0xC0 && $b < 0xE0} {
+        return [encoding convertfrom utf-8 "${raw}[read stdin 1]"]
+    } elseif {$b >= 0xE0 && $b < 0xF0} {
+        return [encoding convertfrom utf-8 "${raw}[read stdin 2]"]
+    } elseif {$b >= 0xF0} {
+        return [encoding convertfrom utf-8 "${raw}[read stdin 3]"]
+    }
+    if {$b == 127 || $b == 8}  { return BACKSPACE }
+    if {$b == 13  || $b == 10} { return ENTER }
+    if {$b == 9}               { return TAB }
+    return [format %c $b]
+}
+
+# ── Word wrap ─────────────────────────────────────────────────────────────────
+
+proc tui-wrap-line {line width} {
+    set len [string length $line]
+    if {$width <= 0} { return [list [list 0 $len]] }
+    if {$len == 0}   { return [list [list 0 0]] }
+    set segs {}; set pos 0
+    while {$pos < $len} {
+        if {$len - $pos <= $width} { lappend segs [list $pos $len]; break }
+        set ce [expr {$pos + $width}]
+        set sub [string range $line $pos [expr {$ce-1}]]
+        set lsp -1
+        for {set i [expr {[string length $sub]-1}]} {$i >= 0} {incr i -1} {
+            if {[string index $sub $i] eq " "} { set lsp $i; break }
+        }
+        if {$lsp > 0} {
+            set ba [expr {$pos+$lsp}]; lappend segs [list $pos $ba]; set pos [expr {$ba+1}]
+        } else { lappend segs [list $pos $ce]; set pos $ce }
+    }
+    return $segs
+}
+
+proc tui-wrap-map {lines width} {
+    set vrows {}; set li 1
+    foreach line $lines {
+        foreach seg [tui-wrap-line $line $width] {
+            lappend vrows [list $li [lindex $seg 0] [lindex $seg 1]]
+        }
+        incr li
+    }
+    return $vrows
+}
+
+proc tui-l2v {vrows cy cx} {
+    set n [llength $vrows]
+    for {set vi 0} {$vi < $n} {incr vi} {
+        lassign [lindex $vrows $vi] li scol ecol
+        if {$li == $cy && $scol <= $cx && $cx <= $ecol} {
+            set nx [expr {$vi+1}]
+            if {$cx == $ecol && $ecol > $scol && $nx < $n && [lindex [lindex $vrows $nx] 0] == $li} continue
+            return [list $vi [expr {$cx - $scol}]]
+        }
+    }
+    if {$n > 0} {
+        lassign [lindex $vrows [expr {$n-1}]] li scol ecol
+        return [list [expr {$n-1}] [expr {max(0, min($cx-$scol, $ecol-$scol))}]]
+    }
+    return {0 0}
+}
+
+proc tui-v2l {vrows vi scx} {
+    set n [llength $vrows]
+    if {$n == 0} { return {1 0} }
+    set vi [expr {max(0, min($vi, $n-1))}]
+    lassign [lindex $vrows $vi] li scol ecol
+    return [list $li [expr {$scol + max(0, min($scx, $ecol-$scol))}]]
+}
+
+# ── TUI helpers ───────────────────────────────────────────────────────────────
+
+proc tui-prompt {label rows cols} {
+    set buf ""
+    while 1 {
+        set d " $label$buf"
+        tui-bar [expr {$rows-1}] $d "" $cols
+        puts -nonewline "\033\[?25h"; tui-move [expr {$rows-1}] [string length $d]; flush stdout
+        set k [tui-getch]; puts -nonewline "\033\[?25l"
+        switch -- $k {
+            ESC       { return "" }   ENTER { return $buf }
+            BACKSPACE { set buf [string range $buf 0 end-1] }
+            default   { if {[string length $k] == 1 || [string length $k] > 1} { append buf $k } }
+        }
+    }
+}
+
+proc tui-confirm {msg rows cols} {
+    tui-bar [expr {$rows-1}] " $msg (y/n)" "" $cols; flush stdout
+    while 1 {
+        set k [tui-getch]
+        if {$k in {y Y}} { return 1 }
+        if {$k in {n N ESC}} { return 0 }
+    }
+}
+
+proc tui-active-dir {entries cfi} {
+    set i [expr {$cfi >= 0 ? $cfi : 0}]
+    while {$i >= 0} {
+        lassign [lindex $entries $i] type dir
+        if {$type eq "header"} { return $dir }
+        incr i -1
+    }
+    return $::DOCS_DIR_DEFAULT
+}
+
+# ── TUI Browser ───────────────────────────────────────────────────────────────
+
+proc tui-browser {} {
+    set sel 0; set scroll 0; set msg ""
+    while 1 {
+        lassign [tui-size] rows cols
+        puts -nonewline "\033\[2J"
+        # build entries
+        set entries {}; set fcount 0
+        foreach dir [br-dirs] {
+            if {[br-multi]} { lappend entries [list header $dir ""] }
+            foreach f [list-docs $dir] { lappend entries [list file $dir $f]; incr fcount }
+        }
+        set fidx {}
+        for {set i 0} {$i < [llength $entries]} {incr i} {
+            if {[lindex [lindex $entries $i] 0] eq "file"} { lappend fidx $i }
+        }
+        set nf [llength $fidx]
+        if {$nf > 0} { set sel [expr {max(0, min($sel, $nf-1))}] }
+
+        tui-attr bold; tui-fill 0 " WriterDeck" $cols; tui-attr off
+        set usable [expr {$rows - 3}]
+
+        if {$nf == 0} {
+            set m "No documents yet. Press n to create one."
+            tui-move [expr {$rows/2}] [expr {max(0, ($cols-[string length $m])/2)}]
+            puts -nonewline $m
+        } else {
+            set sel_ei [lindex $fidx $sel]
+            if {$sel_ei < $scroll}             { set scroll $sel_ei }
+            if {$sel_ei >= $scroll + $usable}  { set scroll [expr {$sel_ei - $usable + 1}] }
+            if {$scroll < 0} { set scroll 0 }
+            set row 1; set ei 0
+            foreach entry $entries {
+                if {$ei < $scroll} { incr ei; continue }
+                if {$row >= $rows-2} break
+                lassign $entry type dir name
+                if {$type eq "header"} {
+                    set lbl [string map [list $::env(HOME) ~] $dir]
+                    tui-attr dim; tui-fill $row " $lbl" $cols; tui-attr off
+                } else {
+                    set fi [lsearch $fidx $ei]; set issel [expr {$fi == $sel}]
+                    set fp [file join $dir $name]
+                    set sz [file size $fp]
+                    set ss [expr {$sz < 1024 ? "${sz}B" : "[expr {$sz/1024}]K"}]
+                    set mt [clock format [file mtime $fp] -format "%b %d %H:%M"]
+                    set meta [format "%6s  %s" $ss $mt]
+                    set maxn [expr {$cols - 3 - [string length $meta] - 1}]
+                    set dn   [string range $name 0 [expr {max(0,$maxn-1)}]]
+                    set gap  [string repeat " " [expr {max(0,$cols-3-[string length $dn]-[string length $meta])}]]
+                    set pfx  [expr {$issel ? " \u00bb " : "   "}]
+                    if {$issel} { tui-attr reverse }
+                    tui-fill $row [string range "${pfx}${dn}${gap}${meta}" 0 [expr {$cols-1}]] $cols
+                    if {$issel} { tui-attr off }
+                }
+                incr row; incr ei
+            }
+        }
+        set plu [expr {$fcount != 1 ? "s" : ""}]
+        tui-help [expr {$rows-2}] "\u21b5 open  n new  d delete  r rename  q quit" $cols
+        if {$msg ne ""} { tui-bar [expr {$rows-1}] " $msg" "" $cols; set msg ""
+        } else { tui-bar [expr {$rows-1}] " [string map [list $::env(HOME) ~] $::DOCS_DIR_DEFAULT]" \
+                         " $fcount file${plu} " $cols }
+        flush stdout
+
+        set key [tui-getch]
+        set cfi [expr {$nf > 0 ? [lindex $fidx $sel] : -1}]
+        switch -- $key {
+            q       { return "" }
+            UP - k  { if {$sel > 0} { incr sel -1 } }
+            DOWN - j { if {$sel < $nf-1} { incr sel 1 } }
+            HOME    { set sel 0 }
+            END     { set sel [expr {max(0,$nf-1)}] }
+            ENTER {
+                if {$cfi >= 0} { lassign [lindex $entries $cfi] _ dir name; return [file join $dir $name] }
+            }
+            n {
+                set dir [tui-active-dir $entries $cfi]
+                set name [string trim [tui-prompt "new file: " $rows $cols]]
+                if {$name ne ""} {
+                    if {[file extension $name] eq ""} { append name $::FILE_EXT }
+                    set fp [file join $dir $name]
+                    if {[file exists $fp]} { set msg "'$name' already exists"
+                    } else { close [open $fp w]; return $fp }
+                }
+            }
+            d {
+                if {$cfi >= 0} {
+                    lassign [lindex $entries $cfi] _ dir name
+                    if {[tui-confirm "delete '$name'?" $rows $cols]} {
+                        file delete [file join $dir $name]
+                        set msg "deleted '$name'"; if {$sel > 0} { incr sel -1 }
+                    }
+                }
+            }
+            r {
+                if {$cfi >= 0} {
+                    lassign [lindex $entries $cfi] _ dir name
+                    set new [string trim [tui-prompt "rename '$name' to: " $rows $cols]]
+                    if {$new ne ""} {
+                        if {[file extension $new] eq ""} { append new $::FILE_EXT }
+                        set np [file join $dir $new]
+                        if {[file exists $np]} { set msg "'$new' already exists"
+                        } else { file rename [file join $dir $name] $np; set msg "renamed \u2192 '$new'" }
+                    }
+                }
+            }
+        }
+    }
+}
+
+# ── TUI TOC ───────────────────────────────────────────────────────────────────
+
+proc tui-toc {lines rows cols} {
+    set headings {}; set ln 1
+    foreach line $lines {
+        set t [parse-heading $line]
+        if {$t ne ""} { lappend headings [list $ln $t] }
+        incr ln
+    }
+    if {![llength $headings]} { return -1 }
+    set sel 0; set scroll 0
+    while 1 {
+        puts -nonewline "\033\[2J"
+        set usable [expr {$rows-3}]
+        if {$sel < $scroll}            { set scroll $sel }
+        if {$sel >= $scroll + $usable} { set scroll [expr {$sel - $usable + 1}] }
+        tui-attr bold; tui-fill 0 " Table of contents" $cols; tui-attr off
+        for {set i 0} {$i < $usable} {incr i} {
+            set idx [expr {$scroll+$i}]
+            if {$idx >= [llength $headings]} break
+            lassign [lindex $headings $idx] ln title
+            set line [format "  %4d   %s" $ln $title]
+            if {$idx == $sel} { tui-attr reverse }
+            tui-fill [expr {$i+1}] [string range $line 0 [expr {$cols-1}]] $cols
+            if {$idx == $sel} { tui-attr off }
+        }
+        set nh [llength $headings]; set plu [expr {$nh != 1 ? "s" : ""}]
+        tui-help [expr {$rows-2}] "\u21b5 jump  esc cancel" $cols
+        tui-bar  [expr {$rows-1}] " $nh heading${plu}" "" $cols
+        flush stdout
+        switch -- [tui-getch] {
+            ESC      { return -1 }
+            UP - k   { if {$sel > 0} { incr sel -1 } }
+            DOWN - j { if {$sel < $nh-1} { incr sel 1 } }
+            HOME     { set sel 0 }
+            END      { set sel [expr {$nh-1}] }
+            ENTER    { return [lindex [lindex $headings $sel] 0] }
+        }
+    }
+}
+
+# ── TUI Editor ────────────────────────────────────────────────────────────────
+
+proc tui-editor {filepath} {
+    set lines {}
+    if {[file exists $filepath] && [file size $filepath] > 0} {
+        set fh [open $filepath r]; fconfigure $fh -encoding utf-8
+        set content [read $fh]; close $fh
+        foreach line [split $content "\n"] { lappend lines $line }
+        if {[llength $lines] > 1 && [lindex $lines end] eq ""} {
+            set lines [lrange $lines 0 end-1]
+        }
+    }
+    if {[llength $lines] == 0} { set lines [list ""] }
+
+    set cy 1; set cx 0; set scroll_y 0
+    set dirty 0; set message ""; set msg_time 0; set sticky -1
+
+    while 1 {
+        lassign [tui-size] rows cols
+        set roff $::cfg_margin_rows
+        set coff $::cfg_margin_cols
+        set tw   [expr {max(1, $cols - 2*$coff)}]
+        set th   [expr {max(1, $rows - 2 - 2*$roff)}]
+
+        set cy [expr {max(1, min($cy, [llength $lines]))}]
+        set cx [expr {max(0, min($cx, [string length [lindex $lines [expr {$cy-1}]]]))}]
+
+        set vrows [tui-wrap-map $lines $tw]
+        lassign [tui-l2v $vrows $cy $cx] vi scx
+
+        if {$vi < $scroll_y}           { set scroll_y $vi }
+        if {$vi >= $scroll_y + $th}    { set scroll_y [expr {$vi - $th + 1}] }
+        set scroll_y [expr {max(0, min($scroll_y, max(0, [llength $vrows] - $th)))}]
+
+        puts -nonewline "\033\[2J"
+        for {set i 0} {$i < $th} {incr i} {
+            set vi2 [expr {$scroll_y + $i}]
+            if {$vi2 >= [llength $vrows]} break
+            lassign [lindex $vrows $vi2] li scol ecol
+            set seg [string range [lindex $lines [expr {$li-1}]] $scol [expr {$ecol-1}]]
+            set ish [expr {[parse-heading [lindex $lines [expr {$li-1}]]] ne ""}]
+            if {$ish} { tui-attr bold }
+            tui-move [expr {$i+$roff}] $coff; puts -nonewline $seg
+            if {$ish} { tui-attr off }
+        }
+
+        set wc 0; foreach l $lines { incr wc [llength [split $l]] }
+        tui-help [expr {$rows-2}] "^S save  ^W close  ^G goto  $::cfg_toc_key toc  ^Q quit" $cols
+        set left " [file tail $filepath][expr {$dirty ? { [+]} : {}}]"
+        set right [format "ln %d/%d  col %d  %dw " $cy [llength $lines] [expr {$cx+1}] $wc]
+        if {$message ne "" && [clock seconds]-$msg_time < 2} { set left " $message" }
+        tui-bar [expr {$rows-1}] $left $right $cols
+
+        tui-move [expr {$vi-$scroll_y+$roff}] [expr {$scx+$coff}]
+        puts -nonewline "\033\[?25h"; flush stdout
+
+        set key [tui-getch]; puts -nonewline "\033\[?25l"
+        set rst 1
+
+        switch -- $key {
+            UP {
+                if {$vi > 0} { if {$sticky<0} {set sticky $scx}; lassign [tui-v2l $vrows [expr {$vi-1}] $sticky] cy cx }
+                set rst 0
+            }
+            DOWN {
+                if {$vi < [llength $vrows]-1} { if {$sticky<0} {set sticky $scx}; lassign [tui-v2l $vrows [expr {$vi+1}] $sticky] cy cx }
+                set rst 0
+            }
+            LEFT {
+                if {$cx > 0} { incr cx -1 } elseif {$cy > 1} { incr cy -1; set cx [string length [lindex $lines [expr {$cy-1}]]] }
+            }
+            RIGHT {
+                if {$cx < [string length [lindex $lines [expr {$cy-1}]]]} { incr cx
+                } elseif {$cy < [llength $lines]} { incr cy; set cx 0 }
+            }
+            HOME { set cx [lindex [lindex $vrows $vi] 1] }
+            END  { set cx [lindex [lindex $vrows $vi] 2] }
+            PPAGE {
+                if {$sticky<0} {set sticky $scx}
+                lassign [tui-v2l $vrows [expr {max(0,$vi-$th)}] $sticky] cy cx; set rst 0
+            }
+            NPAGE {
+                if {$sticky<0} {set sticky $scx}
+                lassign [tui-v2l $vrows [expr {min([llength $vrows]-1,$vi+$th)}] $sticky] cy cx; set rst 0
+            }
+            BACKSPACE {
+                if {$cx > 0} {
+                    set l [lindex $lines [expr {$cy-1}]]
+                    lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-2}]][string range $l $cx end]"
+                    incr cx -1; set dirty 1
+                } elseif {$cy > 1} {
+                    set cx [string length [lindex $lines [expr {$cy-2}]]]
+                    lset lines [expr {$cy-2}] "[lindex $lines [expr {$cy-2}]][lindex $lines [expr {$cy-1}]]"
+                    set lines [lreplace $lines [expr {$cy-1}] [expr {$cy-1}]]
+                    incr cy -1; set dirty 1
+                }
+            }
+            DC {
+                set l [lindex $lines [expr {$cy-1}]]
+                if {$cx < [string length $l]} {
+                    lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-1}]][string range $l [expr {$cx+1}] end]"
+                    set dirty 1
+                } elseif {$cy < [llength $lines]} {
+                    lset lines [expr {$cy-1}] "${l}[lindex $lines $cy]"
+                    set lines [lreplace $lines $cy $cy]; set dirty 1
+                }
+            }
+            ENTER {
+                set l [lindex $lines [expr {$cy-1}]]
+                set lines [linsert [lreplace $lines [expr {$cy-1}] [expr {$cy-1}] [string range $l 0 [expr {$cx-1}]]] $cy [string range $l $cx end]]
+                incr cy; set cx 0; set dirty 1
+            }
+            TAB {
+                set l [lindex $lines [expr {$cy-1}]]
+                lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-1}]]    [string range $l $cx end]"
+                incr cx 4; set dirty 1
+            }
+            default {
+                set c [scan $key %c]
+                if {$key eq "\x13"} {
+                    set fh [open $filepath w]; fconfigure $fh -encoding utf-8
+                    puts -nonewline $fh "[join $lines \n]\n"; close $fh
+                    set dirty 0; set message "saved"; set msg_time [clock seconds]
+                } elseif {$key in {"\x17" "\x11" ESC}} {
+                    if {$dirty} {
+                        lassign [tui-size] rows cols
+                        if {[tui-confirm "save before closing?" $rows $cols]} {
+                            set fh [open $filepath w]; fconfigure $fh -encoding utf-8
+                            puts -nonewline $fh "[join $lines \n]\n"; close $fh
+                        }
+                    }
+                    return
+                } elseif {$key eq "\x07"} {
+                    lassign [tui-size] rows cols
+                    set num [tui-prompt "go to line: " $rows $cols]
+                    if {[string is integer -strict $num] && $num >= 1} {
+                        set cy [expr {min($num, [llength $lines])}]; set cx 0
+                    }
+                } elseif {$key eq $::cfg_toc_key} {
+                    lassign [tui-size] rows cols
+                    set target [tui-toc $lines $rows $cols]
+                    if {$target > 0} { set cy $target; set cx 0 }
+                } elseif {[string length $key] >= 1 && ($c eq "" || $c >= 32)} {
+                    set l [lindex $lines [expr {$cy-1}]]
+                    lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-1}]]${key}[string range $l $cx end]"
+                    incr cx [string length $key]; set dirty 1
+                }
+            }
+        }
+        if {$rst} { set sticky -1 }
+    }
+}
+
+proc tui-main {} {
+    tui-init
+    set ok [catch {
+        if {$::argc > 0} {
+            set fp [lindex $::argv 0]
+            if {![file exists $fp]} { close [open $fp w] }
+            tui-editor $fp
+        } else {
+            while 1 {
+                set fp [tui-browser]
+                if {$fp eq ""} break
+                tui-editor $fp
+            }
+        }
+    } err info]
+    tui-cleanup
+    if {$ok} { puts stderr $err }
+}
+
 # ─── start ────────────────────────────────────────────────────────────────────
-if {$::argc > 0} {
+if {$::no_gui} {
+    tui-main
+} elseif {$::argc > 0} {
     show-editor [lindex $::argv 0]
 } else {
     show-browser
