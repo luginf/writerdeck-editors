@@ -21,6 +21,9 @@ set ::cfg_fg             "#e8e8e8"
 set ::cfg_bg_bar         "#2a2a2a"
 set ::cfg_fg_bar         "#aaaaaa"
 set ::cfg_bg_sel         "#3a5a8a"
+set ::cfg_heading_marker "="
+set ::cfg_toc_key        "F11"
+set ::cfg_color_heading  "#c8a060"
 set ::fullscreen 0
 
 proc ini-load {} {
@@ -40,7 +43,10 @@ proc ini-load {} {
                 color_fg       { set ::cfg_fg             [string trim $val] }
                 color_bg_bar   { set ::cfg_bg_bar         [string trim $val] }
                 color_fg_bar   { set ::cfg_fg_bar         [string trim $val] }
-                color_bg_sel   { set ::cfg_bg_sel         [string trim $val] }
+                color_bg_sel     { set ::cfg_bg_sel         [string trim $val] }
+                heading_marker   { set ::cfg_heading_marker [string trim $val] }
+                toc_key          { set ::cfg_toc_key        [string trim $val] }
+                color_heading    { set ::cfg_color_heading  [string trim $val] }
             }
         }
     }
@@ -57,12 +63,27 @@ proc ini-save {} {
     puts $fh "font_size      = $::cfg_font_size"
     puts $fh "fullscreen_key = $::cfg_fullscreen_key"
     puts $fh ""
-    puts $fh "# couleurs (format #rrggbb)"
+    puts $fh "# colors (#rrggbb format)"
     puts $fh "color_bg       = $::cfg_bg"
     puts $fh "color_fg       = $::cfg_fg"
     puts $fh "color_bg_bar   = $::cfg_bg_bar"
     puts $fh "color_fg_bar   = $::cfg_fg_bar"
     puts $fh "color_bg_sel   = $::cfg_bg_sel"
+    puts $fh ""
+    puts $fh "# headings / table of contents"
+    puts $fh "heading_marker = $::cfg_heading_marker"
+    puts $fh "toc_key        = $::cfg_toc_key"
+    puts $fh "color_heading  = $::cfg_color_heading"
+    puts $fh ""
+    puts $fh "# ── light theme (solarized light) ─────────────────────────────"
+    puts $fh "# To enable: uncomment the lines below and comment out the"
+    puts $fh "# color_* values defined above."
+    puts $fh "#color_bg      = #fdf6e3"
+    puts $fh "#color_fg      = #657b83"
+    puts $fh "#color_bg_bar  = #eee8d5"
+    puts $fh "#color_fg_bar  = #93a1a1"
+    puts $fh "#color_bg_sel  = #268bd2"
+    puts $fh "#color_heading = #b58900"
     close $fh
 }
 
@@ -263,6 +284,9 @@ text .ed.t \
 scrollbar .ed.sb -orient vertical -command {.ed.t yview} \
     -bg $bg_bar -troughcolor $bg
 .ed.t configure -yscrollcommand {.ed.sb set}
+.ed.t tag configure heading \
+    -foreground $::cfg_color_heading \
+    -font [list Mono $::cfg_font_size bold]
 
 frame .ed.bar -bg $bg_bar
 label .ed.bar.lbl -textvariable ::ed_status \
@@ -296,6 +320,7 @@ bind .ed.t <ButtonRelease> { ed-status }
 bind .ed.t <<Modified>> {
     if {[.ed.t edit modified]} { set ::dirty 1; .ed.t edit modified false }
     ed-status
+    after idle { highlight-headings }
 }
 
 # ─── file I/O ─────────────────────────────────────────────────────────────────
@@ -314,6 +339,7 @@ proc load-file {path} {
     .ed.t mark set insert 1.0
     .ed.t see insert
     ed-status
+    highlight-headings
 }
 
 proc save-file {} {
@@ -371,6 +397,99 @@ proc toggle-fullscreen {} {
 bind .ed.t          <$::cfg_fullscreen_key> { toggle-fullscreen; break }
 bind .br.mid.lst    <$::cfg_fullscreen_key> { toggle-fullscreen }
 
+# ─── headings & TOC ───────────────────────────────────────────────────────────
+proc heading-re {} {
+    set m [regsub -all {[\\^$.|?*+()\[\]{}]} $::cfg_heading_marker {\\&}]
+    return "^\\s*${m}\\s*(.+?)\\s*${m}\\s*$"
+}
+
+proc parse-heading {line} {
+    # returns title string if line is a heading, else ""
+    if {[regexp [heading-re] $line -> title]}          { return [string trim $title] }
+    if {[regexp {^\s*(#{1,6})\s+(.+)$} $line -> _ title]} { return [string trim $title] }
+    return ""
+}
+
+proc highlight-headings {} {
+    .ed.t tag remove heading 1.0 end
+    set last [lindex [split [.ed.t index end] .] 0]
+    for {set ln 1} {$ln < $last} {incr ln} {
+        set line [.ed.t get $ln.0 "$ln.0 lineend"]
+        if {[parse-heading $line] ne ""} {
+            .ed.t tag add heading $ln.0 "$ln.0 lineend"
+        }
+    }
+}
+
+proc toc-collect {} {
+    set last [lindex [split [.ed.t index end] .] 0]
+    set result {}
+    for {set ln 1} {$ln < $last} {incr ln} {
+        set line [.ed.t get $ln.0 "$ln.0 lineend"]
+        set title [parse-heading $line]
+        if {$title ne ""} { lappend result [list $ln $title] }
+    }
+    return $result
+}
+
+proc toc-show {} {
+    set headings [toc-collect]
+    if {![llength $headings]} { set-msg "aucun titre trouvé"; return }
+
+    set w .toc
+    catch {destroy $w}
+    toplevel $w
+    wm title $w "Table des matières"
+    wm resizable $w 1 0
+    wm transient $w .
+
+    set h [expr {min([llength $headings], 24)}]
+    listbox $w.lst \
+        -font $::font -bg $::bg -fg $::cfg_color_heading \
+        -selectbackground $::bg_sel -selectforeground $::fg \
+        -activestyle none -borderwidth 0 -highlightthickness 0 \
+        -width 48 -height $h
+    pack $w.lst -fill both -expand 1 -padx 2 -pady 2
+
+    foreach item $headings {
+        lassign $item ln title
+        $w.lst insert end [format "  %4d   %s" $ln $title]
+    }
+    $w.lst selection set 0
+
+    bind $w.lst <Return>   [list toc-jump $w $headings]
+    bind $w.lst <Double-1> [list toc-jump $w $headings]
+    bind $w     <Escape>   [list destroy $w]
+    bind $w     <$::cfg_toc_key> [list destroy $w]
+    focus $w.lst
+}
+
+proc toc-jump {w headings} {
+    set sel [$w.lst curselection]
+    if {![llength $sel]} return
+    set ln [lindex [lindex $headings [lindex $sel 0]] 0]
+    destroy $w
+    .ed.t mark set insert $ln.0
+    .ed.t see insert
+    focus .ed.t
+}
+
+bind .ed.t <$::cfg_toc_key> { toc-show; break }
+
+# ─── taille de police dynamique ───────────────────────────────────────────────
+proc font-resize {delta} {
+    set ::cfg_font_size [expr {max(6, min(72, $::cfg_font_size + $delta))}]
+    set f [list Mono $::cfg_font_size]
+    .ed.t configure -font $f
+    .ed.t tag configure heading -font [list Mono $::cfg_font_size bold]
+}
+
+bind .ed.t <Control-equal>    { font-resize  1; break }
+bind .ed.t <Control-plus>    { font-resize  1; break }
+bind .ed.t <Control-KP_Add>  { font-resize  1; break }
+bind .ed.t <Control-minus>   { font-resize -1; break }
+bind .ed.t <Control-KP_Subtract> { font-resize -1; break }
+
 proc help-dialog {} {
     set w .help
     catch {destroy $w}
@@ -380,7 +499,9 @@ proc help-dialog {} {
     wm transient $w .
     grab $w
 
-    set fs_key $::cfg_fullscreen_key
+    set fs_key  $::cfg_fullscreen_key
+    set toc_key $::cfg_toc_key
+    set hm      $::cfg_heading_marker
     set sections [list \
         "EDITOR" [list \
             "Ctrl+S"       "Save" \
@@ -389,17 +510,18 @@ proc help-dialog {} {
             "Ctrl+G"       "Go to line" \
             "Ctrl+Z"       "Undo" \
             "Tab"          "Insert 4 spaces" \
-            $fs_key        "Toggle fullscreen" \
-            "Ctrl+H"       "This help" \
+            $toc_key       "Table des matières  (${hm}titre${hm})" \
+            $fs_key        "Plein écran" \
+            "Ctrl+H"       "Cette aide" \
         ] \
         "BROWSER" [list \
-            "↵ / double-click"  "Open selected file" \
-            "n"                 "New file" \
-            "d"                 "Delete file" \
-            "r"                 "Rename file" \
-            $fs_key             "Toggle fullscreen" \
-            "h"                 "This help" \
-            "q"                 "Quit" \
+            "↵ / double-click"  "Ouvrir" \
+            "n"                 "Nouveau fichier" \
+            "d"                 "Supprimer" \
+            "r"                 "Renommer" \
+            $fs_key             "Plein écran" \
+            "h"                 "Cette aide" \
+            "q"                 "Quitter" \
         ] \
     ]
 
@@ -407,7 +529,7 @@ proc help-dialog {} {
         -font {Mono 11} -state normal \
         -bg "#1a1a1a" -fg "#e8e8e8" \
         -borderwidth 0 -padx 16 -pady 12 \
-        -width 46 -height 18 \
+        -width 52 -height 22 \
         -cursor arrow
     $w.t tag configure heading -foreground "#aaaaaa" -font {Mono 11 bold}
     $w.t tag configure key     -foreground "#7ab0d4"
