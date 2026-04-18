@@ -1,5 +1,5 @@
-\ writerdeck-ansi.fs — pure gforth text editor, ANSI terminal, no C FFI
-\ Usage: gforth writerdeck-ansi.fs [filename]
+\ forrdeck-ansi.fs — pure gforth text editor, ANSI terminal, no C FFI
+\ Usage: gforth forrdeck-ansi.fs [filename]
 decimal
 
 \ ─── compatibility ───────────────────────────────────────────────────────────
@@ -445,7 +445,7 @@ create _1b 1 allot   \ 1-byte scratch for single-char insert
     1 arg drop               \ fa = c-string pointer (argv entry, null-terminated)
     { fa }  fa wr-editor
   else
-    s" No filename given. Usage: gforth writerdeck-ansi.fs filename" type cr
+    s" No filename given. Usage: gforth forrdeck-ansi.fs filename" type cr
   then
   term-cook ;
 

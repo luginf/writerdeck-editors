@@ -1,6 +1,6 @@
 #!/usr/bin/env tclsh
-# writerdeck-tk.tcl — Tk/TUI text editor with file browser
-# Usage: tclsh writerdeck-tk.tcl [--no-gui] [filename]
+# forrdeck-tk.tcl — Tk/TUI text editor with file browser
+# Usage: tclsh forrdeck-tk.tcl [--no-gui] [filename]
 
 set ::no_gui [expr {[lsearch $::argv "--no-gui"] >= 0}]
 if {$::no_gui} {
@@ -9,9 +9,9 @@ if {$::no_gui} {
 }
 if {!$::no_gui} { package require Tk }
 
-set ::DOCS_DIR_DEFAULT [file join $::env(HOME) Documents writerdeck]
+set ::DOCS_DIR_DEFAULT [file join $::env(HOME) Documents forrdeck]
 set ::DOCS_DIR         $::DOCS_DIR_DEFAULT
-set ::INI_FILE         [file join $::DOCS_DIR_DEFAULT "writerdeck.ini"]
+set ::INI_FILE         [file join $::DOCS_DIR_DEFAULT "forrdeck.ini"]
 set ::FILE_EXT ".txt"
 set ::filename ""
 set ::dirty    0
@@ -70,9 +70,9 @@ proc ini-load {} {
 proc ini-save {} {
     set fh [open $::INI_FILE w]
     fconfigure $fh -encoding utf-8
-    puts $fh "# WriterDeck — configuration"
+    puts $fh "# Forrdeck — configuration"
     puts $fh "\[editor\]"
-    puts $fh "# docs_dir = ~/Documents/my-writing  (default: ~/Documents/writerdeck)"
+    puts $fh "# docs_dir = ~/Documents/my-writing  (default: ~/Documents/forrdeck)"
     puts $fh "margin_width   = $::cfg_margin_width"
     puts $fh "margin_height  = $::cfg_margin_height"
     puts $fh "font_size      = $::cfg_font_size"
@@ -85,7 +85,7 @@ proc ini-save {} {
     puts $fh "color_fg_bar   = $::cfg_fg_bar"
     puts $fh "color_bg_sel   = $::cfg_bg_sel"
     puts $fh ""
-    puts $fh "# ── terminal version (writerdeck.lua) — values in columns/lines"
+    puts $fh "# ── terminal version (forrdeck.lua) — values in columns/lines"
     puts $fh "# margin_cols = 8"
     puts $fh "# margin_rows = 2"
     puts $fh ""
@@ -174,14 +174,14 @@ proc fmt-meta {path} {
 }
 
 if {!$::no_gui} {
-wm title . "WriterDeck"
+wm title . "Forrdeck"
 wm minsize . 500 400
 
 # ─── browser frame ────────────────────────────────────────────────────────────
 frame .br -bg $bg
 
 label .br.title \
-    -text " WriterDeck" \
+    -text " Forrdeck" \
     -bg $bg -fg $fg \
     -font [list [lindex $font 0] 15 bold] \
     -anchor w -pady 10 -padx 4
@@ -439,7 +439,7 @@ bind .ed.t <<Modified>> {
 # ─── file I/O ─────────────────────────────────────────────────────────────────
 proc load-file {path} {
     set ::filename $path
-    wm title . "WriterDeck — [file tail $path]"
+    wm title . "Forrdeck — [file tail $path]"
     .ed.t delete 1.0 end
     if {[file exists $path] && [file size $path] > 0} {
         set fh [open $path r]
@@ -479,7 +479,7 @@ proc save-as {} {
         if {$r ne "yes"} return
     }
     set ::filename $new_path
-    wm title . "WriterDeck — [file tail $new_path]"
+    wm title . "Forrdeck — [file tail $new_path]"
     save-file
 }
 
@@ -494,7 +494,7 @@ proc close-editor {} {
     set ::filename ""
     set ::dirty    0
     set ::msg      ""
-    wm title . "WriterDeck"
+    wm title . "Forrdeck"
     .ed.t delete 1.0 end
     show-browser
 }
@@ -613,7 +613,7 @@ proc help-dialog {} {
     set w .help
     catch {destroy $w}
     toplevel $w
-    wm title $w "Help — WriterDeck"
+    wm title $w "Help — Forrdeck"
     wm resizable $w 0 0
     wm transient $w .
     grab $w
@@ -925,7 +925,7 @@ proc tui-browser {} {
         set nf [llength $fidx]
         if {$nf > 0} { set sel [expr {max(0, min($sel, $nf-1))}] }
 
-        tui-attr bold; tui-fill 0 " WriterDeck" $cols; tui-attr off
+        tui-attr bold; tui-fill 0 " Forrdeck" $cols; tui-attr off
         set usable [expr {$rows - 3}]
 
         if {$nf == 0} {

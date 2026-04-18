@@ -1,9 +1,9 @@
 #!/usr/bin/env lua
 --[[
-  writerdeck — a minimal TUI writing program for a dedicated writing device.
+  forrdeck — a minimal TUI writing program for a dedicated writing device.
   Requires: luarocks install lcurses luafilesystem
   or: sudo apt install lua-curses lua-filesystem
-  Usage:    lua writerdeck.lua
+  Usage:    lua forrdeck.lua
 ]]
 
 local curses = require("curses")
@@ -12,9 +12,9 @@ local lfs    = require("lfs")
 -- ── Config ───────────────────────────────────────────────────────────────────
 
 local HOME        = os.getenv("HOME") or "."
-local DOCS_DIR    = HOME .. "/Documents/writerdeck"
+local DOCS_DIR    = HOME .. "/Documents/forrdeck"
 local CURSOR_FILE = DOCS_DIR .. "/.cursors.json"
-local INI_FILE    = DOCS_DIR .. "/writerdeck.ini"
+local INI_FILE    = DOCS_DIR .. "/forrdeck.ini"
 local FILE_EXT    = ".txt"
 local TAB_WIDTH   = 4
 
@@ -511,7 +511,7 @@ local function file_browser(stdscr)
     local files  = list_docs()
 
     -- Header
-    local header = " writerdeck"
+    local header = " forrdeck"
     stdscr:attron(curses.A_BOLD)
     pcall(function()
       stdscr:mvaddstr(0, 0, header .. string.rep(" ", math.max(0, w - #header)))
