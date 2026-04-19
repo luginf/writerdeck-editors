@@ -36,7 +36,7 @@ proc cursors-load {} {
     set fh [open $::CURSOR_FILE r]; fconfigure $fh -encoding utf-8
     set raw [read $fh]; close $fh
     set d {}
-    set re {"([^"\\]*)"\s*:\s*\[(\d+)\s*,\s*(\d+)\]"}
+    set re {"([^"\\]*)"\s*:\s*\[(\d+)\s*,\s*(\d+)\]}
     set start 0
     while {[regexp -start $start $re $raw -> key cy cx]} {
         dict set d $key [list [expr {int($cy)}] [expr {int($cx)}]]
@@ -499,7 +499,7 @@ frame .ed.bar -bg $bg_bar
 label .ed.bar.lbl -textvariable ::ed_status \
     -bg $bg_bar -fg $fg_bar -font $font_sm -anchor w -padx 8
 label .ed.bar.help \
-    -text "^S save  ^Q close  ^F find  ^H replace  ^G goto  ^O open  F1 help" \
+    -text "^S save  ^Q close  ^F find  ^R replace  ^G goto  ^O open  ^H/F1 help" \
     -bg $bg_bar -fg $fg_bar -font $font_sm -anchor e -padx 8
 pack .ed.bar.lbl  -side left
 pack .ed.bar.help -side right
@@ -780,10 +780,11 @@ bind .ed.t <Control-k> { break }
 
 bind .ed.t <Tab>          { .ed.t insert insert "    "; break }
 bind .ed.t <Control-g>   { goto-dialog; break }
-bind .ed.t <Control-h>   { replace-open; break }
+bind .ed.t <Control-h>   { help-dialog;  break }
+bind .ed.t <Control-r>   { replace-open; break }
 bind .ed.t <Control-f>   { search-open; break }
 bind .ed.t <Control-o>   { open-file-dialog; break }
-bind .ed.t <F1>          { help-dialog; break }
+bind .ed.t <F1>          { help-dialog;  break }
 
 bind .ed.sf.e <KeyRelease>   { search-update }
 bind .ed.sf.e <Return>       { search-next }
@@ -915,16 +916,15 @@ proc help-dialog {} {
             "Ctrl+S"       "Save" \
             "Ctrl+Shift+S" "Save as" \
             "Ctrl+Q / ESC" "Save and return to browser" \
-            "Ctrl+K"       "Delete to end of line" \
             "Ctrl+F"       "Find (Enter: next  Shift+Enter: prev)" \
-            "Ctrl+H"       "Find & Replace (Enter: replace one  Ctrl+Enter: all)" \
+            "Ctrl+R"       "Find & Replace (Enter: replace one  Ctrl+Enter: all)" \
             "Ctrl+O"       "Open file" \
             "Ctrl+G"       "Go to line" \
             "Ctrl+Z"       "Undo" \
             "Tab"          "Insert 4 spaces" \
-            $toc_key       "Table des matières  (${hm}titre${hm})" \
-            $fs_key        "Plein écran" \
-            "Ctrl+H"       "Cette aide" \
+            $toc_key       "Table of contents  (${hm}title${hm})" \
+            $fs_key        "Fullscreen" \
+            "Ctrl+H / F1"  "Help" \
         ] \
         "BROWSER" [list \
             "↵ / double-click"  "Ouvrir" \
@@ -1072,20 +1072,66 @@ proc tui-help {row text cols} {
     tui-attr dim; tui-fill $row " $text" $cols; tui-attr off
 }
 
+proc tui-help-dialog {rows cols} {
+    set lines {
+        "  Writhdeck — keyboard shortcuts"
+        ""
+        "  ^S        Save              ^Z        Undo"
+        "  ^W / Esc  Close             ^A        Select all"
+        "  ^K        Toggle selection  ^C        Copy"
+        "  ^F        Find              ^X        Cut"
+        "  ^R        Replace           ^V        Paste"
+        "  ^G        Go to line        ^L        Toggle line numbers"
+        "  ^O        Open (browser)"
+        ""
+        "  Arrows    Move cursor       Shift+Arrows  Extend selection"
+        "  Home/End  Line start/end    PgUp/PgDn     Scroll page"
+        ""
+        "  F11 / toc_key   Table of contents"
+        "  ^H / F1         This help"
+        ""
+        "  Press any key to close"
+    }
+    set h [llength $lines]
+    set w 52
+    set top  [expr {max(0, ($rows - $h) / 2)}]
+    set left [expr {max(0, ($cols - $w) / 2)}]
+    puts -nonewline "\033\[2J"
+    for {set i 0} {$i < $h} {incr i} {
+        tui-move [expr {$top + $i}] $left
+        set txt [lindex $lines $i]
+        puts -nonewline "[string range $txt 0 [expr {$w-1}]]\033\[K"
+    }
+    flush stdout
+    tui-getch
+    puts -nonewline "\033\[2J"
+}
+
 proc tui-getch {} {
     set raw [read stdin 1]
     if {$raw eq ""} { return "" }
     scan $raw %c b
     if {$b == 27} {
-        # Read escape sequence byte by byte, stop at terminator
+        # Read escape sequence byte by byte
         set seq ""
-        while {[string length $seq] < 20} {
-            fconfigure stdin -blocking 0
-            set ch [read stdin 1]
-            fconfigure stdin -blocking 1
-            if {$ch eq ""} break
-            append seq $ch
-            if {[regexp {[A-Za-z~]} $ch]} break
+        fconfigure stdin -blocking 0; set ch [read stdin 1]; fconfigure stdin -blocking 1
+        if {$ch eq ""} { return ESC }
+        append seq $ch
+        switch -- $ch {
+            O {
+                # SS3 sequence (xterm F1-F4): read one more byte
+                fconfigure stdin -blocking 0; set ch2 [read stdin 1]; fconfigure stdin -blocking 1
+                if {$ch2 ne ""} { append seq $ch2 }
+            }
+            {[} {
+                # CSI sequence: read until letter or ~
+                while {[string length $seq] < 20} {
+                    fconfigure stdin -blocking 0; set ch [read stdin 1]; fconfigure stdin -blocking 1
+                    if {$ch eq ""} break
+                    append seq $ch
+                    if {[regexp {[A-Za-z~]} $ch]} break
+                }
+            }
         }
         # bracketed paste: \x1b[200~ ... pasted text ... \x1b[201~
         if {[string range $seq 0 4] eq "\[200~"} {
@@ -1107,8 +1153,18 @@ proc tui-getch {} {
             "\x1b\[H"     { return HOME  }  "\x1b\[F"     { return END   }
             "\x1b\[1~"    { return HOME  }  "\x1b\[4~"    { return END   }
             "\x1b\[3~"    { return DC    }  "\x1b\[5~"    { return PPAGE }
-            "\x1b\[6~"    { return NPAGE }  "\x1b\[23~"   { return F11   }
-            "\x1b\[24~"   { return F12   }
+            "\x1b\[6~"    { return NPAGE }
+            "\x1b\[11~"   { return F1    }  "\x1b\[12~"   { return F2    }
+            "\x1b\[13~"   { return F3    }  "\x1b\[14~"   { return F4    }
+            "\x1b\[15~"   { return F5    }  "\x1b\[17~"   { return F6    }
+            "\x1b\[18~"   { return F7    }  "\x1b\[19~"   { return F8    }
+            "\x1b\[20~"   { return F9    }  "\x1b\[21~"   { return F10   }
+            "\x1b\[23~"   { return F11   }  "\x1b\[24~"   { return F12   }
+            "\x1bOP"      { return F1    }  "\x1bOQ"      { return F2    }
+            "\x1bOR"      { return F3    }  "\x1bOS"      { return F4    }
+            "\x1b\[\[A"   { return F1    }  "\x1b\[\[B"   { return F2    }
+            "\x1b\[\[C"   { return F3    }  "\x1b\[\[D"   { return F4    }
+            "\x1b\[\[E"   { return F5    }
             "\x1b\[1;2A"  { return SHIFT-UP    }
             "\x1b\[1;2B"  { return SHIFT-DOWN  }
             "\x1b\[1;2C"  { return SHIFT-RIGHT }
@@ -1128,7 +1184,7 @@ proc tui-getch {} {
     } elseif {$b >= 0xF0} {
         return [encoding convertfrom utf-8 "${raw}[read stdin 3]"]
     }
-    if {$b == 127 || $b == 8}  { return BACKSPACE }
+    if {$b == 127} { return BACKSPACE }
     if {$b == 13  || $b == 10} { return ENTER }
     if {$b == 9}               { return TAB }
     return [format %c $b]
@@ -1196,13 +1252,15 @@ proc tui-v2l {vrows vi scx} {
 
 proc tui-prompt {label rows cols} {
     set buf ""
+    set ::tui_escaped 0
     while 1 {
         set d " $label$buf"
         tui-bar [expr {$rows-1}] $d "" $cols
         puts -nonewline "\033\[?25h"; tui-move [expr {$rows-1}] [string length $d]; flush stdout
         set k [tui-getch]; puts -nonewline "\033\[?25l"
         switch -- $k {
-            ESC       { return "" }   ENTER { return $buf }
+            ESC       { set ::tui_escaped 1; return "" }
+            ENTER     { return $buf }
             BACKSPACE { set buf [string range $buf 0 end-1] }
             default   { if {[string length $k] == 1 || [string length $k] > 1} { append buf $k } }
         }
@@ -1575,7 +1633,7 @@ proc tui-editor {filepath} {
         # ── bars ──────────────────────────────────────────────────────────────
         set sel_info [expr {$sel_r ne {} ? " \[sel\]" : ""}]
         set sel_hint [expr {$sel_anchor ne "" ? "^K cancel-sel" : "^K sel"}]
-        tui-help [expr {$rows-2}] "^S save  ^W close  ^F find  ^R replace  ^G goto  ^O open  ^Z undo  ^A selall  $sel_hint ^C copy  ^V paste  $::cfg_toc_key toc" $cols
+        tui-help [expr {$rows-2}] "^S save  ^W close  ^F find  ^R replace  ^G goto  ^O open  ^Z undo  ^A selall  $sel_hint ^C copy  ^V paste  ^H help  $::cfg_toc_key toc" $cols
         set left " [file tail $filepath][expr {$dirty ? { [+]} : {}}]${sel_info}"
         set wc_str ""
         if {$::cfg_word_count} { set wc [llength [regexp -all -inline {\S+} [join $lines " "]]]; set wc_str "  ${wc}w" }
@@ -1798,7 +1856,7 @@ proc tui-editor {filepath} {
                     if {$term ne ""} { set ::tui_search $term }
                     if {$::tui_search ne ""} {
                         set repl [tui-prompt "replace with (ESC=cancel): " $rows $cols]
-                        if {$repl ne "" || [string length $repl] == 0} {
+                        if {!$::tui_escaped} {
                             set count 0; set new_lines {}
                             foreach l $lines {
                                 set out ""; set pos 0
@@ -1834,6 +1892,12 @@ proc tui-editor {filepath} {
                 } elseif {$key eq $::cfg_ln_tui_key} {                        ;# toggle line numbers
                     set ::cfg_line_numbers [expr {$::cfg_line_numbers ? 0 : 1}]
                     set clear_sel 0
+                } elseif {$key eq "\x08" || $key eq "F1"} {                   ;# Ctrl+H / F1 help
+                    lassign [tui-size] rows cols
+                    tui-help-dialog $rows $cols
+                    set clear_sel 0
+                } elseif {[string match "F*" $key]} {                          ;# ignore unknown F-keys
+                    set clear_sel 0
                 } elseif {[string length $key] >= 1 && ($c eq "" || $c >= 32)} {
                     eval $push_undo
                     if {$sel_anchor ne ""} { lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; set dirty 1 }
@@ -1859,6 +1923,7 @@ proc tui-main {} {
             while 1 {
                 set fp [tui-browser]
                 if {$fp eq ""} break
+                puts -nonewline "\033\[2J"; flush stdout
                 tui-editor $fp
             }
         }
