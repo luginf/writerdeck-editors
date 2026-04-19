@@ -665,12 +665,27 @@ pack .ed.sf.r.one -side left
 pack .ed.sf.r.all -side left
 
 # ─── editor status ────────────────────────────────────────────────────────────
+set ::wc_cache ""
+set ::wc_after_id ""
+
+proc wc-flush {} {
+    if {$::wc_after_id ne ""} { after cancel $::wc_after_id }
+    set ::wc_after_id ""
+    set ::wc_cache "   [llength [regexp -all -inline {\S+} [.ed.t get 1.0 end-1c]]]w"
+    set d  [expr {$::dirty ? "* " : "  "}]
+    set fn [expr {$::filename eq "" ? "\[new\]" : [file tail $::filename]}]
+    lassign [split [.ed.t index insert] .] ln col
+    set ::ed_status "${d}${fn}   Ln ${ln}  Col [expr {$col + 1}]$::wc_cache"
+}
+
 proc ed-status {} {
     set d  [expr {$::dirty ? "* " : "  "}]
     set fn [expr {$::filename eq "" ? "\[new\]" : [file tail $::filename]}]
     lassign [split [.ed.t index insert] .] ln col
     if {$::cfg_word_count} {
-        set wc "   [llength [regexp -all -inline {\S+} [.ed.t get 1.0 end-1c]]]w"
+        if {$::wc_after_id ne ""} { after cancel $::wc_after_id }
+        set ::wc_after_id [after 400 wc-flush]
+        set wc $::wc_cache
     } else { set wc "" }
     set ::ed_status "${d}${fn}   Ln ${ln}  Col [expr {$col + 1}]${wc}"
 }
@@ -744,6 +759,7 @@ proc load-file {path} {
     .ed.t mark set insert ${cy}.${cx}
     .ed.t see insert
     ed-status
+    if {$::cfg_word_count} { wc-flush }
     highlight-headings
     ln-update
 }
@@ -1031,8 +1047,20 @@ proc help-dialog {} {
     wm transient $w .
     grab $w
 
-    set hm      $::cfg_heading_marker
-    set sections [list \
+    set hm $::cfg_heading_marker
+    set sections {}
+    set height 22
+    if {$::filename ne ""} {
+        set txt [.ed.t get 1.0 end-1c]
+        set wc    [llength [regexp -all -inline {\S+} $txt]]
+        set chars [string length $txt]
+        lappend sections "FILE INFO" [list \
+            "Mots"    $wc \
+            "Signes"  $chars \
+        ]
+        set height 25
+    }
+    lappend sections \
         "EDITOR" [list \
             [key-label $::cfg_key_save]         "Save" \
             [key-label $::cfg_key_save_as]      "Save as" \
@@ -1056,14 +1084,13 @@ proc help-dialog {} {
             [key-label $::cfg_key_open]         "Open file" \
             "h / [key-label $::cfg_key_help]"   "Help" \
             "q"                                 "Quit" \
-        ] \
-    ]
+        ]
 
     text $w.t \
         -font {Mono 11} -state normal \
         -bg "#1a1a1a" -fg "#e8e8e8" \
         -borderwidth 0 -padx 16 -pady 12 \
-        -width 52 -height 22 \
+        -width 52 -height $height \
         -cursor arrow
     $w.t tag configure heading -foreground "#aaaaaa" -font {Mono 11 bold}
     $w.t tag configure key     -foreground "#7ab0d4"
@@ -1668,6 +1695,7 @@ proc tui-editor {filepath} {
         lappend undo_stack [list $lines $cy $cx]
         if {[llength $undo_stack] > 100} { set undo_stack [lrange $undo_stack end-99 end] }
     }
+    set wc_dirty 1; set wc_cached 0
 
     while 1 {
         lassign [tui-size] rows cols
@@ -1766,7 +1794,14 @@ proc tui-editor {filepath} {
         if {$::cfg_help_bar ne ""} { tui-help [expr {$rows-2}] $::cfg_help_bar $cols }
         set left " [file tail $filepath][expr {$dirty ? { [+]} : {}}]${sel_info}"
         set wc_str ""
-        if {$::cfg_word_count} { set wc [llength [regexp -all -inline {\S+} [join $lines " "]]]; set wc_str "  ${wc}w" }
+        if {$::cfg_word_count} {
+            if {$wc_dirty} {
+                set wc_cached 0
+                foreach l $lines { incr wc_cached [llength [regexp -all -inline {\S+} $l]] }
+                set wc_dirty 0
+            }
+            set wc_str "  ${wc_cached}w"
+        }
         set clk [expr {$::cfg_show_clock ? "  [clock format [clock seconds] -format {%H:%M}]" : ""}]
         set right [format "ln %d/%d  col %d%s%s " $cy [llength $lines] [expr {$cx+1}] $wc_str $clk]
         if {$::cfg_key_error ne "" && $message eq ""} { set message "key conflict: $::cfg_key_error"; set msg_time [clock seconds] }
@@ -1849,47 +1884,47 @@ proc tui-editor {filepath} {
             BACKSPACE {
                 eval $push_undo
                 if {$sel_anchor ne ""} {
-                    lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; set dirty 1
+                    lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; set dirty 1; set wc_dirty 1
                 } elseif {$cx > 0} {
                     set l [lindex $lines [expr {$cy-1}]]
                     lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-2}]][string range $l $cx end]"
-                    incr cx -1; set dirty 1
+                    incr cx -1; set dirty 1; set wc_dirty 1
                 } elseif {$cy > 1} {
                     set cx [string length [lindex $lines [expr {$cy-2}]]]
                     lset lines [expr {$cy-2}] "[lindex $lines [expr {$cy-2}]][lindex $lines [expr {$cy-1}]]"
                     set lines [lreplace $lines [expr {$cy-1}] [expr {$cy-1}]]
-                    incr cy -1; set dirty 1
+                    incr cy -1; set dirty 1; set wc_dirty 1
                 }
             }
             DC {
                 eval $push_undo
                 if {$sel_anchor ne ""} {
-                    lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; set dirty 1
+                    lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; set dirty 1; set wc_dirty 1
                 } else {
                     set l [lindex $lines [expr {$cy-1}]]
                     if {$cx < [string length $l]} {
                         lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-1}]][string range $l [expr {$cx+1}] end]"
-                        set dirty 1
+                        set dirty 1; set wc_dirty 1
                     } elseif {$cy < [llength $lines]} {
                         lset lines [expr {$cy-1}] "${l}[lindex $lines $cy]"
-                        set lines [lreplace $lines $cy $cy]; set dirty 1
+                        set lines [lreplace $lines $cy $cy]; set dirty 1; set wc_dirty 1
                     }
                 }
             }
             ENTER {
                 eval $push_undo
-                if {$sel_anchor ne ""} { lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; set dirty 1 }
+                if {$sel_anchor ne ""} { lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; set dirty 1; set wc_dirty 1 }
                 set l [lindex $lines [expr {$cy-1}]]
                 set lines [linsert [lreplace $lines [expr {$cy-1}] [expr {$cy-1}] \
                     [string range $l 0 [expr {$cx-1}]]] $cy [string range $l $cx end]]
-                incr cy; set cx 0; set dirty 1
+                incr cy; set cx 0; set dirty 1; set wc_dirty 1
             }
             TAB {
                 eval $push_undo
-                if {$sel_anchor ne ""} { lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; set dirty 1 }
+                if {$sel_anchor ne ""} { lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; set dirty 1; set wc_dirty 1 }
                 set l [lindex $lines [expr {$cy-1}]]
                 lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-1}]]    [string range $l $cx end]"
-                incr cx 4; set dirty 1
+                incr cx 4; set dirty 1; set wc_dirty 1
             }
             default {
                 set c [scan $key %c]
@@ -1915,7 +1950,7 @@ proc tui-editor {filepath} {
                 } elseif {$key eq $::cfg_tui_undo} {
                     if {[llength $undo_stack] > 0} {
                         lassign [lindex $undo_stack end] lines cy cx
-                        set undo_stack [lrange $undo_stack 0 end-1]; set dirty 1
+                        set undo_stack [lrange $undo_stack 0 end-1]; set dirty 1; set wc_dirty 1
                     }
                     set clear_sel 0
                 } elseif {$key eq $::cfg_tui_sticky_sel} {
@@ -1938,7 +1973,7 @@ proc tui-editor {filepath} {
                     if {$txt ne ""} {
                         eval $push_undo; tui-copy $txt
                         lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx
-                        set dirty 1; set message "cut"; set msg_time [clock seconds]
+                        set dirty 1; set wc_dirty 1; set message "cut"; set msg_time [clock seconds]
                     }
                 } elseif {$key eq $::cfg_tui_paste || [string match "PASTE:*" $key]} {
                     if {[string match "PASTE:*" $key]} {
@@ -1964,7 +1999,7 @@ proc tui-editor {filepath} {
                             incr cy [expr {[llength $plines]-1}]
                             set cx [string length [lindex $plines end]]
                         }
-                        set dirty 1
+                        set dirty 1; set wc_dirty 1
                     }
                 } elseif {$key eq $::cfg_tui_find} {
                     lassign [tui-size] rows cols
@@ -2001,7 +2036,7 @@ proc tui-editor {filepath} {
                                 lappend new_lines $out
                             }
                             if {$count > 0} {
-                                eval $push_undo; set lines $new_lines; set dirty 1
+                                eval $push_undo; set lines $new_lines; set dirty 1; set wc_dirty 1
                                 set message "replaced $count occurrence[expr {$count!=1?{s}:{}}]"
                                 set msg_time [clock seconds]
                                 set cy [expr {max(1, min($cy, [llength $lines]))}]
@@ -2032,10 +2067,10 @@ proc tui-editor {filepath} {
                     set clear_sel 0
                 } elseif {[string length $key] >= 1 && ($c eq "" || $c >= 32)} {
                     eval $push_undo
-                    if {$sel_anchor ne ""} { lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; set dirty 1 }
+                    if {$sel_anchor ne ""} { lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; set dirty 1; set wc_dirty 1 }
                     set l [lindex $lines [expr {$cy-1}]]
                     lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-1}]]${key}[string range $l $cx end]"
-                    incr cx [string length $key]; set dirty 1
+                    incr cx [string length $key]; set dirty 1; set wc_dirty 1
                 }
             }
         }
