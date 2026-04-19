@@ -26,6 +26,8 @@ set ::FILE_EXT ".txt"
 set ::filename ""
 set ::dirty    0
 set ::msg      ""
+set ::ed_msg   ""
+set ::ed_clock ""
 
 file mkdir $::DOCS_DIR_DEFAULT
 set ::CURSOR_FILE [file join $::DOCS_DIR_DEFAULT ".cursors.json"]
@@ -78,7 +80,6 @@ proc cursor-put {filepath cy cx} {
 set ::cfg_margin_width   60
 set ::cfg_margin_height  40
 set ::cfg_font_size      13
-set ::cfg_fullscreen_key Alt-Return
 set ::cfg_bg             "#1a1a1a"
 set ::cfg_fg             "#e8e8e8"
 set ::cfg_bg_bar         "#2a2a2a"
@@ -88,12 +89,31 @@ set ::cfg_docs_dir       ""
 set ::cfg_margin_cols    6
 set ::cfg_margin_rows    4
 set ::cfg_heading_marker "="
-set ::cfg_toc_key        "F11"
 set ::cfg_color_heading  "#c8a060"
 set ::cfg_line_numbers   0
-set ::cfg_ln_key         "Control-l"
 set ::cfg_cursor_restore 1
 set ::cfg_word_count     1
+set ::cfg_show_clock     1
+set ::cfg_help_bar       "^S save   ^Q close   ^H help"
+# shortcuts (Tk key names)
+set ::cfg_key_save         "Control-s"
+set ::cfg_key_save_as      "Control-S"
+set ::cfg_key_close        "Control-q"
+set ::cfg_key_find         "Control-f"
+set ::cfg_key_replace      "Control-r"
+set ::cfg_key_help         "Control-h"
+set ::cfg_key_goto         "Control-g"
+set ::cfg_key_open         "Control-o"
+set ::cfg_key_undo         "Control-z"
+set ::cfg_key_copy         "Control-c"
+set ::cfg_key_cut          "Control-x"
+set ::cfg_key_paste        "Control-v"
+set ::cfg_key_select_all   "Control-a"
+set ::cfg_key_sticky_sel   "Control-k"
+set ::cfg_key_toc          "F11"
+set ::cfg_key_line_numbers "Control-l"
+set ::cfg_key_fullscreen   "Alt-Return"
+set ::cfg_key_error        ""
 set ::fullscreen 0
 
 proc ini-load {} {
@@ -104,26 +124,46 @@ proc ini-load {} {
         set line [string trim $line]
         if {$line eq "" || [string match "#*" $line] || [string match {\[*} $line]} continue
         if {[regexp {^(\w+)\s*=\s*(.+)$} $line -> key val]} {
+            set v [string trim $val]
             switch [string trim $key] {
-                margin_width   { set ::cfg_margin_width   [string trim $val] }
-                margin_height  { set ::cfg_margin_height  [string trim $val] }
-                font_size      { set ::cfg_font_size      [string trim $val] }
-                fullscreen_key { set ::cfg_fullscreen_key [string trim $val] }
-                color_bg       { set ::cfg_bg             [string trim $val] }
-                color_fg       { set ::cfg_fg             [string trim $val] }
-                color_bg_bar   { set ::cfg_bg_bar         [string trim $val] }
-                color_fg_bar   { set ::cfg_fg_bar         [string trim $val] }
-                docs_dir         { set ::cfg_docs_dir       [string trim $val] }
-                margin_cols      { set ::cfg_margin_cols    [string trim $val] }
-                margin_rows      { set ::cfg_margin_rows    [string trim $val] }
-                color_bg_sel     { set ::cfg_bg_sel         [string trim $val] }
-                heading_marker   { set ::cfg_heading_marker [string trim $val] }
-                toc_key          { set ::cfg_toc_key        [string trim $val] }
-                color_heading    { set ::cfg_color_heading  [string trim $val] }
-                line_numbers     { set ::cfg_line_numbers   [string trim $val] }
-                ln_key           { set ::cfg_ln_key         [string trim $val] }
-                cursor_restore   { set ::cfg_cursor_restore [string trim $val] }
-                word_count       { set ::cfg_word_count     [string trim $val] }
+                margin_width     { set ::cfg_margin_width   $v }
+                margin_height    { set ::cfg_margin_height  $v }
+                font_size        { set ::cfg_font_size      $v }
+                color_bg         { set ::cfg_bg             $v }
+                color_fg         { set ::cfg_fg             $v }
+                color_bg_bar     { set ::cfg_bg_bar         $v }
+                color_fg_bar     { set ::cfg_fg_bar         $v }
+                docs_dir         { set ::cfg_docs_dir       $v }
+                margin_cols      { set ::cfg_margin_cols    $v }
+                margin_rows      { set ::cfg_margin_rows    $v }
+                color_bg_sel     { set ::cfg_bg_sel         $v }
+                heading_marker   { set ::cfg_heading_marker $v }
+                color_heading    { set ::cfg_color_heading  $v }
+                line_numbers     { set ::cfg_line_numbers   $v }
+                cursor_restore   { set ::cfg_cursor_restore $v }
+                word_count       { set ::cfg_word_count     $v }
+                show_clock       { set ::cfg_show_clock     $v }
+                help_bar         { set ::cfg_help_bar       $v }
+                key_save         { set ::cfg_key_save         $v }
+                key_save_as      { set ::cfg_key_save_as      $v }
+                key_close        { set ::cfg_key_close        $v }
+                key_find         { set ::cfg_key_find         $v }
+                key_replace      { set ::cfg_key_replace      $v }
+                key_help         { set ::cfg_key_help         $v }
+                key_goto         { set ::cfg_key_goto         $v }
+                key_open         { set ::cfg_key_open         $v }
+                key_undo         { set ::cfg_key_undo         $v }
+                key_copy         { set ::cfg_key_copy         $v }
+                key_cut          { set ::cfg_key_cut          $v }
+                key_paste        { set ::cfg_key_paste        $v }
+                key_select_all   { set ::cfg_key_select_all   $v }
+                key_sticky_sel   { set ::cfg_key_sticky_sel   $v }
+                key_toc          { set ::cfg_key_toc          $v }
+                key_line_numbers { set ::cfg_key_line_numbers $v }
+                key_fullscreen   { set ::cfg_key_fullscreen   $v }
+                toc_key          { set ::cfg_key_toc          $v }
+                ln_key           { set ::cfg_key_line_numbers $v }
+                fullscreen_key   { set ::cfg_key_fullscreen   $v }
             }
         }
     }
@@ -134,28 +174,48 @@ proc ini-save {} {
     set fh [open $::INI_FILE w]
     fconfigure $fh -encoding utf-8
     puts $fh "# Writhdeck — configuration"
+    puts $fh ""
     puts $fh "\[editor\]"
     puts $fh "# docs_dir = ~/Documents/writerdeck"
     puts $fh "# (default: ~/Documents/writhdeck)"
     puts $fh "margin_width   = $::cfg_margin_width"
     puts $fh "margin_height  = $::cfg_margin_height"
     puts $fh "# ── terminal version — values in columns/lines"
-    puts $fh "margin_cols = $::cfg_margin_cols"
-    puts $fh "margin_rows = $::cfg_margin_rows"
+    puts $fh "margin_cols    = $::cfg_margin_cols"
+    puts $fh "margin_rows    = $::cfg_margin_rows"
     puts $fh "font_size      = $::cfg_font_size"
-    puts $fh "fullscreen_key = $::cfg_fullscreen_key"
-    puts $fh ""
-    puts $fh "# headings / table of contents"
     puts $fh "heading_marker = $::cfg_heading_marker"
-    puts $fh "toc_key        = $::cfg_toc_key"
     puts $fh ""
-    puts $fh "# ── editor behaviour"
+    puts $fh "\[behaviour\]"
     puts $fh "line_numbers   = $::cfg_line_numbers"
-    puts $fh "ln_key         = $::cfg_ln_key"
     puts $fh "cursor_restore = $::cfg_cursor_restore"
     puts $fh "word_count     = $::cfg_word_count"
+    puts $fh "show_clock     = $::cfg_show_clock"
+    puts $fh "# help_bar: text shown in the shortcuts bar, empty to hide"
+    puts $fh "help_bar       = $::cfg_help_bar"
     puts $fh ""
-    puts $fh "# ── colors (#rrggbb format)"
+    puts $fh "\[keys\]"
+    puts $fh "# Use Tk key names: Control-s, Alt-Return, F11, etc."
+    puts $fh "key_save         = $::cfg_key_save"
+    puts $fh "key_save_as      = $::cfg_key_save_as"
+    puts $fh "key_close        = $::cfg_key_close"
+    puts $fh "key_find         = $::cfg_key_find"
+    puts $fh "key_replace      = $::cfg_key_replace"
+    puts $fh "key_help         = $::cfg_key_help"
+    puts $fh "key_goto         = $::cfg_key_goto"
+    puts $fh "key_open         = $::cfg_key_open"
+    puts $fh "key_undo         = $::cfg_key_undo"
+    puts $fh "key_copy         = $::cfg_key_copy"
+    puts $fh "key_cut          = $::cfg_key_cut"
+    puts $fh "key_paste        = $::cfg_key_paste"
+    puts $fh "key_select_all   = $::cfg_key_select_all"
+    puts $fh "key_sticky_sel   = $::cfg_key_sticky_sel"
+    puts $fh "key_toc          = $::cfg_key_toc"
+    puts $fh "key_line_numbers = $::cfg_key_line_numbers"
+    puts $fh "key_fullscreen   = $::cfg_key_fullscreen"
+    puts $fh ""
+    puts $fh "\[colors\]"
+    puts $fh "# colors in #rrggbb format"
     puts $fh "color_bg       = $::cfg_bg"
     puts $fh "color_fg       = $::cfg_fg"
     puts $fh "color_bg_bar   = $::cfg_bg_bar"
@@ -177,25 +237,76 @@ proc ini-save {} {
 
 ini-load
 
-# Map Tk key name → TUI escape sequence
+# Map Tk key name → string returned by tui-getch
 proc tk-key-to-tui {key} {
     set k [string tolower $key]
     if {[regexp {^control-([a-z])$} $k -> letter]} {
         scan $letter %c code
         return [format %c [expr {$code - 96}]]
     }
-    set ESC [format %c 27]
-    switch -- $k {
-        f1  { return "${ESC}OP"     }  f2  { return "${ESC}OQ"     }
-        f3  { return "${ESC}OR"     }  f4  { return "${ESC}OS"     }
-        f5  { return "${ESC}\[15~" }  f6  { return "${ESC}\[17~" }
-        f7  { return "${ESC}\[18~" }  f8  { return "${ESC}\[19~" }
-        f9  { return "${ESC}\[20~" }  f10 { return "${ESC}\[21~" }
-        f11 { return "${ESC}\[23~" }  f12 { return "${ESC}\[24~" }
-    }
+    if {[regexp {^f(\d+)$} $k -> n]} { return "F$n" }
     return $key
 }
-set ::cfg_ln_tui_key [tk-key-to-tui $::cfg_ln_key]
+
+# Return a short human-readable label for a Tk key name
+proc key-label {key} {
+    if {[regexp -nocase {^control-([a-z])$} $key -> l]} { return "^[string toupper $l]" }
+    if {[regexp -nocase {^f(\d+)$} $key -> n]}          { return "F$n" }
+    return $key
+}
+
+# Compute TUI equivalents and detect key conflicts
+proc keys-init {} {
+    set ::cfg_tui_save       [tk-key-to-tui $::cfg_key_save]
+    set ::cfg_tui_save_as    [tk-key-to-tui $::cfg_key_save_as]
+    set ::cfg_tui_close      [tk-key-to-tui $::cfg_key_close]
+    set ::cfg_tui_find       [tk-key-to-tui $::cfg_key_find]
+    set ::cfg_tui_replace    [tk-key-to-tui $::cfg_key_replace]
+    set ::cfg_tui_help       [tk-key-to-tui $::cfg_key_help]
+    set ::cfg_tui_goto       [tk-key-to-tui $::cfg_key_goto]
+    set ::cfg_tui_open       [tk-key-to-tui $::cfg_key_open]
+    set ::cfg_tui_undo       [tk-key-to-tui $::cfg_key_undo]
+    set ::cfg_tui_copy       [tk-key-to-tui $::cfg_key_copy]
+    set ::cfg_tui_cut        [tk-key-to-tui $::cfg_key_cut]
+    set ::cfg_tui_paste      [tk-key-to-tui $::cfg_key_paste]
+    set ::cfg_tui_select_all [tk-key-to-tui $::cfg_key_select_all]
+    set ::cfg_tui_sticky_sel [tk-key-to-tui $::cfg_key_sticky_sel]
+    set ::cfg_tui_toc        [tk-key-to-tui $::cfg_key_toc]
+    set ::cfg_tui_line_nums  [tk-key-to-tui $::cfg_key_line_numbers]
+    # labels for UI display
+    set ::cfg_lbl_save       [key-label $::cfg_key_save]
+    set ::cfg_lbl_close      [key-label $::cfg_key_close]
+    set ::cfg_lbl_find       [key-label $::cfg_key_find]
+    set ::cfg_lbl_replace    [key-label $::cfg_key_replace]
+    set ::cfg_lbl_help       [key-label $::cfg_key_help]
+    set ::cfg_lbl_goto       [key-label $::cfg_key_goto]
+    set ::cfg_lbl_open       [key-label $::cfg_key_open]
+    set ::cfg_lbl_undo       [key-label $::cfg_key_undo]
+    set ::cfg_lbl_copy       [key-label $::cfg_key_copy]
+    set ::cfg_lbl_paste      [key-label $::cfg_key_paste]
+    set ::cfg_lbl_sel_all    [key-label $::cfg_key_select_all]
+    set ::cfg_lbl_sticky     [key-label $::cfg_key_sticky_sel]
+    set ::cfg_lbl_toc        [key-label $::cfg_key_toc]
+    set ::cfg_lbl_line_nums  [key-label $::cfg_key_line_numbers]
+    # conflict detection
+    set pairs [list \
+        key_save $::cfg_tui_save \
+        key_close $::cfg_tui_close  key_find $::cfg_tui_find \
+        key_replace $::cfg_tui_replace  key_help $::cfg_tui_help \
+        key_goto $::cfg_tui_goto  key_open $::cfg_tui_open \
+        key_undo $::cfg_tui_undo  key_copy $::cfg_tui_copy \
+        key_cut $::cfg_tui_cut  key_paste $::cfg_tui_paste \
+        key_select_all $::cfg_tui_select_all  key_sticky_sel $::cfg_tui_sticky_sel \
+        key_toc $::cfg_tui_toc  key_line_numbers $::cfg_tui_line_nums]
+    set seen [dict create]; set conflicts {}
+    foreach {name val} $pairs {
+        if {[dict exists $seen $val]} {
+            lappend conflicts "$name=[dict get $seen $val]"
+        } else { dict set seen $val $name }
+    }
+    set ::cfg_key_error [join $conflicts "  "]
+}
+keys-init
 
 if {$::cfg_docs_dir ne ""} {
     set ::DOCS_DIR [file normalize $::cfg_docs_dir]
@@ -496,13 +607,22 @@ proc ed-yscroll {first last} {
     -font [list Mono $::cfg_font_size bold]
 
 frame .ed.bar -bg $bg_bar
-label .ed.bar.lbl -textvariable ::ed_status \
+label .ed.bar.lbl  -textvariable ::ed_status \
     -bg $bg_bar -fg $fg_bar -font $font_sm -anchor w -padx 8
-label .ed.bar.help \
-    -text "^S save  ^Q close  ^F find  ^R replace  ^G goto  ^O open  ^H/F1 help" \
-    -bg $bg_bar -fg $fg_bar -font $font_sm -anchor e -padx 8
+label .ed.bar.msg  -textvariable ::ed_msg \
+    -bg $bg_bar -fg $fg_bar -font $font_sm -anchor center -width 10
+if {$::cfg_show_clock} {
+    label .ed.bar.clk -textvariable ::ed_clock \
+        -bg $bg_bar -fg $fg_bar -font $font_sm -anchor e -padx 8 -width 6
+}
+if {$::cfg_help_bar ne ""} {
+    label .ed.bar.help -text $::cfg_help_bar \
+        -bg $bg_bar -fg $fg_bar -font $font_sm -anchor e -padx 8
+}
 pack .ed.bar.lbl  -side left
-pack .ed.bar.help -side right
+if {$::cfg_show_clock} { pack .ed.bar.clk  -side right }
+if {$::cfg_help_bar ne ""} { pack .ed.bar.help -side right }
+pack .ed.bar.msg  -side right
 pack .ed.bar -side bottom -fill x
 pack .ed.sb  -side right  -fill y
 if {$::cfg_line_numbers} {
@@ -549,18 +669,23 @@ proc ed-status {} {
     set d  [expr {$::dirty ? "* " : "  "}]
     set fn [expr {$::filename eq "" ? "\[new\]" : [file tail $::filename]}]
     lassign [split [.ed.t index insert] .] ln col
-    set m  [expr {$::msg ne "" ? "   | $::msg" : ""}]
     if {$::cfg_word_count} {
         set wc "   [llength [regexp -all -inline {\S+} [.ed.t get 1.0 end-1c]]]w"
     } else { set wc "" }
-    set ::ed_status "${d}${fn}   Ln ${ln}  Col [expr {$col + 1}]${wc}${m}"
+    set ::ed_status "${d}${fn}   Ln ${ln}  Col [expr {$col + 1}]${wc}"
 }
 
 proc set-msg {text} {
     set ::msg $text
-    ed-status
-    after 2000 { set ::msg ""; ed-status }
+    set ::ed_msg $text
+    after 2000 { set ::msg ""; set ::ed_msg ""; ed-status }
 }
+
+proc clock-tick {} {
+    set ::ed_clock [clock format [clock seconds] -format "%H:%M"]
+    after 30000 clock-tick
+}
+if {$::cfg_show_clock} { clock-tick }
 
 bind .ed.t <KeyRelease>    { ed-status }
 bind .ed.t <ButtonRelease> { ed-status }
@@ -763,6 +888,7 @@ proc close-editor {} {
     set ::filename ""
     set ::dirty    0
     set ::msg      ""
+    set ::ed_msg   ""
     wm title . "Writhdeck"
     .ed.t delete 1.0 end
     search-close
@@ -770,21 +896,17 @@ proc close-editor {} {
 }
 
 # ─── editor bindings ──────────────────────────────────────────────────────────
-bind .ed.t <Control-s> { save-file;    break }
-bind .ed.t <Control-S> { save-as;     break }
-bind .ed.t <Control-q> { close-editor; break }
-bind .ed.t <Control-w> { close-editor; break }
-bind .ed.t <Escape>    { close-editor; break }
+bind .ed.t <$::cfg_key_save>    { save-file;         break }
+bind .ed.t <$::cfg_key_save_as> { save-as;           break }
+bind .ed.t <$::cfg_key_close>   { close-editor;      break }
+bind .ed.t <Escape>             { close-editor;      break }
 
-bind .ed.t <Control-k> { break }
-
-bind .ed.t <Tab>          { .ed.t insert insert "    "; break }
-bind .ed.t <Control-g>   { goto-dialog; break }
-bind .ed.t <Control-h>   { help-dialog;  break }
-bind .ed.t <Control-r>   { replace-open; break }
-bind .ed.t <Control-f>   { search-open; break }
-bind .ed.t <Control-o>   { open-file-dialog; break }
-bind .ed.t <F1>          { help-dialog;  break }
+bind .ed.t <Tab>                { .ed.t insert insert "    "; break }
+bind .ed.t <$::cfg_key_goto>    { goto-dialog;       break }
+bind .ed.t <$::cfg_key_help>    { help-dialog;       break }
+bind .ed.t <$::cfg_key_replace> { replace-open;      break }
+bind .ed.t <$::cfg_key_find>    { search-open;       break }
+bind .ed.t <$::cfg_key_open>    { open-file-dialog;  break }
 
 bind .ed.sf.e <KeyRelease>   { search-update }
 bind .ed.sf.e <Return>       { search-next }
@@ -797,8 +919,8 @@ bind .ed.sf.r.e <Return>        { replace-one }
 bind .ed.sf.r.e <Control-Return> { replace-all }
 bind .ed.sf.r.e <Escape>        { search-close }
 bind .ed.sf.r.e <Tab>           { focus .ed.sf.e; break }
-bind .br.mid.lst <h>  { help-dialog }
-bind .br.mid.lst <F1> { help-dialog }
+bind .br.mid.lst <h>                  { help-dialog }
+bind .br.mid.lst <$::cfg_key_help>   { help-dialog }
 
 proc open-file-dialog {} {
     set path [tk_getOpenFile \
@@ -814,8 +936,8 @@ proc toggle-fullscreen {} {
     wm attributes . -fullscreen $::fullscreen
 }
 
-bind .ed.t          <$::cfg_fullscreen_key> { toggle-fullscreen; break }
-bind .br.mid.lst    <$::cfg_fullscreen_key> { toggle-fullscreen }
+bind .ed.t          <$::cfg_key_fullscreen> { toggle-fullscreen; break }
+bind .br.mid.lst    <$::cfg_key_fullscreen> { toggle-fullscreen }
 
 # ─── headings & TOC ───────────────────────────────────────────────────────────
 proc highlight-headings {} {
@@ -868,7 +990,7 @@ proc toc-show {} {
     bind $w.lst <Return>   [list toc-jump $w $headings]
     bind $w.lst <Double-1> [list toc-jump $w $headings]
     bind $w     <Escape>   [list destroy $w]
-    bind $w     <$::cfg_toc_key> [list destroy $w]
+    bind $w     <$::cfg_key_toc> [list destroy $w]
     focus $w.lst
 }
 
@@ -882,8 +1004,8 @@ proc toc-jump {w headings} {
     focus .ed.t
 }
 
-bind .ed.t <$::cfg_toc_key>  { toc-show;   break }
-bind .ed.t <$::cfg_ln_key>  { ln-toggle;  break }
+bind .ed.t <$::cfg_key_toc>          { toc-show;   break }
+bind .ed.t <$::cfg_key_line_numbers> { ln-toggle;  break }
 
 # ─── taille de police dynamique ───────────────────────────────────────────────
 proc font-resize {delta} {
@@ -908,33 +1030,31 @@ proc help-dialog {} {
     wm transient $w .
     grab $w
 
-    set fs_key  $::cfg_fullscreen_key
-    set toc_key $::cfg_toc_key
     set hm      $::cfg_heading_marker
     set sections [list \
         "EDITOR" [list \
-            "Ctrl+S"       "Save" \
-            "Ctrl+Shift+S" "Save as" \
-            "Ctrl+Q / ESC" "Save and return to browser" \
-            "Ctrl+F"       "Find (Enter: next  Shift+Enter: prev)" \
-            "Ctrl+R"       "Find & Replace (Enter: replace one  Ctrl+Enter: all)" \
-            "Ctrl+O"       "Open file" \
-            "Ctrl+G"       "Go to line" \
-            "Ctrl+Z"       "Undo" \
-            "Tab"          "Insert 4 spaces" \
-            $toc_key       "Table of contents  (${hm}title${hm})" \
-            $fs_key        "Fullscreen" \
-            "Ctrl+H / F1"  "Help" \
+            [key-label $::cfg_key_save]         "Save" \
+            [key-label $::cfg_key_save_as]      "Save as" \
+            "[key-label $::cfg_key_close] / ESC" "Return to browser" \
+            [key-label $::cfg_key_find]         "Find (Enter: next  Shift+Enter: prev)" \
+            [key-label $::cfg_key_replace]      "Find & Replace (Enter: replace one  Ctrl+Enter: all)" \
+            [key-label $::cfg_key_open]         "Open file" \
+            [key-label $::cfg_key_goto]         "Go to line" \
+            [key-label $::cfg_key_undo]         "Undo" \
+            "Tab"                               "Insert 4 spaces" \
+            [key-label $::cfg_key_toc]          "Table of contents  (${hm}title${hm})" \
+            [key-label $::cfg_key_fullscreen]   "Fullscreen" \
+            [key-label $::cfg_key_help]         "Help" \
         ] \
         "BROWSER" [list \
-            "↵ / double-click"  "Ouvrir" \
-            "n"                 "Nouveau fichier" \
-            "d"                 "Supprimer" \
-            "r"                 "Renommer" \
-            $fs_key             "Plein écran" \
-            "Ctrl+O"            "Open file" \
-            "h / F1"            "Help" \
-            "q"                 "Quit" \
+            "↵ / double-click"                  "Open" \
+            "n"                                 "New file" \
+            "d"                                 "Delete" \
+            "r"                                 "Rename" \
+            [key-label $::cfg_key_fullscreen]   "Fullscreen" \
+            [key-label $::cfg_key_open]         "Open file" \
+            "h / [key-label $::cfg_key_help]"   "Help" \
+            "q"                                 "Quit" \
         ] \
     ]
 
@@ -1073,25 +1193,33 @@ proc tui-help {row text cols} {
 }
 
 proc tui-help-dialog {rows cols} {
-    set lines {
-        "  Writhdeck — keyboard shortcuts"
-        ""
-        "  ^S        Save              ^Z        Undo"
-        "  ^W / Esc  Close             ^A        Select all"
-        "  ^K        Toggle selection  ^C        Copy"
-        "  ^F        Find              ^X        Cut"
-        "  ^R        Replace           ^V        Paste"
-        "  ^G        Go to line        ^L        Toggle line numbers"
-        "  ^O        Open (browser)"
-        ""
-        "  Arrows    Move cursor       Shift+Arrows  Extend selection"
-        "  Home/End  Line start/end    PgUp/PgDn     Scroll page"
-        ""
-        "  F11 / toc_key   Table of contents"
-        "  ^H / F1         This help"
-        ""
-        "  Press any key to close"
-    }
+    set lbl_save   $::cfg_lbl_save;   set lbl_close  $::cfg_lbl_close
+    set lbl_undo   $::cfg_lbl_undo;   set lbl_selall $::cfg_lbl_sel_all
+    set lbl_sticky $::cfg_lbl_sticky; set lbl_copy   $::cfg_lbl_copy
+    set lbl_find   $::cfg_lbl_find;   set lbl_cut    [key-label $::cfg_key_cut]
+    set lbl_repl   $::cfg_lbl_replace; set lbl_paste $::cfg_lbl_paste
+    set lbl_goto   $::cfg_lbl_goto;   set lbl_lnum   $::cfg_lbl_line_nums
+    set lbl_open   $::cfg_lbl_open;   set lbl_toc    $::cfg_lbl_toc
+    set lbl_help   $::cfg_lbl_help
+    set lines [list \
+        "  Writhdeck — keyboard shortcuts" \
+        "" \
+        [format "  %-10s Save              %-10s Undo" $lbl_save $lbl_undo] \
+        [format "  %-10s Close / Esc       %-10s Select all" $lbl_close $lbl_selall] \
+        [format "  %-10s Toggle selection  %-10s Copy" $lbl_sticky $lbl_copy] \
+        [format "  %-10s Find              %-10s Cut" $lbl_find $lbl_cut] \
+        [format "  %-10s Replace           %-10s Paste" $lbl_repl $lbl_paste] \
+        [format "  %-10s Go to line        %-10s Line numbers" $lbl_goto $lbl_lnum] \
+        [format "  %-10s Open (browser)" $lbl_open] \
+        "" \
+        "  Arrows    Move cursor       Shift+Arrows  Extend selection" \
+        "  Home/End  Line start/end    PgUp/PgDn     Scroll page" \
+        "" \
+        [format "  %-16s Table of contents" $lbl_toc] \
+        [format "  %-16s This help" $lbl_help] \
+        "" \
+        "  Press any key to close" \
+    ]
     set h [llength $lines]
     set w 52
     set top  [expr {max(0, ($rows - $h) / 2)}]
@@ -1412,10 +1540,11 @@ proc tui-browser {} {
             while {$row < $rows-2} { tui-move $row 0; puts -nonewline "\033\[K"; incr row }
         }
         set plu [expr {$fcount != 1 ? "s" : ""}]
-        tui-help [expr {$rows-2}] "\u21b5 open  n new  d delete  r rename  q/^Q quit" $cols
-        if {$msg ne ""} { tui-bar [expr {$rows-1}] " $msg" "" $cols; set msg ""
+        if {$::cfg_help_bar ne ""} { tui-help [expr {$rows-2}] "\u21b5 open  n new  d delete  r rename  q quit   $::cfg_lbl_help help" $cols }
+        set clk [expr {$::cfg_show_clock ? "  [clock format [clock seconds] -format {%H:%M}]" : ""}]
+        if {$msg ne ""} { tui-bar [expr {$rows-1}] " $msg" "${clk} " $cols; set msg ""
         } else { tui-bar [expr {$rows-1}] " [string map [list $::env(HOME) ~] $::DOCS_DIR_DEFAULT]" \
-                         " $fcount file${plu} " $cols }
+                         " $fcount file${plu}${clk} " $cols }
         flush stdout
 
         set key [tui-getch]
@@ -1632,13 +1761,15 @@ proc tui-editor {filepath} {
 
         # ── bars ──────────────────────────────────────────────────────────────
         set sel_info [expr {$sel_r ne {} ? " \[sel\]" : ""}]
-        set sel_hint [expr {$sel_anchor ne "" ? "^K cancel-sel" : "^K sel"}]
-        tui-help [expr {$rows-2}] "^S save  ^W close  ^F find  ^R replace  ^G goto  ^O open  ^Z undo  ^A selall  $sel_hint ^C copy  ^V paste  ^H help  $::cfg_toc_key toc" $cols
+        set sel_hint [expr {$sel_anchor ne "" ? "$::cfg_lbl_sticky cancel-sel" : "$::cfg_lbl_sticky sel"}]
+        if {$::cfg_help_bar ne ""} { tui-help [expr {$rows-2}] $::cfg_help_bar $cols }
         set left " [file tail $filepath][expr {$dirty ? { [+]} : {}}]${sel_info}"
         set wc_str ""
         if {$::cfg_word_count} { set wc [llength [regexp -all -inline {\S+} [join $lines " "]]]; set wc_str "  ${wc}w" }
-        set right [format "ln %d/%d  col %d%s " $cy [llength $lines] [expr {$cx+1}] $wc_str]
-        if {$message ne "" && [clock seconds] - $msg_time < 2} { set left " $message" }
+        set clk [expr {$::cfg_show_clock ? "  [clock format [clock seconds] -format {%H:%M}]" : ""}]
+        set right [format "ln %d/%d  col %d%s%s " $cy [llength $lines] [expr {$cx+1}] $wc_str $clk]
+        if {$::cfg_key_error ne "" && $message eq ""} { set message "key conflict: $::cfg_key_error"; set msg_time [clock seconds] }
+        if {$message ne "" && [clock seconds] - $msg_time < 4} { set left " $message" }
         tui-bar [expr {$rows-1}] $left $right $cols
 
         tui-move [expr {$vi - $scroll_y + $roff}] [expr {$scx + $coff}]
@@ -1761,13 +1892,13 @@ proc tui-editor {filepath} {
             }
             default {
                 set c [scan $key %c]
-                if {$key eq "\x13"} {                                          ;# Ctrl+S save
+                if {$key eq $::cfg_tui_save} {
                     set fh [open $filepath w]; fconfigure $fh -encoding utf-8
                     puts -nonewline $fh "[join $lines \n]\n"; close $fh
                     cursor-put $filepath $cy $cx
                     set dirty 0; set message "saved"; set msg_time [clock seconds]
                     set clear_sel 0
-                } elseif {$key in {"\x17" "\x11" ESC}} {                       ;# Ctrl+W/Q/Esc close
+                } elseif {$key eq $::cfg_tui_close || $key eq "ESC"} {
                     if {$dirty} {
                         lassign [tui-size] rows cols
                         if {[tui-confirm "save before closing?" $rows $cols]} {
@@ -1776,39 +1907,39 @@ proc tui-editor {filepath} {
                         }
                     }
                     cursor-put $filepath $cy $cx; return
-                } elseif {$key eq "\x0f"} {                                    ;# Ctrl+O open (→ browser)
+                } elseif {$key eq $::cfg_tui_open} {
                     set fh [open $filepath w]; fconfigure $fh -encoding utf-8
                     puts -nonewline $fh "[join $lines \n]\n"; close $fh
                     cursor-put $filepath $cy $cx; set dirty 0; return
-                } elseif {$key eq "\x1a"} {                                    ;# Ctrl+Z undo
+                } elseif {$key eq $::cfg_tui_undo} {
                     if {[llength $undo_stack] > 0} {
                         lassign [lindex $undo_stack end] lines cy cx
                         set undo_stack [lrange $undo_stack 0 end-1]; set dirty 1
                     }
                     set clear_sel 0
-                } elseif {$key eq "\x0b"} {                                    ;# Ctrl+K toggle sticky selection
+                } elseif {$key eq $::cfg_tui_sticky_sel} {
                     if {$sel_sticky} {
                         set sel_sticky 0; set sel_anchor ""
                     } else {
                         set sel_sticky 1; set sel_anchor [list $cy $cx]
                     }
                     set clear_sel 0
-                } elseif {$key eq "\x01"} {                                    ;# Ctrl+A select all
+                } elseif {$key eq $::cfg_tui_select_all} {
                     set sel_anchor [list 1 0]
                     set cy [llength $lines]; set cx [string length [lindex $lines end]]
                     set clear_sel 0
-                } elseif {$key eq "\x03"} {                                    ;# Ctrl+C copy
+                } elseif {$key eq $::cfg_tui_copy} {
                     set txt [tui-sel-text $lines $sel_anchor $cy $cx]
                     if {$txt ne ""} { tui-copy $txt; set message "copied"; set msg_time [clock seconds] }
                     set clear_sel 0
-                } elseif {$key eq "\x18"} {                                    ;# Ctrl+X cut
+                } elseif {$key eq $::cfg_tui_cut} {
                     set txt [tui-sel-text $lines $sel_anchor $cy $cx]
                     if {$txt ne ""} {
                         eval $push_undo; tui-copy $txt
                         lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx
                         set dirty 1; set message "cut"; set msg_time [clock seconds]
                     }
-                } elseif {$key eq "\x16" || [string match "PASTE:*" $key]} {   ;# Ctrl+V / bracketed paste
+                } elseif {$key eq $::cfg_tui_paste || [string match "PASTE:*" $key]} {
                     if {[string match "PASTE:*" $key]} {
                         set txt [string range $key 6 end]
                     } else {
@@ -1834,7 +1965,7 @@ proc tui-editor {filepath} {
                         }
                         set dirty 1
                     }
-                } elseif {$key eq "\x06"} {                                    ;# Ctrl+F find
+                } elseif {$key eq $::cfg_tui_find} {
                     lassign [tui-size] rows cols
                     set term [string trim [tui-prompt "find: " $rows $cols]]
                     if {$term ne ""} { set ::tui_search $term }
@@ -1850,7 +1981,7 @@ proc tui-editor {filepath} {
                         if {!$found} { set message "not found: $::tui_search"; set msg_time [clock seconds] }
                     }
                     set clear_sel 0
-                } elseif {$key eq "\x12"} {                                    ;# Ctrl+R replace
+                } elseif {$key eq $::cfg_tui_replace} {
                     lassign [tui-size] rows cols
                     set term [string trim [tui-prompt "find: " $rows $cols]]
                     if {$term ne ""} { set ::tui_search $term }
@@ -1878,21 +2009,21 @@ proc tui-editor {filepath} {
                         }
                     }
                     set clear_sel 0
-                } elseif {$key eq "\x07"} {                                    ;# Ctrl+G goto line
+                } elseif {$key eq $::cfg_tui_goto} {
                     lassign [tui-size] rows cols
                     set num [tui-prompt "go to line: " $rows $cols]
                     if {[string is integer -strict $num] && $num >= 1} {
                         set cy [expr {min($num, [llength $lines])}]; set cx 0
                     }
-                } elseif {$key eq $::cfg_toc_key} {
+                } elseif {$key eq $::cfg_tui_toc} {
                     lassign [tui-size] rows cols
                     set target [tui-toc $lines $rows $cols]
                     puts -nonewline "\033\[2J"
                     if {$target > 0} { set cy $target; set cx 0 }
-                } elseif {$key eq $::cfg_ln_tui_key} {                        ;# toggle line numbers
+                } elseif {$key eq $::cfg_tui_line_nums} {
                     set ::cfg_line_numbers [expr {$::cfg_line_numbers ? 0 : 1}]
                     set clear_sel 0
-                } elseif {$key eq "\x08" || $key eq "F1"} {                   ;# Ctrl+H / F1 help
+                } elseif {$key eq $::cfg_tui_help} {
                     lassign [tui-size] rows cols
                     tui-help-dialog $rows $cols
                     set clear_sel 0
@@ -1935,8 +2066,9 @@ proc tui-main {} {
 # ─── start ────────────────────────────────────────────────────────────────────
 if {$::no_gui} {
     tui-main
-} elseif {$::argc > 0} {
-    show-editor [lindex $::argv 0]
 } else {
-    show-browser
+    if {$::argc > 0} { show-editor [lindex $::argv 0] } else { show-browser }
+    if {$::cfg_key_error ne ""} {
+        after 100 [list set-msg "key conflict: $::cfg_key_error"]
+    }
 }

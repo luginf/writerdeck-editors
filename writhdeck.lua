@@ -691,8 +691,12 @@ local function editor(stdscr, filepath)
     msg_time = os.time()
   end
 
-  local function save_and_close()
-    save()
+  local function close_editor()
+    if dirty then
+      if confirm(stdscr, "save before closing?") then save() end
+    else
+      save_cursor(filepath, cy, cx)
+    end
     curses.curs_set(0)
   end
 
@@ -736,7 +740,7 @@ local function editor(stdscr, filepath)
     end
 
     -- Help bar
-    draw_help_bar(stdscr, " ^S save  ^W save+close  ^G goto  " .. cfg.toc_key .. " toc  ^Q quit")
+    draw_help_bar(stdscr, " ^S save  ^W close  ^G goto  " .. cfg.toc_key .. " toc  ^Q quit")
 
     -- Status bar
     local fname   = basename(filepath)
@@ -850,7 +854,7 @@ local function editor(stdscr, filepath)
       save()
 
     elseif ch == 23 or ch == 17 or ch == 27 then  -- Ctrl+W / Ctrl+Q / Esc
-      save_and_close(); return
+      close_editor(); return
 
     elseif ch == key_from_name(cfg.toc_key) then
       local target = show_toc(stdscr, lines)
