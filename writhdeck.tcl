@@ -1301,7 +1301,6 @@ proc tui-browser {} {
     set sel 0; set scroll 0; set msg ""
     while 1 {
         lassign [tui-size] rows cols
-        puts -nonewline "\033\[2J"
         # build entries
         set entries {}; set fcount 0
         foreach dir [br-dirs] {
@@ -1352,6 +1351,7 @@ proc tui-browser {} {
                 }
                 incr row; incr ei
             }
+            while {$row < $rows-2} { tui-move $row 0; puts -nonewline "\033\[K"; incr row }
         }
         set plu [expr {$fcount != 1 ? "s" : ""}]
         tui-help [expr {$rows-2}] "\u21b5 open  n new  d delete  r rename  q/^Q quit" $cols
@@ -1503,19 +1503,22 @@ proc tui-editor {filepath} {
         set scroll_y [expr {max(0, min($scroll_y, max(0, [llength $vrows] - $th)))}]
 
         # ── draw ──────────────────────────────────────────────────────────────
-        puts -nonewline "\033\[2J"
         set sel_r [tui-sel-range $sel_anchor $cy $cx]
 
         for {set i 0} {$i < $th} {incr i} {
             set vi2 [expr {$scroll_y + $i}]
-            if {$vi2 >= [llength $vrows]} break
+            set srow [expr {$i + $roff}]
+            if {$vi2 >= [llength $vrows]} {
+                tui-move $srow 0; puts -nonewline "\033\[K"
+                continue
+            }
             lassign [lindex $vrows $vi2] li scol ecol
             set line_text [lindex $lines [expr {$li-1}]]
             set seg [string range $line_text $scol [expr {$ecol-1}]]
             set ish [expr {[parse-heading $line_text] ne ""}]
-            set srow [expr {$i + $roff}]
 
-            # line number
+            # left margin + line number
+            tui-move $srow 0; puts -nonewline "\033\[K"
             if {$ln_w > 0 && $scol == 0} {
                 tui-attr dim
                 tui-move $srow $marg
@@ -1826,6 +1829,7 @@ proc tui-editor {filepath} {
                 } elseif {$key eq $::cfg_toc_key} {
                     lassign [tui-size] rows cols
                     set target [tui-toc $lines $rows $cols]
+                    puts -nonewline "\033\[2J"
                     if {$target > 0} { set cy $target; set cx 0 }
                 } elseif {$key eq $::cfg_ln_tui_key} {                        ;# toggle line numbers
                     set ::cfg_line_numbers [expr {$::cfg_line_numbers ? 0 : 1}]

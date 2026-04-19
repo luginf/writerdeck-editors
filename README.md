@@ -71,6 +71,7 @@ similar usage for the other versions.
   save/close; toggled via cursor_restore = 1                                                                   
   - Ctrl+O: tk_getOpenFile dialog to open any file                                                             
   - F1: help (Ctrl+H was reassigned to replace)     
+  - Ctrl+l : show line number
                                                             
                                                                                                                
   TUI mode (--no-gui flag, pure terminal via ANSI escapes):                                                    
