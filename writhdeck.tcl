@@ -1055,8 +1055,8 @@ proc help-dialog {} {
         set wc    [llength [regexp -all -inline {\S+} $txt]]
         set chars [string length $txt]
         lappend sections "FILE INFO" [list \
-            "Mots"    $wc \
-            "Signes"  $chars \
+            "Word count"    $wc \
+            "Char count"  $chars \
         ]
         set height 25
     }
