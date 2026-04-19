@@ -1,6 +1,6 @@
 #!/usr/bin/env tclsh
-# writhdeck-tk.tcl — Tk/TUI text editor with file browser
-# Usage: tclsh writhdeck-tk.tcl [--no-gui] [filename]
+# writhdeck.tcl — Tk/TUI text editor with file browser
+# Usage: tclsh writhdeck.tcl [--no-gui] [filename]
 
 set ::no_gui [expr {[lsearch $::argv "--no-gui"] >= 0}]
 if {$::no_gui} {
@@ -91,7 +91,9 @@ set ::cfg_heading_marker "="
 set ::cfg_toc_key        "F11"
 set ::cfg_color_heading  "#c8a060"
 set ::cfg_line_numbers   0
+set ::cfg_ln_key         "Control-l"
 set ::cfg_cursor_restore 1
+set ::cfg_word_count     1
 set ::fullscreen 0
 
 proc ini-load {} {
@@ -119,7 +121,9 @@ proc ini-load {} {
                 toc_key          { set ::cfg_toc_key        [string trim $val] }
                 color_heading    { set ::cfg_color_heading  [string trim $val] }
                 line_numbers     { set ::cfg_line_numbers   [string trim $val] }
+                ln_key           { set ::cfg_ln_key         [string trim $val] }
                 cursor_restore   { set ::cfg_cursor_restore [string trim $val] }
+                word_count       { set ::cfg_word_count     [string trim $val] }
             }
         }
     }
@@ -146,8 +150,10 @@ proc ini-save {} {
     puts $fh "toc_key        = $::cfg_toc_key"
     puts $fh ""
     puts $fh "# ── editor behaviour"
-    puts $fh "# line_numbers   = 0  (1 = show line numbers in left margin)"
-    puts $fh "# cursor_restore = 1  (0 = always open at line 1)"
+    puts $fh "line_numbers   = $::cfg_line_numbers"
+    puts $fh "ln_key         = $::cfg_ln_key"
+    puts $fh "cursor_restore = $::cfg_cursor_restore"
+    puts $fh "word_count     = $::cfg_word_count"
     puts $fh ""
     puts $fh "# ── colors (#rrggbb format)"
     puts $fh "color_bg       = $::cfg_bg"
@@ -170,6 +176,26 @@ proc ini-save {} {
 }
 
 ini-load
+
+# Map Tk key name → TUI escape sequence
+proc tk-key-to-tui {key} {
+    set k [string tolower $key]
+    if {[regexp {^control-([a-z])$} $k -> letter]} {
+        scan $letter %c code
+        return [format %c [expr {$code - 96}]]
+    }
+    set ESC [format %c 27]
+    switch -- $k {
+        f1  { return "${ESC}OP"     }  f2  { return "${ESC}OQ"     }
+        f3  { return "${ESC}OR"     }  f4  { return "${ESC}OS"     }
+        f5  { return "${ESC}\[15~" }  f6  { return "${ESC}\[17~" }
+        f7  { return "${ESC}\[18~" }  f8  { return "${ESC}\[19~" }
+        f9  { return "${ESC}\[20~" }  f10 { return "${ESC}\[21~" }
+        f11 { return "${ESC}\[23~" }  f12 { return "${ESC}\[24~" }
+    }
+    return $key
+}
+set ::cfg_ln_tui_key [tk-key-to-tui $::cfg_ln_key]
 
 if {$::cfg_docs_dir ne ""} {
     set ::DOCS_DIR [file normalize $::cfg_docs_dir]
@@ -524,7 +550,10 @@ proc ed-status {} {
     set fn [expr {$::filename eq "" ? "\[new\]" : [file tail $::filename]}]
     lassign [split [.ed.t index insert] .] ln col
     set m  [expr {$::msg ne "" ? "   | $::msg" : ""}]
-    set ::ed_status "${d}${fn}   Ln ${ln}  Col [expr {$col + 1}]${m}"
+    if {$::cfg_word_count} {
+        set wc "   [llength [regexp -all -inline {\S+} [.ed.t get 1.0 end-1c]]]w"
+    } else { set wc "" }
+    set ::ed_status "${d}${fn}   Ln ${ln}  Col [expr {$col + 1}]${wc}${m}"
 }
 
 proc set-msg {text} {
@@ -551,6 +580,26 @@ proc ln-update {} {
     }
     .ed.ln configure -state disabled
     catch { .ed.ln yview moveto [lindex [.ed.t yview] 0] }
+}
+
+proc ln-toggle {} {
+    if {[winfo exists .ed.ln]} {
+        destroy .ed.ln
+        set ::cfg_line_numbers 0
+    } else {
+        set bg_bar [.ed.bar cget -bg]
+        set fg_dim [lindex [.ed.bar.lbl cget -fg] 0]
+        text .ed.ln \
+            -width 4 -font [.ed.t cget -font] \
+            -bg $bg_bar -fg $fg_dim \
+            -state disabled -borderwidth 0 \
+            -padx 4 -pady [.ed.t cget -pady] \
+            -highlightthickness 0 -wrap none \
+            -cursor arrow
+        pack .ed.ln -in .ed -side left -fill y -before .ed.t
+        set ::cfg_line_numbers 1
+        ln-update
+    }
 }
 
 # ─── file I/O ─────────────────────────────────────────────────────────────────
@@ -832,7 +881,8 @@ proc toc-jump {w headings} {
     focus .ed.t
 }
 
-bind .ed.t <$::cfg_toc_key> { toc-show; break }
+bind .ed.t <$::cfg_toc_key>  { toc-show;   break }
+bind .ed.t <$::cfg_ln_key>  { ln-toggle;  break }
 
 # ─── taille de police dynamique ───────────────────────────────────────────────
 proc font-resize {delta} {
@@ -1520,12 +1570,13 @@ proc tui-editor {filepath} {
         }
 
         # ── bars ──────────────────────────────────────────────────────────────
-        set wc 0; foreach l $lines { incr wc [llength [split $l]] }
         set sel_info [expr {$sel_r ne {} ? " \[sel\]" : ""}]
         set sel_hint [expr {$sel_anchor ne "" ? "^K cancel-sel" : "^K sel"}]
         tui-help [expr {$rows-2}] "^S save  ^W close  ^F find  ^R replace  ^G goto  ^O open  ^Z undo  ^A selall  $sel_hint ^C copy  ^V paste  $::cfg_toc_key toc" $cols
         set left " [file tail $filepath][expr {$dirty ? { [+]} : {}}]${sel_info}"
-        set right [format "ln %d/%d  col %d  %dw " $cy [llength $lines] [expr {$cx+1}] $wc]
+        set wc_str ""
+        if {$::cfg_word_count} { set wc [llength [regexp -all -inline {\S+} [join $lines " "]]]; set wc_str "  ${wc}w" }
+        set right [format "ln %d/%d  col %d%s " $cy [llength $lines] [expr {$cx+1}] $wc_str]
         if {$message ne "" && [clock seconds] - $msg_time < 2} { set left " $message" }
         tui-bar [expr {$rows-1}] $left $right $cols
 
@@ -1776,6 +1827,9 @@ proc tui-editor {filepath} {
                     lassign [tui-size] rows cols
                     set target [tui-toc $lines $rows $cols]
                     if {$target > 0} { set cy $target; set cx 0 }
+                } elseif {$key eq $::cfg_ln_tui_key} {                        ;# toggle line numbers
+                    set ::cfg_line_numbers [expr {$::cfg_line_numbers ? 0 : 1}]
+                    set clear_sel 0
                 } elseif {[string length $key] >= 1 && ($c eq "" || $c >= 32)} {
                     eval $push_undo
                     if {$sel_anchor ne ""} { lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; set dirty 1 }

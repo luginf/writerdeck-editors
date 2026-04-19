@@ -7,11 +7,11 @@ some simple editors for a writerdeck:
 - writhdeck.py  : python version
 - writhdeck.fs : gforth version (uses C bindings)
 - writhdeck-ansi.fs : gforth version (no C bindings, simpler version) 
-- writhdeck.tcl : tcl/tk version  ("wish writhdeck-tk.tcl file.txt")
+- writhdeck.tcl : tcl/tk version  ("wish writhdeck.tcl file.txt"), the most advanced: configurable margins, font size, colors, fullscreen toggle, and chapter navigation via a custom marker or Markdown headings. All options live in  ~/Documents/writhdeck/writhdeck.ini
 
 Converted to lua and others with the help of LLM (Claude code)
 
-Nano and micro are also great tools for simple writerdeck. Simple, yet powerful.  Scite is my editor of choice for using with a GUI.
+Nano, micro or scite are also great tools for simple writerdeck. Simple, yet powerful. 
 
 Those simpler editors are some kind of proof-of-concept for alternatives or other usages. 
 
@@ -21,10 +21,7 @@ Those simpler editors are some kind of proof-of-concept for alternatives or othe
 lua writhdeck.lua : writhdeck mode, let you create and restore files from ~/Documents/writhdeck/ folder.
 lua writhdeck.lua file.txt : editor mode, let you edit a file from any folder.
 
-Same usage for the python and tcl versions.
-
-
-writhdeck Tcl/Tk editor with configurable margins, font size, colors, fullscreen toggle, and chapter navigation via a custom marker or Markdown headings. All options live in  ~/Documents/writhdeck/writhdeck.ini.
+similar usage for the other versions.
 
 
 ## Summary
