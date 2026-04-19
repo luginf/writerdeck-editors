@@ -7,7 +7,7 @@ some simple editors for a writerdeck:
 - forrdeck.py  : python version
 - forrdeck.fs : gforth version (uses C bindings)
 - forrdeck-ansi.fs : gforth version (no C bindings, simpler version) 
-- forrdeck-tk.tcl : tcl/tk version  ("wish forrdeck-tk.tcl file.txt")
+- forrdeck.tcl : tcl/tk version  ("wish forrdeck-tk.tcl file.txt")
 
 Converted to lua and others with the help of LLM (Claude code)
 
@@ -47,7 +47,7 @@ forrdeck Tcl/Tk editor with configurable margins, font size, colors, fullscreen 
   - UTF-8 input support                                                                                        
                                                                                                                
   ---                                                                                                          
-  forrdeck-tk.tcl — Tcl/Tk GUI + TUI (dual mode)                                                               
+  forrdeck.tcl — Tcl/Tk GUI + TUI (dual mode)                                                               
                                                                                                                
   GUI mode (default, requires Tk):
   - Graphical window with scrollable text editor and file browser                                              
@@ -66,7 +66,14 @@ forrdeck Tcl/Tk editor with configurable margins, font size, colors, fullscreen 
   - Shift+Enter : previous match     
   - Ctrl+F from the search bar : next match                                                                    
   - Esc : closes the bar and clears highlights              
-  - Match counter displayed (3 matches)                                                                        
+  - Match counter displayed (3 matches)               
+  - Search & Replace (Ctrl+H): inline replace bar with Replace (Enter) and Replace All (Ctrl+Enter); Tab       
+  navigates between find/replace fields                                                                 
+  - Line numbers: enabled via line_numbers = 1 in the .ini, synchronized with scroll                           
+  - Cursor restore: position saved in .cursors.json (format compatible with the Lua version) on every
+  save/close; toggled via cursor_restore = 1                                                                   
+  - Ctrl+O: tk_getOpenFile dialog to open any file                                                             
+  - F1: help (Ctrl+H was reassigned to replace)     
                                                             
                                                                                                                
   TUI mode (--no-gui flag, pure terminal via ANSI escapes):                                                    
@@ -80,6 +87,21 @@ forrdeck Tcl/Tk editor with configurable margins, font size, colors, fullscreen 
   - Type a term, jumps to the first occurrence after the cursor (wraps around)                                 
   - Press Ctrl+F again without typing a new term (just Enter) to find the next occurrence
   - Displays not found: … if no match  
+  - Undo (Ctrl+Z): 100-state stack; every destructive edit pushes a snapshot
+  - Selection (Shift+↑↓←→): character-level visual highlight; Ctrl+A selects all                               
+  - Copy/Cut/Paste (Ctrl+C / Ctrl+X / Ctrl+V): via xclip, xsel, or wl-copy (tried in cascade); multi-line paste
+   handled                                                                                                     
+  - Cursor restore: same JSON as GUI and Lua                                                                   
+  - Line numbers: left column when line_numbers = 1, shown only on the first visual row of each paragraph      
+  - Scroll indicator: mini ▐/│ bar in the rightmost column when content overflows the screen                   
+  - Search & Replace (Ctrl+R): two consecutive find/replace prompts, global replacement with a counter
+  - Ctrl+O: saves and returns to the browser  
+  
+  Ctrl+B behavior:                                                                                       
+                                            
+  - First press: sets the anchor at the current position, arrows extend the selection normally                 
+  - Second press: cancels the selection
+  - The help bar shows ^B sel or ^B cancel-sel depending on the state   
   
   
   ---                                                       

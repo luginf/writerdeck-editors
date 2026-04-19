@@ -7,7 +7,17 @@ if {$::no_gui} {
     set ::argv [lsearch -all -inline -not $::argv "--no-gui"]
     set ::argc [llength $::argv]
 }
-if {!$::no_gui} { package require Tk }
+if {!$::no_gui} {
+    # auto-detect: no graphical display available
+    set _has_display [expr {
+        ([info exists ::env(DISPLAY)]          && $::env(DISPLAY)          ne "") ||
+        ([info exists ::env(WAYLAND_DISPLAY)]  && $::env(WAYLAND_DISPLAY)  ne "")
+    }]
+    if {!$_has_display || [catch {package require Tk}]} {
+        set ::no_gui 1
+    }
+    unset _has_display
+}
 
 set ::DOCS_DIR_DEFAULT [file join $::env(HOME) Documents forrdeck]
 set ::DOCS_DIR         $::DOCS_DIR_DEFAULT
@@ -18,6 +28,51 @@ set ::dirty    0
 set ::msg      ""
 
 file mkdir $::DOCS_DIR_DEFAULT
+set ::CURSOR_FILE [file join $::DOCS_DIR_DEFAULT ".cursors.json"]
+
+# ─── cursor persistence (JSON, compatible with forrdeck.lua) ──────────────────
+proc cursors-load {} {
+    if {![file exists $::CURSOR_FILE]} { return {} }
+    set fh [open $::CURSOR_FILE r]; fconfigure $fh -encoding utf-8
+    set raw [read $fh]; close $fh
+    set d {}
+    set re {"([^"\\]*)"\s*:\s*\[(\d+)\s*,\s*(\d+)\]"}
+    set start 0
+    while {[regexp -start $start $re $raw -> key cy cx]} {
+        dict set d $key [list [expr {int($cy)}] [expr {int($cx)}]]
+        set idx [string first "\"$key\"" $raw $start]
+        set start [expr {$idx + [string length $key] + 2}]
+    }
+    return $d
+}
+
+proc cursors-save {d} {
+    set parts {}
+    dict for {k v} $d {
+        set ke [string map {\\ \\\\ \" \\\"} $k]
+        lappend parts "\"$ke\":\[[lindex $v 0],[lindex $v 1]\]"
+    }
+    set fh [open $::CURSOR_FILE w]; fconfigure $fh -encoding utf-8
+    puts $fh "\{[join $parts ,]\}"
+    close $fh
+}
+
+proc cursor-get {filepath} {
+    if {!$::cfg_cursor_restore} { return {1 0} }
+    set d [cursors-load]
+    if {[dict exists $d $filepath]} {
+        lassign [dict get $d $filepath] cy cx
+        return [list [expr {$cy + 1}] $cx]
+    }
+    return {1 0}
+}
+
+proc cursor-put {filepath cy cx} {
+    if {!$::cfg_cursor_restore} return
+    set d [cursors-load]
+    dict set d $filepath [list [expr {$cy - 1}] $cx]
+    cursors-save $d
+}
 
 # ─── ini ──────────────────────────────────────────────────────────────────────
 set ::cfg_margin_width   60
@@ -35,6 +90,8 @@ set ::cfg_margin_rows    0
 set ::cfg_heading_marker "="
 set ::cfg_toc_key        "F11"
 set ::cfg_color_heading  "#c8a060"
+set ::cfg_line_numbers   0
+set ::cfg_cursor_restore 1
 set ::fullscreen 0
 
 proc ini-load {} {
@@ -61,6 +118,8 @@ proc ini-load {} {
                 heading_marker   { set ::cfg_heading_marker [string trim $val] }
                 toc_key          { set ::cfg_toc_key        [string trim $val] }
                 color_heading    { set ::cfg_color_heading  [string trim $val] }
+                line_numbers     { set ::cfg_line_numbers   [string trim $val] }
+                cursor_restore   { set ::cfg_cursor_restore [string trim $val] }
             }
         }
     }
@@ -72,7 +131,8 @@ proc ini-save {} {
     fconfigure $fh -encoding utf-8
     puts $fh "# Forrdeck — configuration"
     puts $fh "\[editor\]"
-    puts $fh "# docs_dir = ~/Documents/my-writing  (default: ~/Documents/forrdeck)"
+    puts $fh "# docs_dir = ~/Documents/writerdeck"
+    puts $fh "# (default: ~/Documents/forrdeck)"
     puts $fh "margin_width   = $::cfg_margin_width"
     puts $fh "margin_height  = $::cfg_margin_height"
     puts $fh "font_size      = $::cfg_font_size"
@@ -86,13 +146,17 @@ proc ini-save {} {
     puts $fh "color_bg_sel   = $::cfg_bg_sel"
     puts $fh ""
     puts $fh "# ── terminal version (forrdeck.lua) — values in columns/lines"
-    puts $fh "# margin_cols = 8"
-    puts $fh "# margin_rows = 2"
+    puts $fh "margin_cols = $::cfg_margin_cols"
+    puts $fh "margin_rows = $::cfg_margin_rows"
     puts $fh ""
     puts $fh "# headings / table of contents"
     puts $fh "heading_marker = $::cfg_heading_marker"
     puts $fh "toc_key        = $::cfg_toc_key"
     puts $fh "color_heading  = $::cfg_color_heading"
+    puts $fh ""
+    puts $fh "# ── editor behaviour"
+    puts $fh "# line_numbers   = 0  (1 = show line numbers in left margin)"
+    puts $fh "# cursor_restore = 1  (0 = always open at line 1)"
     puts $fh ""
     puts $fh "# ── light theme (solarized light) ─────────────────────────────"
     puts $fh "# To enable: uncomment the lines below and comment out the"
@@ -396,7 +460,12 @@ text .ed.t \
 
 scrollbar .ed.sb -orient vertical -command {.ed.t yview} \
     -bg $bg_bar -troughcolor $bg
-.ed.t configure -yscrollcommand {.ed.sb set}
+
+proc ed-yscroll {first last} {
+    .ed.sb set $first $last
+    catch { .ed.ln yview moveto $first }
+}
+.ed.t configure -yscrollcommand ed-yscroll
 .ed.t tag configure heading \
     -foreground $::cfg_color_heading \
     -font [list Mono $::cfg_font_size bold]
@@ -405,12 +474,22 @@ frame .ed.bar -bg $bg_bar
 label .ed.bar.lbl -textvariable ::ed_status \
     -bg $bg_bar -fg $fg_bar -font $font_sm -anchor w -padx 8
 label .ed.bar.help \
-    -text "^S save  ^Q close  ^K kill  ^F find  ^G goto  ^H help" \
+    -text "^S save  ^Q close  ^F find  ^H replace  ^G goto  ^O open  F1 help" \
     -bg $bg_bar -fg $fg_bar -font $font_sm -anchor e -padx 8
 pack .ed.bar.lbl  -side left
 pack .ed.bar.help -side right
 pack .ed.bar -side bottom -fill x
 pack .ed.sb  -side right  -fill y
+if {$::cfg_line_numbers} {
+    text .ed.ln \
+        -width 4 -font $font \
+        -bg $bg_bar -fg $fg_dim \
+        -state disabled -borderwidth 0 \
+        -padx 4 -pady $::cfg_margin_height \
+        -highlightthickness 0 -wrap none \
+        -cursor arrow
+    pack .ed.ln -side left -fill y
+}
 pack .ed.t   -fill both   -expand 1
 
 # ─── search bar (hidden until Ctrl+F) ────────────────────────────────────────
@@ -426,6 +505,19 @@ label .ed.sf.cnt -textvariable ::search_count \
 pack .ed.sf.lbl -side left
 pack .ed.sf.e   -side left -padx 4
 pack .ed.sf.cnt -side left
+
+frame .ed.sf.r -bg $bg_bar
+label  .ed.sf.r.lbl -text " Replace: " -bg $bg_bar -fg $fg_bar -font $font_sm
+entry  .ed.sf.r.e   -bg $bg -fg $fg -font $font_sm -insertbackground $fg \
+    -relief flat -bd 1 -width 32 -highlightthickness 0
+button .ed.sf.r.one -text " Replace " -bg $bg_bar -fg $fg_bar -font $font_sm \
+    -relief flat -command replace-one -padx 2
+button .ed.sf.r.all -text " All " -bg $bg_bar -fg $fg_bar -font $font_sm \
+    -relief flat -command replace-all -padx 2
+pack .ed.sf.r.lbl -side left
+pack .ed.sf.r.e   -side left -padx 4
+pack .ed.sf.r.one -side left
+pack .ed.sf.r.all -side left
 
 # ─── editor status ────────────────────────────────────────────────────────────
 proc ed-status {} {
@@ -447,7 +539,19 @@ bind .ed.t <ButtonRelease> { ed-status }
 bind .ed.t <<Modified>> {
     if {[.ed.t edit modified]} { set ::dirty 1; .ed.t edit modified false }
     ed-status
-    after idle { highlight-headings }
+    after idle { highlight-headings; ln-update }
+}
+
+proc ln-update {} {
+    if {![winfo exists .ed.ln]} return
+    set last [lindex [split [.ed.t index end] .] 0]
+    .ed.ln configure -state normal
+    .ed.ln delete 1.0 end
+    for {set i 1} {$i < $last} {incr i} {
+        .ed.ln insert end [format "%3d\n" $i]
+    }
+    .ed.ln configure -state disabled
+    catch { .ed.ln yview moveto [lindex [.ed.t yview] 0] }
 }
 
 # ─── file I/O ─────────────────────────────────────────────────────────────────
@@ -463,10 +567,12 @@ proc load-file {path} {
     }
     .ed.t edit modified false
     set ::dirty 0
-    .ed.t mark set insert 1.0
+    lassign [cursor-get $path] cy cx
+    .ed.t mark set insert ${cy}.${cx}
     .ed.t see insert
     ed-status
     highlight-headings
+    ln-update
 }
 
 proc save-file {} {
@@ -477,6 +583,8 @@ proc save-file {} {
     close $fh
     set ::dirty 0
     .ed.t edit modified false
+    lassign [split [.ed.t index insert] .] cy cx
+    cursor-put $::filename $cy $cx
     set-msg "saved"
 }
 
@@ -501,10 +609,53 @@ proc search-open {} {
     if {![winfo ismapped .ed.sf]} {
         pack .ed.sf -before .ed.bar -side bottom -fill x
     }
+    catch { pack forget .ed.sf.r }
     .ed.sf.e delete 0 end
     if {$::search_term ne ""} { .ed.sf.e insert 0 $::search_term }
     .ed.sf.e selection range 0 end
     focus .ed.sf.e
+}
+
+proc replace-open {} {
+    if {![winfo ismapped .ed.sf]} {
+        pack .ed.sf -before .ed.bar -side bottom -fill x
+    }
+    pack .ed.sf.r -fill x
+    .ed.sf.e delete 0 end
+    if {$::search_term ne ""} { .ed.sf.e insert 0 $::search_term }
+    .ed.sf.e selection range 0 end
+    focus .ed.sf.e
+}
+
+proc replace-one {} {
+    if {$::search_term eq ""} return
+    set repl [.ed.sf.r.e get]
+    set slen [string length $::search_term]
+    set pos [.ed.t search -nocase -exact -- $::search_term insert end]
+    if {$pos eq ""} { set pos [.ed.t search -nocase -exact -- $::search_term 1.0 end] }
+    if {$pos ne ""} {
+        .ed.t delete $pos "$pos + ${slen} chars"
+        .ed.t insert $pos $repl
+        .ed.t mark set insert "$pos + [string length $repl] chars"
+        .ed.t see insert
+        search-update
+    }
+}
+
+proc replace-all {} {
+    if {$::search_term eq ""} return
+    set repl [.ed.sf.r.e get]
+    set count 0; set pos 1.0
+    while 1 {
+        set pos [.ed.t search -nocase -exact -count len -- $::search_term $pos end]
+        if {$pos eq ""} break
+        .ed.t delete $pos "$pos + $len chars"
+        .ed.t insert $pos $repl
+        set pos "$pos + [string length $repl] chars"
+        incr count
+    }
+    set-msg "replaced $count occurrence[expr {$count!=1?{s}:{}}]"
+    search-update
 }
 
 proc search-close {} {
@@ -557,6 +708,10 @@ proc close-editor {} {
         if {$r eq "cancel"} return
         if {$r eq "yes"}    save-file
     }
+    if {$::filename ne ""} {
+        lassign [split [.ed.t index insert] .] cy cx
+        cursor-put $::filename $cy $cx
+    }
     set ::filename ""
     set ::dirty    0
     set ::msg      ""
@@ -584,15 +739,33 @@ bind .ed.t <Control-k> {
 
 bind .ed.t <Tab>          { .ed.t insert insert "    "; break }
 bind .ed.t <Control-g>   { goto-dialog; break }
-bind .ed.t <Control-h>   { help-dialog; break }
+bind .ed.t <Control-h>   { replace-open; break }
 bind .ed.t <Control-f>   { search-open; break }
+bind .ed.t <Control-o>   { open-file-dialog; break }
+bind .ed.t <F1>          { help-dialog; break }
 
 bind .ed.sf.e <KeyRelease>   { search-update }
 bind .ed.sf.e <Return>       { search-next }
 bind .ed.sf.e <Shift-Return> { search-prev }
 bind .ed.sf.e <Escape>       { search-close }
 bind .ed.sf.e <Control-f>    { search-next; break }
-bind .br.mid.lst <h>   { help-dialog }
+bind .ed.sf.e <Tab>          { focus .ed.sf.r.e; break }
+
+bind .ed.sf.r.e <Return>        { replace-one }
+bind .ed.sf.r.e <Control-Return> { replace-all }
+bind .ed.sf.r.e <Escape>        { search-close }
+bind .ed.sf.r.e <Tab>           { focus .ed.sf.e; break }
+bind .br.mid.lst <h>  { help-dialog }
+bind .br.mid.lst <F1> { help-dialog }
+
+proc open-file-dialog {} {
+    set path [tk_getOpenFile \
+        -initialdir $::DOCS_DIR_DEFAULT \
+        -filetypes {{"Text files" {.txt}} {"All files" *}}]
+    if {$path ne ""} { show-editor $path }
+}
+
+bind .br.mid.lst <Control-o> { open-file-dialog }
 
 proc toggle-fullscreen {} {
     set ::fullscreen [expr {!$::fullscreen}]
@@ -702,6 +875,8 @@ proc help-dialog {} {
             "Ctrl+Q / ESC" "Save and return to browser" \
             "Ctrl+K"       "Delete to end of line" \
             "Ctrl+F"       "Find (Enter: next  Shift+Enter: prev)" \
+            "Ctrl+H"       "Find & Replace (Enter: replace one  Ctrl+Enter: all)" \
+            "Ctrl+O"       "Open file" \
             "Ctrl+G"       "Go to line" \
             "Ctrl+Z"       "Undo" \
             "Tab"          "Insert 4 spaces" \
@@ -715,8 +890,9 @@ proc help-dialog {} {
             "d"                 "Supprimer" \
             "r"                 "Renommer" \
             $fs_key             "Plein écran" \
-            "h"                 "Cette aide" \
-            "q"                 "Quitter" \
+            "Ctrl+O"            "Open file" \
+            "h / F1"            "Help" \
+            "q"                 "Quit" \
         ] \
     ]
 
@@ -810,12 +986,12 @@ proc tui-init {} {
     catch { exec stty raw -echo <@stdin }
     fconfigure stdin  -blocking 1 -translation binary -buffering none
     fconfigure stdout -encoding utf-8 -buffering none
-    puts -nonewline "\033\[?25l\033\[2J"
+    puts -nonewline "\033\[?25l\033\[2J\033\[?2004h"
     flush stdout
 }
 
 proc tui-cleanup {} {
-    puts -nonewline "\033\[?25h\033\[2J\033\[H"
+    puts -nonewline "\033\[?2004l\033\[?25h\033\[2J\033\[H"
     flush stdout
     if {$::tui_stty ne ""} { catch {exec stty $::tui_stty <@stdin}
     } else                 { catch {exec stty sane <@stdin} }
@@ -856,19 +1032,49 @@ proc tui-help {row text cols} {
 
 proc tui-getch {} {
     set raw [read stdin 1]
+    if {$raw eq ""} { return "" }
     scan $raw %c b
     if {$b == 27} {
-        fconfigure stdin -blocking 0
-        set seq [read stdin 20]
-        fconfigure stdin -blocking 1
+        # Read escape sequence byte by byte, stop at terminator
+        set seq ""
+        while {[string length $seq] < 20} {
+            fconfigure stdin -blocking 0
+            set ch [read stdin 1]
+            fconfigure stdin -blocking 1
+            if {$ch eq ""} break
+            append seq $ch
+            if {[regexp {[A-Za-z~]} $ch]} break
+        }
+        # bracketed paste: \x1b[200~ ... pasted text ... \x1b[201~
+        if {[string range $seq 0 4] eq "\[200~"} {
+            set pasted [string range $seq 5 end]
+            while 1 {
+                set ch [read stdin 1]
+                if {$ch eq ""} break
+                append pasted $ch
+                if {[string match "*\x1b\[201~" $pasted]} {
+                    set pasted [string range $pasted 0 end-6]
+                    break
+                }
+            }
+            return "PASTE:$pasted"
+        }
         switch -exact -- "\x1b$seq" {
-            "\x1b\[A"   { return UP    }  "\x1b\[B"   { return DOWN  }
-            "\x1b\[C"   { return RIGHT }  "\x1b\[D"   { return LEFT  }
-            "\x1b\[H"   { return HOME  }  "\x1b\[F"   { return END   }
-            "\x1b\[1~"  { return HOME  }  "\x1b\[4~"  { return END   }
-            "\x1b\[3~"  { return DC    }  "\x1b\[5~"  { return PPAGE }
-            "\x1b\[6~"  { return NPAGE }  "\x1b\[23~" { return F11   }
-            "\x1b\[24~" { return F12   }
+            "\x1b\[A"     { return UP    }  "\x1b\[B"     { return DOWN  }
+            "\x1b\[C"     { return RIGHT }  "\x1b\[D"     { return LEFT  }
+            "\x1b\[H"     { return HOME  }  "\x1b\[F"     { return END   }
+            "\x1b\[1~"    { return HOME  }  "\x1b\[4~"    { return END   }
+            "\x1b\[3~"    { return DC    }  "\x1b\[5~"    { return PPAGE }
+            "\x1b\[6~"    { return NPAGE }  "\x1b\[23~"   { return F11   }
+            "\x1b\[24~"   { return F12   }
+            "\x1b\[1;2A"  { return SHIFT-UP    }
+            "\x1b\[1;2B"  { return SHIFT-DOWN  }
+            "\x1b\[1;2C"  { return SHIFT-RIGHT }
+            "\x1b\[1;2D"  { return SHIFT-LEFT  }
+            "\x1b\[a"     { return SHIFT-UP    }
+            "\x1b\[b"     { return SHIFT-DOWN  }
+            "\x1b\[c"     { return SHIFT-RIGHT }
+            "\x1b\[d"     { return SHIFT-LEFT  }
         }
         return ESC
     }
@@ -980,6 +1186,73 @@ proc tui-active-dir {entries cfi} {
     return $::DOCS_DIR_DEFAULT
 }
 
+# ── Clipboard ────────────────────────────────────────────────────────────────
+
+set ::tui_clipboard ""
+
+proc tui-copy {text} {
+    set ::tui_clipboard $text
+    foreach cmd {
+        {xclip -selection clipboard}
+        {xsel --clipboard --input}
+        {wl-copy}
+    } {
+        if {![catch { set fh [open "| $cmd" w]; puts -nonewline $fh $text; close $fh }]} return
+    }
+}
+
+proc tui-paste {} {
+    foreach cmd {
+        {xclip -selection clipboard -o}
+        {xsel --clipboard --output}
+        {wl-paste --no-newline}
+    } {
+        if {![catch {set r [exec {*}$cmd]}]} { return $r }
+    }
+    return $::tui_clipboard
+}
+
+# ── Selection helpers ─────────────────────────────────────────────────────────
+
+proc tui-sel-range {anchor cy cx} {
+    if {$anchor eq ""} { return {} }
+    lassign $anchor aly alx
+    if {$aly < $cy || ($aly == $cy && $alx <= $cx)} {
+        return [list $aly $alx $cy $cx]
+    }
+    return [list $cy $cx $aly $alx]
+}
+
+proc tui-sel-text {lines anchor cy cx} {
+    set r [tui-sel-range $anchor $cy $cx]
+    if {$r eq {}} { return "" }
+    lassign $r sly scx ely ecx
+    set out {}
+    for {set li $sly} {$li <= $ely} {incr li} {
+        set l [lindex $lines [expr {$li-1}]]
+        if {$li == $sly && $li == $ely} {
+            lappend out [string range $l $scx [expr {$ecx-1}]]
+        } elseif {$li == $sly} {
+            lappend out [string range $l $scx end]
+        } elseif {$li == $ely} {
+            lappend out [string range $l 0 [expr {$ecx-1}]]
+        } else {
+            lappend out $l
+        }
+    }
+    return [join $out "\n"]
+}
+
+proc tui-sel-delete {lines anchor cy cx} {
+    set r [tui-sel-range $anchor $cy $cx]
+    if {$r eq {}} { return [list $lines $cy $cx] }
+    lassign $r sly scx ely ecx
+    set pre  [string range [lindex $lines [expr {$sly-1}]] 0 [expr {$scx-1}]]
+    set post [string range [lindex $lines [expr {$ely-1}]] $ecx end]
+    set new  [lreplace $lines [expr {$sly-1}] [expr {$ely-1}] "${pre}${post}"]
+    return [list $new $sly $scx]
+}
+
 # ── TUI Browser ───────────────────────────────────────────────────────────────
 
 proc tui-browser {} {
@@ -1039,7 +1312,7 @@ proc tui-browser {} {
             }
         }
         set plu [expr {$fcount != 1 ? "s" : ""}]
-        tui-help [expr {$rows-2}] "\u21b5 open  n new  d delete  r rename  q quit" $cols
+        tui-help [expr {$rows-2}] "\u21b5 open  n new  d delete  r rename  q/^Q quit" $cols
         if {$msg ne ""} { tui-bar [expr {$rows-1}] " $msg" "" $cols; set msg ""
         } else { tui-bar [expr {$rows-1}] " [string map [list $::env(HOME) ~] $::DOCS_DIR_DEFAULT]" \
                          " $fcount file${plu} " $cols }
@@ -1048,7 +1321,7 @@ proc tui-browser {} {
         set key [tui-getch]
         set cfi [expr {$nf > 0 ? [lindex $fidx $sel] : -1}]
         switch -- $key {
-            q       { return "" }
+            q - "\x11" { return "" }
             UP - k  { if {$sel > 0} { incr sel -1 } }
             DOWN - j { if {$sel < $nf-1} { incr sel 1 } }
             HOME    { set sel 0 }
@@ -1135,6 +1408,7 @@ proc tui-toc {lines rows cols} {
 # ── TUI Editor ────────────────────────────────────────────────────────────────
 
 proc tui-editor {filepath} {
+    # ── load ──────────────────────────────────────────────────────────────────
     set lines {}
     if {[file exists $filepath] && [file size $filepath] > 0} {
         set fh [open $filepath r]; fconfigure $fh -encoding utf-8
@@ -1146,16 +1420,35 @@ proc tui-editor {filepath} {
     }
     if {[llength $lines] == 0} { set lines [list ""] }
 
-    set cy 1; set cx 0; set scroll_y 0
+    # ── cursor restore ────────────────────────────────────────────────────────
+    lassign [cursor-get $filepath] cy cx
+    set cy [expr {max(1, min($cy, [llength $lines]))}]
+    set cx [expr {max(0, min($cx, [string length [lindex $lines [expr {$cy-1}]]]))}]
+
+    set scroll_y 0
     set dirty 0; set message ""; set msg_time 0; set sticky -1
-    if {![info exists ::tui_search]} { set ::tui_search "" }
+    set undo_stack {}
+    set sel_anchor ""
+    set sel_sticky  0
+    if {![info exists ::tui_search]}  { set ::tui_search  "" }
+    if {![info exists ::tui_replace]} { set ::tui_replace "" }
+
+    # push-undo: call before any destructive edit
+    set push_undo {
+        lappend undo_stack [list $lines $cy $cx]
+        if {[llength $undo_stack] > 100} { set undo_stack [lrange $undo_stack end-99 end] }
+    }
 
     while 1 {
         lassign [tui-size] rows cols
-        set roff $::cfg_margin_rows
-        set coff $::cfg_margin_cols
-        set tw   [expr {max(1, $cols - 2*$coff)}]
-        set th   [expr {max(1, $rows - 2 - 2*$roff)}]
+
+        # ── layout ────────────────────────────────────────────────────────────
+        set roff  $::cfg_margin_rows
+        set marg  $::cfg_margin_cols
+        set ln_w  [expr {$::cfg_line_numbers ? [string length [llength $lines]] + 2 : 0}]
+        set coff  [expr {$marg + $ln_w}]
+        set tw    [expr {max(1, $cols - $coff - $marg - 1)}]   ;# -1 for scroll indicator
+        set th    [expr {max(1, $rows - 2 - 2*$roff)}]
 
         set cy [expr {max(1, min($cy, [llength $lines]))}]
         set cx [expr {max(0, min($cx, [string length [lindex $lines [expr {$cy-1}]]]))}]
@@ -1163,49 +1456,148 @@ proc tui-editor {filepath} {
         set vrows [tui-wrap-map $lines $tw]
         lassign [tui-l2v $vrows $cy $cx] vi scx
 
-        if {$vi < $scroll_y}           { set scroll_y $vi }
-        if {$vi >= $scroll_y + $th}    { set scroll_y [expr {$vi - $th + 1}] }
+        if {$vi < $scroll_y}        { set scroll_y $vi }
+        if {$vi >= $scroll_y + $th} { set scroll_y [expr {$vi - $th + 1}] }
         set scroll_y [expr {max(0, min($scroll_y, max(0, [llength $vrows] - $th)))}]
 
+        # ── draw ──────────────────────────────────────────────────────────────
         puts -nonewline "\033\[2J"
+        set sel_r [tui-sel-range $sel_anchor $cy $cx]
+
         for {set i 0} {$i < $th} {incr i} {
             set vi2 [expr {$scroll_y + $i}]
             if {$vi2 >= [llength $vrows]} break
             lassign [lindex $vrows $vi2] li scol ecol
-            set seg [string range [lindex $lines [expr {$li-1}]] $scol [expr {$ecol-1}]]
-            set ish [expr {[parse-heading [lindex $lines [expr {$li-1}]]] ne ""}]
-            if {$ish} { tui-attr bold }
-            tui-move [expr {$i+$roff}] $coff; puts -nonewline $seg
-            if {$ish} { tui-attr off }
+            set line_text [lindex $lines [expr {$li-1}]]
+            set seg [string range $line_text $scol [expr {$ecol-1}]]
+            set ish [expr {[parse-heading $line_text] ne ""}]
+            set srow [expr {$i + $roff}]
+
+            # line number
+            if {$ln_w > 0 && $scol == 0} {
+                tui-attr dim
+                tui-move $srow $marg
+                puts -nonewline [format "%[expr {$ln_w-1}]d " $li]
+                tui-attr off
+            } elseif {$ln_w > 0} {
+                tui-move $srow $marg
+                puts -nonewline [string repeat " " $ln_w]
+            }
+
+            # text (with selection highlight)
+            tui-move $srow $coff
+            if {$sel_r ne {}} {
+                lassign $sel_r sly scx_s ely ecx_s
+                set seg_len [string length $seg]
+                for {set ci 0} {$ci < $seg_len} {incr ci} {
+                    set abs [expr {$scol + $ci}]
+                    set in_sel 0
+                    if {$li > $sly && $li < $ely} {
+                        set in_sel 1
+                    } elseif {$li == $sly && $li == $ely} {
+                        set in_sel [expr {$abs >= $scx_s && $abs < $ecx_s}]
+                    } elseif {$li == $sly} {
+                        set in_sel [expr {$abs >= $scx_s}]
+                    } elseif {$li == $ely} {
+                        set in_sel [expr {$abs < $ecx_s}]
+                    }
+                    if {$in_sel} { tui-attr reverse } elseif {$ish} { tui-attr bold }
+                    puts -nonewline [string index $seg $ci]
+                    if {$in_sel || $ish} { tui-attr off }
+                }
+            } else {
+                if {$ish} { tui-attr bold }
+                puts -nonewline $seg
+                if {$ish} { tui-attr off }
+            }
         }
 
+        # ── scroll indicator ──────────────────────────────────────────────────
+        set nvrows [llength $vrows]
+        if {$nvrows > $th} {
+            set bar_h [expr {max(1, int(double($th) * $th / $nvrows))}]
+            set bar_p [expr {int(double($scroll_y) * ($th - $bar_h) / ($nvrows - $th))}]
+            for {set i 0} {$i < $th} {incr i} {
+                tui-move [expr {$i + $roff}] [expr {$cols - 1}]
+                if {$i >= $bar_p && $i < $bar_p + $bar_h} {
+                    puts -nonewline "\u2590"
+                } else {
+                    tui-attr dim; puts -nonewline "\u2502"; tui-attr off
+                }
+            }
+        }
+
+        # ── bars ──────────────────────────────────────────────────────────────
         set wc 0; foreach l $lines { incr wc [llength [split $l]] }
-        tui-help [expr {$rows-2}] "^S save  ^W close  ^F find  ^G goto  $::cfg_toc_key toc  ^Q quit" $cols
-        set left " [file tail $filepath][expr {$dirty ? { [+]} : {}}]"
+        set sel_info [expr {$sel_r ne {} ? " \[sel\]" : ""}]
+        set sel_hint [expr {$sel_anchor ne "" ? "^K cancel-sel" : "^K sel"}]
+        tui-help [expr {$rows-2}] "^S save  ^W close  ^F find  ^R replace  ^G goto  ^O open  ^Z undo  ^A selall  $sel_hint ^C copy  ^V paste  $::cfg_toc_key toc" $cols
+        set left " [file tail $filepath][expr {$dirty ? { [+]} : {}}]${sel_info}"
         set right [format "ln %d/%d  col %d  %dw " $cy [llength $lines] [expr {$cx+1}] $wc]
-        if {$message ne "" && [clock seconds]-$msg_time < 2} { set left " $message" }
+        if {$message ne "" && [clock seconds] - $msg_time < 2} { set left " $message" }
         tui-bar [expr {$rows-1}] $left $right $cols
 
-        tui-move [expr {$vi-$scroll_y+$roff}] [expr {$scx+$coff}]
+        tui-move [expr {$vi - $scroll_y + $roff}] [expr {$scx + $coff}]
         puts -nonewline "\033\[?25h"; flush stdout
 
         set key [tui-getch]; puts -nonewline "\033\[?25l"
-        set rst 1
+        set rst       1
+        set clear_sel 1
 
         switch -- $key {
             UP {
                 if {$vi > 0} { if {$sticky<0} {set sticky $scx}; lassign [tui-v2l $vrows [expr {$vi-1}] $sticky] cy cx }
                 set rst 0
+                if {$sel_sticky} { if {$sel_anchor eq ""} { set sel_anchor [list $cy $cx] }; set clear_sel 0 }
             }
             DOWN {
                 if {$vi < [llength $vrows]-1} { if {$sticky<0} {set sticky $scx}; lassign [tui-v2l $vrows [expr {$vi+1}] $sticky] cy cx }
                 set rst 0
+                if {$sel_sticky} { if {$sel_anchor eq ""} { set sel_anchor [list $cy $cx] }; set clear_sel 0 }
+            }
+            SHIFT-UP {
+                set sel_sticky 0
+                if {$sel_anchor eq ""} { set sel_anchor [list $cy $cx] }
+                if {$vi > 0} { if {$sticky<0} {set sticky $scx}; lassign [tui-v2l $vrows [expr {$vi-1}] $sticky] cy cx }
+                set rst 0; set clear_sel 0
+            }
+            SHIFT-DOWN {
+                set sel_sticky 0
+                if {$sel_anchor eq ""} { set sel_anchor [list $cy $cx] }
+                if {$vi < [llength $vrows]-1} { if {$sticky<0} {set sticky $scx}; lassign [tui-v2l $vrows [expr {$vi+1}] $sticky] cy cx }
+                set rst 0; set clear_sel 0
+            }
+            SHIFT-LEFT {
+                set sel_sticky 0
+                if {$sel_anchor eq ""} { set sel_anchor [list $cy $cx] }
+                if {$cx > 0} { incr cx -1 } elseif {$cy > 1} { incr cy -1; set cx [string length [lindex $lines [expr {$cy-1}]]] }
+                set clear_sel 0
+            }
+            SHIFT-RIGHT {
+                set sel_sticky 0
+                if {$sel_anchor eq ""} { set sel_anchor [list $cy $cx] }
+                if {$cx < [string length [lindex $lines [expr {$cy-1}]]]} { incr cx
+                } elseif {$cy < [llength $lines]} { incr cy; set cx 0 }
+                set clear_sel 0
             }
             LEFT {
-                if {$cx > 0} { incr cx -1 } elseif {$cy > 1} { incr cy -1; set cx [string length [lindex $lines [expr {$cy-1}]]] }
+                if {$sel_sticky} {
+                    if {$cx > 0} { incr cx -1 } elseif {$cy > 1} { incr cy -1; set cx [string length [lindex $lines [expr {$cy-1}]]] }
+                    set clear_sel 0
+                } elseif {$sel_anchor ne ""} {
+                    lassign [tui-sel-range $sel_anchor $cy $cx] cy cx
+                } elseif {$cx > 0} { incr cx -1
+                } elseif {$cy > 1} { incr cy -1; set cx [string length [lindex $lines [expr {$cy-1}]]] }
             }
             RIGHT {
-                if {$cx < [string length [lindex $lines [expr {$cy-1}]]]} { incr cx
+                if {$sel_sticky} {
+                    if {$cx < [string length [lindex $lines [expr {$cy-1}]]]} { incr cx
+                    } elseif {$cy < [llength $lines]} { incr cy; set cx 0 }
+                    set clear_sel 0
+                } elseif {$sel_anchor ne ""} {
+                    lassign [tui-sel-range $sel_anchor $cy $cx] sly scx_ ely ecx_
+                    set cy $ely; set cx $ecx_
+                } elseif {$cx < [string length [lindex $lines [expr {$cy-1}]]]} { incr cx
                 } elseif {$cy < [llength $lines]} { incr cy; set cx 0 }
             }
             HOME { set cx [lindex [lindex $vrows $vi] 1] }
@@ -1219,7 +1611,10 @@ proc tui-editor {filepath} {
                 lassign [tui-v2l $vrows [expr {min([llength $vrows]-1,$vi+$th)}] $sticky] cy cx; set rst 0
             }
             BACKSPACE {
-                if {$cx > 0} {
+                eval $push_undo
+                if {$sel_anchor ne ""} {
+                    lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; set dirty 1
+                } elseif {$cx > 0} {
                     set l [lindex $lines [expr {$cy-1}]]
                     lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-2}]][string range $l $cx end]"
                     incr cx -1; set dirty 1
@@ -1231,32 +1626,44 @@ proc tui-editor {filepath} {
                 }
             }
             DC {
-                set l [lindex $lines [expr {$cy-1}]]
-                if {$cx < [string length $l]} {
-                    lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-1}]][string range $l [expr {$cx+1}] end]"
-                    set dirty 1
-                } elseif {$cy < [llength $lines]} {
-                    lset lines [expr {$cy-1}] "${l}[lindex $lines $cy]"
-                    set lines [lreplace $lines $cy $cy]; set dirty 1
+                eval $push_undo
+                if {$sel_anchor ne ""} {
+                    lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; set dirty 1
+                } else {
+                    set l [lindex $lines [expr {$cy-1}]]
+                    if {$cx < [string length $l]} {
+                        lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-1}]][string range $l [expr {$cx+1}] end]"
+                        set dirty 1
+                    } elseif {$cy < [llength $lines]} {
+                        lset lines [expr {$cy-1}] "${l}[lindex $lines $cy]"
+                        set lines [lreplace $lines $cy $cy]; set dirty 1
+                    }
                 }
             }
             ENTER {
+                eval $push_undo
+                if {$sel_anchor ne ""} { lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; set dirty 1 }
                 set l [lindex $lines [expr {$cy-1}]]
-                set lines [linsert [lreplace $lines [expr {$cy-1}] [expr {$cy-1}] [string range $l 0 [expr {$cx-1}]]] $cy [string range $l $cx end]]
+                set lines [linsert [lreplace $lines [expr {$cy-1}] [expr {$cy-1}] \
+                    [string range $l 0 [expr {$cx-1}]]] $cy [string range $l $cx end]]
                 incr cy; set cx 0; set dirty 1
             }
             TAB {
+                eval $push_undo
+                if {$sel_anchor ne ""} { lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; set dirty 1 }
                 set l [lindex $lines [expr {$cy-1}]]
                 lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-1}]]    [string range $l $cx end]"
                 incr cx 4; set dirty 1
             }
             default {
                 set c [scan $key %c]
-                if {$key eq "\x13"} {
+                if {$key eq "\x13"} {                                          ;# Ctrl+S save
                     set fh [open $filepath w]; fconfigure $fh -encoding utf-8
                     puts -nonewline $fh "[join $lines \n]\n"; close $fh
+                    cursor-put $filepath $cy $cx
                     set dirty 0; set message "saved"; set msg_time [clock seconds]
-                } elseif {$key in {"\x17" "\x11" ESC}} {
+                    set clear_sel 0
+                } elseif {$key in {"\x17" "\x11" ESC}} {                       ;# Ctrl+W/Q/Esc close
                     if {$dirty} {
                         lassign [tui-size] rows cols
                         if {[tui-confirm "save before closing?" $rows $cols]} {
@@ -1264,8 +1671,66 @@ proc tui-editor {filepath} {
                             puts -nonewline $fh "[join $lines \n]\n"; close $fh
                         }
                     }
-                    return
-                } elseif {$key eq "\x06"} {
+                    cursor-put $filepath $cy $cx; return
+                } elseif {$key eq "\x0f"} {                                    ;# Ctrl+O open (→ browser)
+                    set fh [open $filepath w]; fconfigure $fh -encoding utf-8
+                    puts -nonewline $fh "[join $lines \n]\n"; close $fh
+                    cursor-put $filepath $cy $cx; set dirty 0; return
+                } elseif {$key eq "\x1a"} {                                    ;# Ctrl+Z undo
+                    if {[llength $undo_stack] > 0} {
+                        lassign [lindex $undo_stack end] lines cy cx
+                        set undo_stack [lrange $undo_stack 0 end-1]; set dirty 1
+                    }
+                    set clear_sel 0
+                } elseif {$key eq "\x0b"} {                                    ;# Ctrl+K toggle sticky selection
+                    if {$sel_sticky} {
+                        set sel_sticky 0; set sel_anchor ""
+                    } else {
+                        set sel_sticky 1; set sel_anchor [list $cy $cx]
+                    }
+                    set clear_sel 0
+                } elseif {$key eq "\x01"} {                                    ;# Ctrl+A select all
+                    set sel_anchor [list 1 0]
+                    set cy [llength $lines]; set cx [string length [lindex $lines end]]
+                    set clear_sel 0
+                } elseif {$key eq "\x03"} {                                    ;# Ctrl+C copy
+                    set txt [tui-sel-text $lines $sel_anchor $cy $cx]
+                    if {$txt ne ""} { tui-copy $txt; set message "copied"; set msg_time [clock seconds] }
+                    set clear_sel 0
+                } elseif {$key eq "\x18"} {                                    ;# Ctrl+X cut
+                    set txt [tui-sel-text $lines $sel_anchor $cy $cx]
+                    if {$txt ne ""} {
+                        eval $push_undo; tui-copy $txt
+                        lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx
+                        set dirty 1; set message "cut"; set msg_time [clock seconds]
+                    }
+                } elseif {$key eq "\x16" || [string match "PASTE:*" $key]} {   ;# Ctrl+V / bracketed paste
+                    if {[string match "PASTE:*" $key]} {
+                        set txt [string range $key 6 end]
+                    } else {
+                        set txt [tui-paste]
+                    }
+                    if {$txt ne ""} {
+                        eval $push_undo
+                        if {$sel_anchor ne ""} { lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx }
+                        set plines [split $txt "\n"]
+                        set l [lindex $lines [expr {$cy-1}]]
+                        set pre [string range $l 0 [expr {$cx-1}]]
+                        set post [string range $l $cx end]
+                        if {[llength $plines] == 1} {
+                            lset lines [expr {$cy-1}] "${pre}${txt}${post}"
+                            incr cx [string length $txt]
+                        } else {
+                            set nl [list "${pre}[lindex $plines 0]"]
+                            foreach pl [lrange $plines 1 end-1] { lappend nl $pl }
+                            lappend nl "[lindex $plines end]${post}"
+                            set lines [lreplace $lines [expr {$cy-1}] [expr {$cy-1}] {*}$nl]
+                            incr cy [expr {[llength $plines]-1}]
+                            set cx [string length [lindex $plines end]]
+                        }
+                        set dirty 1
+                    }
+                } elseif {$key eq "\x06"} {                                    ;# Ctrl+F find
                     lassign [tui-size] rows cols
                     set term [string trim [tui-prompt "find: " $rows $cols]]
                     if {$term ne ""} { set ::tui_search $term }
@@ -1275,13 +1740,41 @@ proc tui-editor {filepath} {
                             set li [expr {($cy - 1 + $i) % $n + 1}]
                             set l  [lindex $lines [expr {$li - 1}]]
                             set from [expr {$li == $cy && $i == 0 ? $cx + 1 : 0}]
-                            set idx [string first [string tolower $::tui_search] \
-                                         [string tolower $l] $from]
+                            set idx [string first [string tolower $::tui_search] [string tolower $l] $from]
                             if {$idx >= 0} { set cy $li; set cx $idx; set found 1; break }
                         }
                         if {!$found} { set message "not found: $::tui_search"; set msg_time [clock seconds] }
                     }
-                } elseif {$key eq "\x07"} {
+                    set clear_sel 0
+                } elseif {$key eq "\x12"} {                                    ;# Ctrl+R replace
+                    lassign [tui-size] rows cols
+                    set term [string trim [tui-prompt "find: " $rows $cols]]
+                    if {$term ne ""} { set ::tui_search $term }
+                    if {$::tui_search ne ""} {
+                        set repl [tui-prompt "replace with (ESC=cancel): " $rows $cols]
+                        if {$repl ne "" || [string length $repl] == 0} {
+                            set count 0; set new_lines {}
+                            foreach l $lines {
+                                set out ""; set pos 0
+                                while 1 {
+                                    set idx [string first [string tolower $::tui_search] [string tolower $l] $pos]
+                                    if {$idx < 0} { append out [string range $l $pos end]; break }
+                                    append out [string range $l $pos [expr {$idx-1}]]$repl
+                                    set pos [expr {$idx + [string length $::tui_search]}]; incr count
+                                }
+                                lappend new_lines $out
+                            }
+                            if {$count > 0} {
+                                eval $push_undo; set lines $new_lines; set dirty 1
+                                set message "replaced $count occurrence[expr {$count!=1?{s}:{}}]"
+                                set msg_time [clock seconds]
+                                set cy [expr {max(1, min($cy, [llength $lines]))}]
+                                set cx [expr {max(0, min($cx, [string length [lindex $lines [expr {$cy-1}]]]))}]
+                            } else { set message "not found: $::tui_search"; set msg_time [clock seconds] }
+                        }
+                    }
+                    set clear_sel 0
+                } elseif {$key eq "\x07"} {                                    ;# Ctrl+G goto line
                     lassign [tui-size] rows cols
                     set num [tui-prompt "go to line: " $rows $cols]
                     if {[string is integer -strict $num] && $num >= 1} {
@@ -1292,13 +1785,16 @@ proc tui-editor {filepath} {
                     set target [tui-toc $lines $rows $cols]
                     if {$target > 0} { set cy $target; set cx 0 }
                 } elseif {[string length $key] >= 1 && ($c eq "" || $c >= 32)} {
+                    eval $push_undo
+                    if {$sel_anchor ne ""} { lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; set dirty 1 }
                     set l [lindex $lines [expr {$cy-1}]]
                     lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-1}]]${key}[string range $l $cx end]"
                     incr cx [string length $key]; set dirty 1
                 }
             }
         }
-        if {$rst} { set sticky -1 }
+        if {$rst}       { set sticky -1 }
+        if {$clear_sel} { set sel_anchor ""; set sel_sticky 0 }
     }
 }
 
