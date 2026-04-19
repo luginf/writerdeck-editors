@@ -901,6 +901,7 @@ bind .ed.t <$::cfg_key_save_as> { save-as;           break }
 bind .ed.t <$::cfg_key_close>   { close-editor;      break }
 bind .ed.t <Escape>             { close-editor;      break }
 
+bind .ed.t <$::cfg_key_sticky_sel> { break }
 bind .ed.t <Tab>                { .ed.t insert insert "    "; break }
 bind .ed.t <$::cfg_key_goto>    { goto-dialog;       break }
 bind .ed.t <$::cfg_key_help>    { help-dialog;       break }

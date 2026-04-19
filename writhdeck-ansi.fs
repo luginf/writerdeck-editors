@@ -145,11 +145,12 @@ variable NL  0 NL !
   NL @ 1+ pos 1+ ?do  i  i 1-  li-mv  loop  -1 NL +! ;
 
 1024 constant RLBUF  create _rl RLBUF allot
+create _fn  512 allot  0 _fn c!   \ filename (c-string, set by wr-editor)
 
-: buf-load { ca -- }
+: buf-load { a l -- }
   buf-clear
-  ca c@ 0= if  s" " buf-push  exit  then
-  ca c>s r/o open-file if drop  s" " buf-push  exit  then  { fid }
+  l 0= if  s" " buf-push  exit  then
+  a l r/o open-file if drop  s" " buf-push  exit  then  { fid }
   begin
     _rl RLBUF fid read-line throw  { len more }
     len 0> more or if  _rl len buf-push  then  \ push last line even without newline
@@ -160,8 +161,8 @@ variable NL  0 NL !
 
 create _nl-b 1 allot  10 _nl-b c!
 
-: buf-save { ca -- }
-  ca c>s w/o create-file throw  { fid }
+: buf-save ( -- )   \ saves to _fn (set by wr-editor)
+  _fn c>s w/o create-file throw  { fid }
   NL @ 1+ 1 ?do
     i li@ fid write-file throw
     _nl-b 1 fid write-file throw
@@ -210,7 +211,6 @@ variable _svy  0 _svy !   \ scroll: index of first visible visual row
 variable _tgc -1 _tgc !   \ sticky target column for up/down (-1 = recompute)
 variable _dirty  false _dirty !
 create _msg 128 allot  0 _msg c!   \ status message (c-string)
-create _fn  512 allot  0 _fn  c!  \ filename (c-string)
 
 : msg! { a l -- }  l 127 min  _msg swap move  _msg l + 0 swap c! ;
 
@@ -386,11 +386,10 @@ create _1b 1 allot   \ 1-byte scratch for single-char insert
   nvi _tgc @ vi-cx _cx !
   nvi vr@ nip drop _cy ! ;
 
-: wr-editor { ca -- }   \ ca = null-terminated filename
-  \ copy filename to _fn
-  ca c-strlen { fl }
-  ca _fn fl move  0 _fn fl + c!
-  ca buf-load
+: wr-editor { fa fl -- }   \ Forth string filename
+  fl 511 min { cl }
+  fa _fn cl move  0 _fn cl + c!   \ store null-terminated copy in _fn
+  fa fl buf-load
   false _dirty !  -1 _tgc !  0 _svy !  1 _cy !  0 _cx !
   cls  redraw
 
@@ -423,10 +422,10 @@ create _1b 1 allot   \ 1-byte scratch for single-char insert
     k 9       = if  4 0 do 32 ed-ins loop  else   \ Tab → 4 spaces
     k 11      = if  ed-kill   else                 \ Ctrl+K
     k 19      = if                                 \ Ctrl+S
-      ca buf-save  false _dirty !  s" saved" msg!
+      buf-save  false _dirty !  s" saved" msg!
     else
     k 17 = k 23 = or k K-ESC = or if              \ Ctrl+Q / Ctrl+W / ESC
-      _dirty @ if  ca buf-save  then
+      _dirty @ if  buf-save  then
       cls  0 0 at-xy  flush-out  exit
     else
     k 7 = if  ed-goto-prompt  else                 \ Ctrl+G
@@ -441,12 +440,11 @@ create _1b 1 allot   \ 1-byte scratch for single-char insert
   init-bufs
   term-raw
   get-term-size
-  argc @ 1 > if
-    1 arg drop               \ fa = c-string pointer (argv entry, null-terminated)
-    { fa }  fa wr-editor
-  else
-    s" No filename given. Usage: gforth writhdeck-ansi.fs filename" type cr
-  then
+  \ arg indices vary by gforth version: try 1 (script as arg0), fallback to 0
+  argc @ 1 > if  1 arg wr-editor  else
+  argc @ 0 > if  0 arg wr-editor  else
+  s" Usage: gforth writhdeck-ansi.fs filename" type cr
+  then then
   term-cook ;
 
 main
