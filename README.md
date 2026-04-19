@@ -1,13 +1,13 @@
 
-# FORRDECK
+# WRITHDECK
 
 some simple editors for a writerdeck:
 
-- forrdeck.lua : lua version
-- forrdeck.py  : python version
-- forrdeck.fs : gforth version (uses C bindings)
-- forrdeck-ansi.fs : gforth version (no C bindings, simpler version) 
-- forrdeck.tcl : tcl/tk version  ("wish forrdeck-tk.tcl file.txt")
+- writhdeck.lua : lua version
+- writhdeck.py  : python version
+- writhdeck.fs : gforth version (uses C bindings)
+- writhdeck-ansi.fs : gforth version (no C bindings, simpler version) 
+- writhdeck.tcl : tcl/tk version  ("wish writhdeck-tk.tcl file.txt")
 
 Converted to lua and others with the help of LLM (Claude code)
 
@@ -18,24 +18,24 @@ Those simpler editors are some kind of proof-of-concept for alternatives or othe
 
 ## Usage
 
-lua forrdeck.lua : forrdeck mode, let you create and restore files from ~/Documents/forrdeck/ folder.
-lua forrdeck.lua file.txt : editor mode, let you edit a file from any folder.
+lua writhdeck.lua : writhdeck mode, let you create and restore files from ~/Documents/writhdeck/ folder.
+lua writhdeck.lua file.txt : editor mode, let you edit a file from any folder.
 
 Same usage for the python and tcl versions.
 
 
-forrdeck Tcl/Tk editor with configurable margins, font size, colors, fullscreen toggle, and chapter navigation via a custom marker or Markdown headings. All options live in  ~/Documents/forrdeck/forrdeck.ini.
+writhdeck Tcl/Tk editor with configurable margins, font size, colors, fullscreen toggle, and chapter navigation via a custom marker or Markdown headings. All options live in  ~/Documents/writhdeck/writhdeck.ini.
 
 
 ## Summary
 
-  Forrdeck — Feature Summary                                                                                   
+  Writhdeck — Feature Summary                                                                                   
                                                                                                                
   All versions share                                                                                           
                                                                                                                
   - Plain .txt file editor focused on distraction-free writing                                                 
-  - Documents stored in ~/Documents/forrdeck/ (auto-created)                                                   
-  - Configuration via ~/Documents/forrdeck/forrdeck.ini                                                        
+  - Documents stored in ~/Documents/writhdeck/ (auto-created)                                                   
+  - Configuration via ~/Documents/writhdeck/writhdeck.ini                                                        
   - File browser: list files sorted by modification date, open/create/rename/delete                            
   - Heading detection: configurable marker (= title =) + Markdown (# title)                                    
   - Table of contents overlay (TOC key configurable, default F11): jump to any heading                         
@@ -47,7 +47,7 @@ forrdeck Tcl/Tk editor with configurable margins, font size, colors, fullscreen 
   - UTF-8 input support                                                                                        
                                                                                                                
   ---                                                                                                          
-  forrdeck.tcl — Tcl/Tk GUI + TUI (dual mode)                                                               
+  writhdeck.tcl — Tcl/Tk GUI + TUI (dual mode)                                                               
                                                                                                                
   GUI mode (default, requires Tk):
   - Graphical window with scrollable text editor and file browser                                              
@@ -105,7 +105,7 @@ forrdeck Tcl/Tk editor with configurable margins, font size, colors, fullscreen 
   
   
   ---                                                       
-  forrdeck.lua — Lua TUI (lcurses)                                                                             
+  writhdeck.lua — Lua TUI (lcurses)                                                                             
                                                                                                                
   - Requires lcurses + luafilesystem
   - Cursor position persisted across sessions in .cursors.json (shared format with Python version)             
@@ -117,21 +117,21 @@ forrdeck Tcl/Tk editor with configurable margins, font size, colors, fullscreen 
   - Robust KEY_F detection (handles lcurses versions where KEY_F is nil)                                       
                                                                                                                
   ---                                                       
-  forrdeck.py — Python TUI (curses, stdlib)                                                                    
+  writhdeck.py — Python TUI (curses, stdlib)                                                                    
                                                             
   - No dependencies beyond Python 3.7+ standard library (optional windows-curses on Windows)
   - Cursor persistence in .cursors.json                                                                        
   - Basic editor with file browser, word-wrapped display, status bar
                                                                                                                
   ---                                                       
-  forrdeck.fs — Forth TUI (gforth + ncurses FFI)                                                               
+  writhdeck.fs — Forth TUI (gforth + ncurses FFI)                                                               
                                                                                                                
   - Requires gforth 0.7+ and libncurses
   - Uses C FFI to call ncurses directly                                                                        
   - Full-screen terminal editor with file browser           
                                                                                                                
   ---                                                       
-  forrdeck-ansi.fs — Forth TUI (gforth, pure ANSI, no FFI)                                                     
+  writhdeck-ansi.fs — Forth TUI (gforth, pure ANSI, no FFI)                                                     
                                                                                                                
   - Requires only gforth, no external C libraries
   - Pure ANSI escape sequences for terminal control                                                            
@@ -140,4 +140,4 @@ forrdeck Tcl/Tk editor with configurable margins, font size, colors, fullscreen 
 
 ## Credits
 
-Based on https://github.com/lallero7/forrdeckForCMD, itself based on https://github.com/shmimel/bee-write-back/
+Based on https://github.com/lallero7/writhdeckForCMD, itself based on https://github.com/shmimel/bee-write-back/

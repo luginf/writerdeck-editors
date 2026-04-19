@@ -1,9 +1,9 @@
 #!/usr/bin/env lua
 --[[
-  forrdeck — a minimal TUI writing program for a dedicated writing device.
+  writhdeck — a minimal TUI writing program for a dedicated writing device.
   Requires: luarocks install lcurses luafilesystem
   or: sudo apt install lua-curses lua-filesystem
-  Usage:    lua forrdeck.lua
+  Usage:    lua writhdeck.lua
 ]]
 
 local curses = require("curses")
@@ -12,9 +12,9 @@ local lfs    = require("lfs")
 -- ── Config ───────────────────────────────────────────────────────────────────
 
 local HOME        = os.getenv("HOME") or "."
-local DOCS_DIR    = HOME .. "/Documents/forrdeck"
+local DOCS_DIR    = HOME .. "/Documents/writhdeck"
 local CURSOR_FILE = DOCS_DIR .. "/.cursors.json"
-local INI_FILE    = DOCS_DIR .. "/forrdeck.ini"
+local INI_FILE    = DOCS_DIR .. "/writhdeck.ini"
 local FILE_EXT    = ".txt"
 local TAB_WIDTH   = 4
 
@@ -23,8 +23,8 @@ local TAB_WIDTH   = 4
 -- margin_cols / margin_rows are in characters/lines (terminal units),
 -- distinct from the Tk version's margin_width/margin_height which are pixels.
 local cfg = {
-  margin_cols     = 0,
-  margin_rows     = 0,
+  margin_cols     = 6,
+  margin_rows     = 4,
   heading_marker  = "=",
   toc_key         = "F11",
 }
@@ -511,7 +511,7 @@ local function file_browser(stdscr)
     local files  = list_docs()
 
     -- Header
-    local header = " forrdeck"
+    local header = " writhdeck"
     stdscr:attron(curses.A_BOLD)
     pcall(function()
       stdscr:mvaddstr(0, 0, header .. string.rep(" ", math.max(0, w - #header)))

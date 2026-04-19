@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 #edit by lallero7
-forrdeck — a minimal TUI writing program for a dedicated writing device.
+writhdeck — a minimal TUI writing program for a dedicated writing device.
 Requires: Python 3.7+, curses (standard library on Linux/macOS)
            On Windows: pip install windows-curses
 """
@@ -23,7 +23,7 @@ import time
 
 # ── Config ──────────────────────────────────────────────────────────────────
 
-DOCS_DIR = os.path.expanduser("~/Documents/forrdeck")
+DOCS_DIR = os.path.expanduser("~/Documents/writhdeck")
 CURSOR_FILE = os.path.join(DOCS_DIR, ".cursors.json")
 FILE_EXT = ".txt"
 TAB_WIDTH = 4
@@ -235,7 +235,7 @@ def file_browser(stdscr):
 
         files = list_docs()
 
-        header = " forrdeck"
+        header = " writhdeck"
         stdscr.addstr(0, 0, header + " " * max(0, w - len(header)), curses.A_BOLD)
 
         if not files:

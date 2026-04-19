@@ -1,6 +1,6 @@
 #!/usr/bin/env tclsh
-# forrdeck-tk.tcl — Tk/TUI text editor with file browser
-# Usage: tclsh forrdeck-tk.tcl [--no-gui] [filename]
+# writhdeck-tk.tcl — Tk/TUI text editor with file browser
+# Usage: tclsh writhdeck-tk.tcl [--no-gui] [filename]
 
 set ::no_gui [expr {[lsearch $::argv "--no-gui"] >= 0}]
 if {$::no_gui} {
@@ -19,9 +19,9 @@ if {!$::no_gui} {
     unset _has_display
 }
 
-set ::DOCS_DIR_DEFAULT [file join $::env(HOME) Documents forrdeck]
+set ::DOCS_DIR_DEFAULT [file join $::env(HOME) Documents writhdeck]
 set ::DOCS_DIR         $::DOCS_DIR_DEFAULT
-set ::INI_FILE         [file join $::DOCS_DIR_DEFAULT "forrdeck.ini"]
+set ::INI_FILE         [file join $::DOCS_DIR_DEFAULT "writhdeck.ini"]
 set ::FILE_EXT ".txt"
 set ::filename ""
 set ::dirty    0
@@ -30,7 +30,7 @@ set ::msg      ""
 file mkdir $::DOCS_DIR_DEFAULT
 set ::CURSOR_FILE [file join $::DOCS_DIR_DEFAULT ".cursors.json"]
 
-# ─── cursor persistence (JSON, compatible with forrdeck.lua) ──────────────────
+# ─── cursor persistence (JSON, compatible with writhdeck.lua) ──────────────────
 proc cursors-load {} {
     if {![file exists $::CURSOR_FILE]} { return {} }
     set fh [open $::CURSOR_FILE r]; fconfigure $fh -encoding utf-8
@@ -85,8 +85,8 @@ set ::cfg_bg_bar         "#2a2a2a"
 set ::cfg_fg_bar         "#aaaaaa"
 set ::cfg_bg_sel         "#3a5a8a"
 set ::cfg_docs_dir       ""
-set ::cfg_margin_cols    0
-set ::cfg_margin_rows    0
+set ::cfg_margin_cols    6
+set ::cfg_margin_rows    4
 set ::cfg_heading_marker "="
 set ::cfg_toc_key        "F11"
 set ::cfg_color_heading  "#c8a060"
@@ -129,34 +129,33 @@ proc ini-load {} {
 proc ini-save {} {
     set fh [open $::INI_FILE w]
     fconfigure $fh -encoding utf-8
-    puts $fh "# Forrdeck — configuration"
+    puts $fh "# Writhdeck — configuration"
     puts $fh "\[editor\]"
     puts $fh "# docs_dir = ~/Documents/writerdeck"
-    puts $fh "# (default: ~/Documents/forrdeck)"
+    puts $fh "# (default: ~/Documents/writhdeck)"
     puts $fh "margin_width   = $::cfg_margin_width"
     puts $fh "margin_height  = $::cfg_margin_height"
+    puts $fh "# ── terminal version — values in columns/lines"
+    puts $fh "margin_cols = $::cfg_margin_cols"
+    puts $fh "margin_rows = $::cfg_margin_rows"
     puts $fh "font_size      = $::cfg_font_size"
     puts $fh "fullscreen_key = $::cfg_fullscreen_key"
     puts $fh ""
-    puts $fh "# colors (#rrggbb format)"
+    puts $fh "# headings / table of contents"
+    puts $fh "heading_marker = $::cfg_heading_marker"
+    puts $fh "toc_key        = $::cfg_toc_key"
+    puts $fh ""
+    puts $fh "# ── editor behaviour"
+    puts $fh "# line_numbers   = 0  (1 = show line numbers in left margin)"
+    puts $fh "# cursor_restore = 1  (0 = always open at line 1)"
+    puts $fh ""
+    puts $fh "# ── colors (#rrggbb format)"
     puts $fh "color_bg       = $::cfg_bg"
     puts $fh "color_fg       = $::cfg_fg"
     puts $fh "color_bg_bar   = $::cfg_bg_bar"
     puts $fh "color_fg_bar   = $::cfg_fg_bar"
     puts $fh "color_bg_sel   = $::cfg_bg_sel"
-    puts $fh ""
-    puts $fh "# ── terminal version (forrdeck.lua) — values in columns/lines"
-    puts $fh "margin_cols = $::cfg_margin_cols"
-    puts $fh "margin_rows = $::cfg_margin_rows"
-    puts $fh ""
-    puts $fh "# headings / table of contents"
-    puts $fh "heading_marker = $::cfg_heading_marker"
-    puts $fh "toc_key        = $::cfg_toc_key"
     puts $fh "color_heading  = $::cfg_color_heading"
-    puts $fh ""
-    puts $fh "# ── editor behaviour"
-    puts $fh "# line_numbers   = 0  (1 = show line numbers in left margin)"
-    puts $fh "# cursor_restore = 1  (0 = always open at line 1)"
     puts $fh ""
     puts $fh "# ── light theme (solarized light) ─────────────────────────────"
     puts $fh "# To enable: uncomment the lines below and comment out the"
@@ -238,14 +237,14 @@ proc fmt-meta {path} {
 }
 
 if {!$::no_gui} {
-wm title . "Forrdeck"
+wm title . "Writhdeck"
 wm minsize . 500 400
 
 # ─── browser frame ────────────────────────────────────────────────────────────
 frame .br -bg $bg
 
 label .br.title \
-    -text " Forrdeck" \
+    -text " Writhdeck" \
     -bg $bg -fg $fg \
     -font [list [lindex $font 0] 15 bold] \
     -anchor w -pady 10 -padx 4
@@ -557,7 +556,7 @@ proc ln-update {} {
 # ─── file I/O ─────────────────────────────────────────────────────────────────
 proc load-file {path} {
     set ::filename $path
-    wm title . "Forrdeck — [file tail $path]"
+    wm title . "Writhdeck — [file tail $path]"
     .ed.t delete 1.0 end
     if {[file exists $path] && [file size $path] > 0} {
         set fh [open $path r]
@@ -601,7 +600,7 @@ proc save-as {} {
         if {$r ne "yes"} return
     }
     set ::filename $new_path
-    wm title . "Forrdeck — [file tail $new_path]"
+    wm title . "Writhdeck — [file tail $new_path]"
     save-file
 }
 
@@ -715,7 +714,7 @@ proc close-editor {} {
     set ::filename ""
     set ::dirty    0
     set ::msg      ""
-    wm title . "Forrdeck"
+    wm title . "Writhdeck"
     .ed.t delete 1.0 end
     search-close
     show-browser
@@ -853,7 +852,7 @@ proc help-dialog {} {
     set w .help
     catch {destroy $w}
     toplevel $w
-    wm title $w "Help — Forrdeck"
+    wm title $w "Help — Writhdeck"
     wm resizable $w 0 0
     wm transient $w .
     grab $w
@@ -1266,7 +1265,7 @@ proc tui-browser {} {
         set nf [llength $fidx]
         if {$nf > 0} { set sel [expr {max(0, min($sel, $nf-1))}] }
 
-        tui-attr bold; tui-fill 0 " Forrdeck" $cols; tui-attr off
+        tui-attr bold; tui-fill 0 " Writhdeck" $cols; tui-attr off
         set usable [expr {$rows - 3}]
 
         if {$nf == 0} {

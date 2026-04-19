@@ -1,6 +1,6 @@
-\ forrdeck.fs — minimal TUI text editor for gforth
+\ writhdeck.fs — minimal TUI text editor for gforth
 \ Requirements: gforth 0.7+, libncurses-dev
-\ Usage: gforth forrdeck.fs [filename]
+\ Usage: gforth writhdeck.fs [filename]
 
 \ ═══════════════════════════════════════════════════════════════════════════════
 \ C / ncurses FFI
@@ -202,7 +202,7 @@ variable cursor-file  \ heap c-addr
 
 : init-paths ( -- )
   s" HOME" s>c-tmp os:getenv c>s
-  s" /Documents/forrdeck" s-cat fs>c docs-dir !
+  s" /Documents/writhdeck" s-cat fs>c docs-dir !
   docs-dir @ c>s s" /.cursors.json" s-cat fs>c cursor-file ! ;
 
 : ensure-docs-dir ( -- )  docs-dir @ os:mkdirp drop ;
@@ -711,7 +711,7 @@ bl _pfx-nor c!  bl _pfx-nor 1+ c!  bl _pfx-nor 2+ c!
 
     \ Header
     a-bold nc:attron drop
-    0 0 s"  forrdeck" nc:print drop
+    0 0 s"  writhdeck" nc:print drop
     w 11 > if  0 11 nc:move drop  w 11 - 0 ?do bl emit loop  then
     a-bold nc:attroff drop
 
