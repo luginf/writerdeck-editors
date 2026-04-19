@@ -97,11 +97,11 @@ forrdeck Tcl/Tk editor with configurable margins, font size, colors, fullscreen 
   - Search & Replace (Ctrl+R): two consecutive find/replace prompts, global replacement with a counter
   - Ctrl+O: saves and returns to the browser  
   
-  Ctrl+B behavior:                                                                                       
+  Ctrl+K behavior:                                                                                       
                                             
   - First press: sets the anchor at the current position, arrows extend the selection normally                 
   - Second press: cancels the selection
-  - The help bar shows ^B sel or ^B cancel-sel depending on the state   
+  - The help bar shows ^K sel or ^K cancel-sel depending on the state   
   
   
   ---                                                       

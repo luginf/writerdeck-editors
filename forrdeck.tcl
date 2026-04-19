@@ -728,14 +728,7 @@ bind .ed.t <Control-q> { close-editor; break }
 bind .ed.t <Control-w> { close-editor; break }
 bind .ed.t <Escape>    { close-editor; break }
 
-bind .ed.t <Control-k> {
-    if {[.ed.t index insert] eq [.ed.t index {insert lineend}]} {
-        .ed.t delete insert
-    } else {
-        .ed.t delete insert {insert lineend}
-    }
-    break
-}
+bind .ed.t <Control-k> { break }
 
 bind .ed.t <Tab>          { .ed.t insert insert "    "; break }
 bind .ed.t <Control-g>   { goto-dialog; break }
