@@ -1,6 +1,27 @@
 #!/usr/bin/env tclsh
-# writhdeck.tcl — Tk/TUI text editor with file browser
+#
+#     writhdeck.tcl 
+#     
+#  ~  Tk/TUI text editor for writerdecks ~
+#
 # Usage: tclsh writhdeck.tcl [--no-gui] [filename]
+# 
+# 
+#    Copyright (C) 2026 by Luginfo
+#    
+#    BSD Zero Clause License
+#
+#    Permission to use, copy, modify, and/or distribute this software for any purpose 
+#    with or without fee is hereby granted.
+#
+#    THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES 
+#    WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES 
+#    OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE 
+#    FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES 
+#    WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION 
+#    OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF 
+#    OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+#
 
 set ::no_gui [expr {[lsearch $::argv "--no-gui"] >= 0}]
 if {$::no_gui} {
@@ -746,14 +767,22 @@ proc ln-toggle {} {
 proc load-file {path} {
     set ::filename $path
     wm title . "Writhdeck — [file tail $path]"
+    .ed.t configure -undo 0
+
     .ed.t delete 1.0 end
     if {[file exists $path] && [file size $path] > 0} {
         set fh [open $path r]
         fconfigure $fh -encoding utf-8
         .ed.t insert 1.0 [read $fh]
         close $fh
-    }
+}
+
+    .ed.t edit reset
     .ed.t edit modified false
+
+    .ed.t configure -undo 1
+    .ed.t edit separator
+
     set ::dirty 0
     lassign [cursor-get $path] cy cx
     .ed.t mark set insert ${cy}.${cx}
