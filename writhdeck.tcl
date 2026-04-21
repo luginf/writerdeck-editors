@@ -23,6 +23,7 @@
 #    OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+
 set ::no_gui [expr {[lsearch $::argv "--no-gui"] >= 0}]
 if {$::no_gui} {
     set ::argv [lsearch -all -inline -not $::argv "--no-gui"]
@@ -2132,6 +2133,11 @@ proc tui-main {} {
 if {$::no_gui} {
     tui-main
 } else {
+    if {[file exists "writhdeck.png"]} {
+        wm iconphoto . [image create photo -file "writhdeck.png"]
+} else {
+    puts "writhdeck.png is missing... no desktop icon."
+}
     if {$::argc > 0} { show-editor [lindex $::argv 0] } else { show-browser }
     if {$::cfg_key_error ne ""} {
         after 100 [list set-msg "key conflict: $::cfg_key_error"]
