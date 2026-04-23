@@ -131,6 +131,17 @@ set ::cfg_heading_marker "="
 set ::cfg_color_heading  "#c8a060"
 set ::cfg_dim_marker     "%"
 set ::cfg_color_dim      "#606060"
+# alternate (light) theme — used when dark_mode = 0
+set ::cfg_bg_alt             "#fdf6e3"
+set ::cfg_fg_alt             "#657b83"
+set ::cfg_bg_bar_alt         "#eee8d5"
+set ::cfg_fg_bar_alt         "#93a1a1"
+set ::cfg_bg_sel_alt         "#268bd2"
+set ::cfg_color_heading_alt  "#b58900"
+set ::cfg_color_dim_alt      "#aaaaaa"
+# dark_mode: 0 = light (alt colors), 1 = dark (primary colors)
+set ::cfg_dark_mode          1
+set ::cfg_key_dark_toggle    "Control-d"
 set ::cfg_line_numbers   0
 set ::cfg_cursor_restore 1
 set ::cfg_word_count     1
@@ -182,6 +193,15 @@ proc ini-load {} {
                 color_heading    { set ::cfg_color_heading  $v }
                 dim_marker       { set ::cfg_dim_marker     $v }
                 color_dim        { set ::cfg_color_dim      $v }
+                color_bg_alt         { set ::cfg_bg_alt            $v }
+                color_fg_alt         { set ::cfg_fg_alt            $v }
+                color_bg_bar_alt     { set ::cfg_bg_bar_alt        $v }
+                color_fg_bar_alt     { set ::cfg_fg_bar_alt        $v }
+                color_bg_sel_alt     { set ::cfg_bg_sel_alt        $v }
+                color_heading_alt    { set ::cfg_color_heading_alt $v }
+                color_dim_alt        { set ::cfg_color_dim_alt     $v }
+                dark_mode            { set ::cfg_dark_mode [string is true $v] }
+                key_dark_toggle      { set ::cfg_key_dark_toggle   $v }
                 line_numbers     { set ::cfg_line_numbers   $v }
                 cursor_restore   { set ::cfg_cursor_restore $v }
                 word_count       { set ::cfg_word_count     $v }
@@ -237,6 +257,7 @@ proc ini-save {} {
     puts $fh "show_clock     = $::cfg_show_clock"
     puts $fh "# help_bar: text shown in the shortcuts bar, empty to hide"
     puts $fh "help_bar       = $::cfg_help_bar"
+    puts $fh "dark_mode      = $::cfg_dark_mode"
     puts $fh ""
     puts $fh "\[keys\]"
     puts $fh "# Use Tk key names: Control-s, Alt-Return, F11, etc."
@@ -257,6 +278,7 @@ proc ini-save {} {
     puts $fh "key_toc          = $::cfg_key_toc"
     puts $fh "key_line_numbers = $::cfg_key_line_numbers"
     puts $fh "key_fullscreen   = $::cfg_key_fullscreen"
+    puts $fh "key_dark_toggle  = $::cfg_key_dark_toggle"
     puts $fh ""
     puts $fh "\[colors\]"
     puts $fh "# colors in #rrggbb format"
@@ -268,15 +290,15 @@ proc ini-save {} {
     puts $fh "color_heading  = $::cfg_color_heading"
     puts $fh "color_dim      = $::cfg_color_dim"
     puts $fh ""
-    puts $fh "# ── light theme (solarized light) ─────────────────────────────"
-    puts $fh "# To enable: uncomment the lines below and comment out the"
-    puts $fh "# color_* values defined above."
-    puts $fh "#color_bg      = #fdf6e3"
-    puts $fh "#color_fg      = #657b83"
-    puts $fh "#color_bg_bar  = #eee8d5"
-    puts $fh "#color_fg_bar  = #93a1a1"
-    puts $fh "#color_bg_sel  = #268bd2"
-    puts $fh "#color_heading = #b58900"
+    puts $fh "# ── alternate (light) theme ───────────────────────────────────"
+    puts $fh "# Used when dark_mode = 0  (active by default)"
+    puts $fh "color_bg_alt       = $::cfg_bg_alt"
+    puts $fh "color_fg_alt       = $::cfg_fg_alt"
+    puts $fh "color_bg_bar_alt   = $::cfg_bg_bar_alt"
+    puts $fh "color_fg_bar_alt   = $::cfg_fg_bar_alt"
+    puts $fh "color_bg_sel_alt   = $::cfg_bg_sel_alt"
+    puts $fh "color_heading_alt  = $::cfg_color_heading_alt"
+    puts $fh "color_dim_alt      = $::cfg_color_dim_alt"
     close $fh
 }
 
@@ -316,8 +338,9 @@ proc keys-init {} {
     set ::cfg_tui_paste      [tk-key-to-tui $::cfg_key_paste]
     set ::cfg_tui_select_all [tk-key-to-tui $::cfg_key_select_all]
     set ::cfg_tui_sticky_sel [tk-key-to-tui $::cfg_key_sticky_sel]
-    set ::cfg_tui_toc        [tk-key-to-tui $::cfg_key_toc]
-    set ::cfg_tui_line_nums  [tk-key-to-tui $::cfg_key_line_numbers]
+    set ::cfg_tui_toc          [tk-key-to-tui $::cfg_key_toc]
+    set ::cfg_tui_line_nums    [tk-key-to-tui $::cfg_key_line_numbers]
+    set ::cfg_tui_dark_toggle  [tk-key-to-tui $::cfg_key_dark_toggle]
     # labels for UI display
     set ::cfg_lbl_save       [key-label $::cfg_key_save]
     set ::cfg_lbl_close      [key-label $::cfg_key_close]
@@ -359,14 +382,26 @@ if {$::cfg_docs_dir ne ""} {
     file mkdir $::DOCS_DIR
 }
 
+# ─── theme helpers ────────────────────────────────────────────────────────────
+proc theme-colors {} {
+    if {$::cfg_dark_mode} {
+        return [list $::cfg_bg $::cfg_fg $::cfg_bg_bar $::cfg_fg_bar \
+                     $::cfg_bg_sel $::cfg_color_heading $::cfg_color_dim]
+    } else {
+        return [list $::cfg_bg_alt $::cfg_fg_alt $::cfg_bg_bar_alt $::cfg_fg_bar_alt \
+                     $::cfg_bg_sel_alt $::cfg_color_heading_alt $::cfg_color_dim_alt]
+    }
+}
+
+proc toggle-dark-mode {} {
+    set ::cfg_dark_mode [expr {!$::cfg_dark_mode}]
+    if {!$::no_gui} { apply-theme }
+}
+
 # ─── config ───────────────────────────────────────────────────────────────────
 set font    [list Mono $::cfg_font_size]
 set font_sm {Mono 10}
-set bg      $::cfg_bg
-set fg      $::cfg_fg
-set bg_bar  $::cfg_bg_bar
-set fg_bar  $::cfg_fg_bar
-set bg_sel  $::cfg_bg_sel
+lassign [theme-colors] bg fg bg_bar fg_bar bg_sel
 set fg_dim  "#666666"
 # expose as globals for use in procs
 set ::bg     $bg
@@ -972,8 +1007,46 @@ proc close-editor {} {
     show-browser
 }
 
+proc apply-theme {} {
+    lassign [theme-colors] bg fg bg_bar fg_bar bg_sel c_heading c_dim
+    set ::bg $bg; set ::fg $fg; set ::bg_bar $bg_bar
+    set ::fg_bar $fg_bar; set ::bg_sel $bg_sel
+    # browser
+    foreach w {.br .br.mid} { catch { $w configure -bg $bg } }
+    foreach w {.br.title .br.bar.help .br.bar.cnt} {
+        catch { $w configure -bg $bg_bar -fg $fg_bar }
+    }
+    catch { .br.title configure -bg $bg -fg $fg }
+    catch { .br.bar configure -bg $bg_bar }
+    catch { .br.mid.lst configure -bg $bg -fg $fg \
+                -selectbackground $bg_sel -selectforeground $fg }
+    catch { .br.mid.sb configure -bg $bg_bar -troughcolor $bg }
+    # editor
+    catch { .ed configure -bg $bg }
+    catch { .ed.t configure -bg $bg -fg $fg \
+                -insertbackground $fg -selectbackground $bg_sel }
+    catch { .ed.t tag configure heading -foreground $c_heading }
+    catch { .ed.t tag configure dim     -foreground $c_dim }
+    catch { .ed.sb configure -bg $bg_bar -troughcolor $bg }
+    catch { .ed.bar configure -bg $bg_bar }
+    foreach w {.ed.bar.lbl .ed.bar.msg .ed.bar.clk .ed.bar.help} {
+        catch { $w configure -bg $bg_bar -fg $fg_bar }
+    }
+    catch { .ed.ln configure -bg $bg_bar -fg $fg_bar }
+    # search bar
+    catch { .ed.sf configure -bg $bg_bar }
+    catch { .ed.sf.lbl configure -bg $bg_bar -fg $fg_bar }
+    catch { .ed.sf.e configure -bg $bg -fg $fg -insertbackground $fg }
+    catch { .ed.sf.cnt configure -bg $bg_bar -fg $fg_bar }
+    catch { .ed.sf.r configure -bg $bg_bar }
+    catch { .ed.sf.r.lbl configure -bg $bg_bar -fg $fg_bar }
+    catch { .ed.sf.r.e configure -bg $bg -fg $fg -insertbackground $fg }
+    catch { .ed.sf.r.one configure -bg $bg_bar -fg $fg_bar }
+    catch { .ed.sf.r.all configure -bg $bg_bar -fg $fg_bar }
+}
+
 proc quit-app {} {
-    if {$::dirty} {
+    if {$::dirty && $::filename ne ""} {
         set r [tk_messageBox \
             -message "Save \"[file tail $::filename]\" before closing?" \
             -type yesnocancel -icon question -default yes -parent .]
@@ -1008,8 +1081,10 @@ bind .ed.t <$::cfg_key_save>    { save-file;         break }
 bind .ed.t <$::cfg_key_save_as> { save-as;           break }
 bind .ed.t <$::cfg_key_close>   { close-editor;      break }
 bind .ed.t <Escape>             { close-editor;      break }
-bind .ed.t <$::cfg_key_paste>      { ed-paste;                              break }
-bind .ed.t <$::cfg_key_select_all> { .ed.t tag add sel 1.0 end;         break }
+bind .ed.t <$::cfg_key_paste>        { ed-paste;          break }
+bind .ed.t <$::cfg_key_select_all>  { .ed.t tag add sel 1.0 end; break }
+bind .ed.t <$::cfg_key_dark_toggle> { toggle-dark-mode;  break }
+bind .br.mid.lst <$::cfg_key_dark_toggle> { toggle-dark-mode }
 
 bind .ed.t <$::cfg_key_sticky_sel> { break }
 bind .ed.t <Tab>                { .ed.t insert insert "    "; break }
@@ -1268,17 +1343,22 @@ proc show-editor {path} {
 
 set ::tui_stty ""
 
+proc tui-reverse-video {on} {
+    puts -nonewline [expr {$on ? "\033\[?5h" : "\033\[?5l"}]
+    flush stdout
+}
+
 proc tui-init {} {
     catch { set ::tui_stty [exec stty -g <@stdin] }
     catch { exec stty raw -echo <@stdin }
     fconfigure stdin  -blocking 1 -translation binary -buffering none
     fconfigure stdout -encoding utf-8 -buffering none
     puts -nonewline "\033\[?25l\033\[2J\033\[?2004h"
-    flush stdout
+    tui-reverse-video [expr {!$::cfg_dark_mode}]
 }
 
 proc tui-cleanup {} {
-    puts -nonewline "\033\[?2004l\033\[?25h\033\[2J\033\[H"
+    puts -nonewline "\033\[?5l\033\[?2004l\033\[?25h\033\[2J\033\[H"
     flush stdout
     if {$::tui_stty ne ""} { catch {exec stty $::tui_stty <@stdin}
     } else                 { catch {exec stty sane <@stdin} }
@@ -1293,10 +1373,12 @@ proc tui-move {row col} { puts -nonewline "\033\[[expr {$row+1}];[expr {$col+1}]
 
 proc tui-attr {a} {
     switch $a {
-        bold    { puts -nonewline "\033\[1m" }
-        reverse { puts -nonewline "\033\[7m" }
-        dim     { puts -nonewline "\033\[2m" }
-        off     { puts -nonewline "\033\[0m" }
+        bold     -
+        heading  { puts -nonewline "\033\[1m" }
+        dim-text { puts -nonewline "\033\[2m" }
+        dim      { puts -nonewline "\033\[2m" }
+        reverse  { puts -nonewline "\033\[7m" }
+        off      { puts -nonewline "\033\[0m" }
     }
 }
 
@@ -1860,12 +1942,12 @@ proc tui-editor {filepath} {
                     } elseif {$li == $ely} {
                         set in_sel [expr {$abs < $ecx_s}]
                     }
-                    if {$in_sel} { tui-attr reverse } elseif {$ish} { tui-attr bold } elseif {$isd} { tui-attr dim }
+                    if {$in_sel} { tui-attr reverse } elseif {$ish} { tui-attr heading } elseif {$isd} { tui-attr dim-text }
                     puts -nonewline [string index $seg $ci]
                     if {$in_sel || $ish || $isd} { tui-attr off }
                 }
             } else {
-                if {$ish} { tui-attr bold } elseif {$isd} { tui-attr dim }
+                if {$ish} { tui-attr heading } elseif {$isd} { tui-attr dim-text }
                 puts -nonewline $seg
                 if {$ish || $isd} { tui-attr off }
             }
@@ -2154,6 +2236,10 @@ proc tui-editor {filepath} {
                     set target [tui-toc $lines $rows $cols]
                     puts -nonewline "\033\[2J"
                     if {$target > 0} { set cy $target; set cx 0 }
+                } elseif {$key eq $::cfg_tui_dark_toggle} {
+                    set ::cfg_dark_mode [expr {!$::cfg_dark_mode}]
+                    tui-reverse-video [expr {!$::cfg_dark_mode}]
+                    set clear_sel 0
                 } elseif {$key eq $::cfg_tui_line_nums} {
                     set ::cfg_line_numbers [expr {$::cfg_line_numbers ? 0 : 1}]
                     set clear_sel 0
