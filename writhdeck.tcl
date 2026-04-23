@@ -1,4 +1,8 @@
-#!/usr/bin/env tclsh
+#!/bin/sh
+# sh/Tcl polyglot — backslash continues Tcl comment to next line, hiding shell bootstrap \
+_w=$(stty -g 2>/dev/null); trap '[ -n "$_w" ] && stty "$_w" 2>/dev/null' EXIT INT TERM; tclsh "$0" "$@"; exit $?
+
+# # # # # # # # # # # #
 #
 #     writhdeck.tcl 
 #     
@@ -22,7 +26,10 @@
 #    OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF 
 #    OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
+# # # # # # # # # # # #
 
+# bail out immediately when invoked by bash tab-completion
+if {[info exists ::env(COMP_LINE)] || [info exists ::env(COMP_POINT)]} { exit 0 }
 
 set ::no_gui [expr {[lsearch $::argv "--no-gui"] >= 0}]
 if {$::no_gui} {
@@ -30,15 +37,25 @@ if {$::no_gui} {
     set ::argc [llength $::argv]
 }
 if {!$::no_gui} {
-    # auto-detect: no graphical display available
-    set _has_display [expr {
-        ([info exists ::env(DISPLAY)]          && $::env(DISPLAY)          ne "") ||
-        ([info exists ::env(WAYLAND_DISPLAY)]  && $::env(WAYLAND_DISPLAY)  ne "")
-    }]
-    if {!$_has_display || [catch {package require Tk}]} {
+    # auto-detect: no graphical display available.
+    # Check that the display socket actually exists before trying Tk —
+    # package require Tk can hang indefinitely if DISPLAY is stale/unreachable.
+    proc _display-socket-exists {} {
+        if {[info exists ::env(WAYLAND_DISPLAY)] && $::env(WAYLAND_DISPLAY) ne ""} {
+            set dir [expr {[info exists ::env(XDG_RUNTIME_DIR)] ? $::env(XDG_RUNTIME_DIR) : ""}]
+            if {$dir ne "" && [file exists [file join $dir $::env(WAYLAND_DISPLAY)]]} { return 1 }
+        }
+        if {[info exists ::env(DISPLAY)] && $::env(DISPLAY) ne ""} {
+            if {[regexp {^:(\d+)} $::env(DISPLAY) -> num]} {
+                return [file exists "/tmp/.X11-unix/X$num"]
+            }
+        }
+        return 0
+    }
+    if {![_display-socket-exists] || [catch {package require Tk}]} {
         set ::no_gui 1
     }
-    unset _has_display
+    rename _display-socket-exists {}
 }
 
 set ::DOCS_DIR_DEFAULT [file join $::env(HOME) Documents writhdeck]
@@ -942,10 +959,26 @@ proc close-editor {} {
 }
 
 # ─── editor bindings ──────────────────────────────────────────────────────────
+
+proc ed-paste {} {
+    # On X11, Tk's default <<Paste>> does not replace the selection.
+    # We delete it manually so paste behaves consistently across platforms.
+    if {![catch {::tk::GetSelection .ed.t CLIPBOARD} clip]} {
+        .ed.t configure -autoseparators 0
+        .ed.t edit separator
+        catch { .ed.t delete sel.first sel.last }
+        .ed.t insert insert $clip
+        .ed.t edit separator
+        .ed.t configure -autoseparators 1
+    }
+}
+
 bind .ed.t <$::cfg_key_save>    { save-file;         break }
 bind .ed.t <$::cfg_key_save_as> { save-as;           break }
 bind .ed.t <$::cfg_key_close>   { close-editor;      break }
 bind .ed.t <Escape>             { close-editor;      break }
+bind .ed.t <$::cfg_key_paste>      { ed-paste;                              break }
+bind .ed.t <$::cfg_key_select_all> { .ed.t tag add sel 1.0 end;         break }
 
 bind .ed.t <$::cfg_key_sticky_sel> { break }
 bind .ed.t <Tab>                { .ed.t insert insert "    "; break }
@@ -2110,6 +2143,10 @@ proc tui-editor {filepath} {
 }
 
 proc tui-main {} {
+    if {[catch {exec stty -g <@stdin}]} {
+        puts stderr "writhdeck: not a terminal"
+        exit 1
+    }
     tui-init
     set ok [catch {
         if {$::argc > 0} {
