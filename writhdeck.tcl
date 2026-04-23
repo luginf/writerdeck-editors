@@ -37,28 +37,33 @@ if {$::no_gui} {
     set ::argc [llength $::argv]
 }
 if {!$::no_gui} {
-    # auto-detect: no graphical display available.
-    # Check that the display socket actually exists before trying Tk —
-    # package require Tk can hang indefinitely if DISPLAY is stale/unreachable.
-    proc _display-socket-exists {} {
-        if {[info exists ::env(WAYLAND_DISPLAY)] && $::env(WAYLAND_DISPLAY) ne ""} {
-            set dir [expr {[info exists ::env(XDG_RUNTIME_DIR)] ? $::env(XDG_RUNTIME_DIR) : ""}]
-            if {$dir ne "" && [file exists [file join $dir $::env(WAYLAND_DISPLAY)]]} { return 1 }
-        }
-        if {[info exists ::env(DISPLAY)] && $::env(DISPLAY) ne ""} {
-            if {[regexp {^:(\d+)} $::env(DISPLAY) -> num]} {
-                return [file exists "/tmp/.X11-unix/X$num"]
+    if {$::tcl_platform(platform) eq "windows"} {
+        if {[catch {package require Tk}]} { set ::no_gui 1 }
+    } else {
+        # On Unix, check that the display socket actually exists before trying Tk —
+        # package require Tk can hang indefinitely if DISPLAY is stale/unreachable.
+        proc _display-socket-exists {} {
+            if {[info exists ::env(WAYLAND_DISPLAY)] && $::env(WAYLAND_DISPLAY) ne ""} {
+                set dir [expr {[info exists ::env(XDG_RUNTIME_DIR)] ? $::env(XDG_RUNTIME_DIR) : ""}]
+                if {$dir ne "" && [file exists [file join $dir $::env(WAYLAND_DISPLAY)]]} { return 1 }
             }
+            if {[info exists ::env(DISPLAY)] && $::env(DISPLAY) ne ""} {
+                if {[regexp {^:(\d+)} $::env(DISPLAY) -> num]} {
+                    return [file exists "/tmp/.X11-unix/X$num"]
+                }
+            }
+            return 0
         }
-        return 0
+        if {![_display-socket-exists] || [catch {package require Tk}]} {
+            set ::no_gui 1
+        }
+        rename _display-socket-exists {}
     }
-    if {![_display-socket-exists] || [catch {package require Tk}]} {
-        set ::no_gui 1
-    }
-    rename _display-socket-exists {}
 }
 
-set ::DOCS_DIR_DEFAULT [file join $::env(HOME) Documents writhdeck]
+set ::HOME_DIR [expr {[info exists ::env(HOME)] ? $::env(HOME) : \
+    ([info exists ::env(USERPROFILE)] ? $::env(USERPROFILE) : [file normalize ~])}]
+set ::DOCS_DIR_DEFAULT [file join $::HOME_DIR Documents writhdeck]
 set ::DOCS_DIR         $::DOCS_DIR_DEFAULT
 set ::INI_FILE         [file join $::DOCS_DIR_DEFAULT "writhdeck.ini"]
 set ::FILE_EXT ".txt"
@@ -523,7 +528,7 @@ proc br-refresh {} {
     for {set i 0} {$i < [llength $::br_entries]} {incr i} {
         lassign [lindex $::br_entries $i] type dir name
         if {$type eq "header"} {
-            set label [string map [list $::env(HOME) ~] $dir]
+            set label [string map [list $::HOME_DIR ~] $dir]
             .br.mid.lst insert end " $label"
             .br.mid.lst itemconfigure $i -foreground $::fg_bar \
                 -selectforeground $::fg_bar -selectbackground $::bg_bar
@@ -1725,7 +1730,7 @@ proc tui-browser {} {
                 if {$row >= $rows-2} break
                 lassign $entry type dir name
                 if {$type eq "header"} {
-                    set lbl [string map [list $::env(HOME) ~] $dir]
+                    set lbl [string map [list $::HOME_DIR ~] $dir]
                     tui-attr dim; tui-fill $row " $lbl" $cols; tui-attr off
                 } else {
                     set fi [lsearch $fidx $ei]; set issel [expr {$fi == $sel}]
@@ -1750,7 +1755,7 @@ proc tui-browser {} {
         if {$::cfg_help_bar ne ""} { tui-help [expr {$rows-2}] "\u21b5 open  n new  d delete  r rename  q quit   $::cfg_lbl_help help" $cols }
         set clk [expr {$::cfg_show_clock ? "  [clock format [clock seconds] -format {%H:%M}]" : ""}]
         if {$msg ne ""} { tui-bar [expr {$rows-1}] " $msg" "${clk} " $cols; set msg ""
-        } else { tui-bar [expr {$rows-1}] " [string map [list $::env(HOME) ~] $::DOCS_DIR_DEFAULT]" \
+        } else { tui-bar [expr {$rows-1}] " [string map [list $::HOME_DIR ~] $::DOCS_DIR_DEFAULT]" \
                          " $fcount file${plu}${clk} " $cols }
         flush stdout
 
@@ -2264,6 +2269,10 @@ proc tui-editor {filepath} {
 }
 
 proc tui-main {} {
+    if {$::tcl_platform(platform) eq "windows"} {
+        puts stderr "writhdeck: TUI mode is not supported on Windows"
+        exit 1
+    }
     if {[catch {exec stty -g <@stdin}]} {
         puts stderr "writhdeck: not a terminal"
         exit 1
