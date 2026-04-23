@@ -2297,14 +2297,30 @@ proc tui-main {} {
 }
 
 # ─── start ────────────────────────────────────────────────────────────────────
+if {$::no_gui && $::tcl_platform(platform) eq "windows"} {
+    # On Windows without Tk, show a helpful message in a console or dialog
+    catch {
+        package require Tk
+        tk_messageBox -title "Writhdeck" \
+            -message "Please run writhdeck.tcl with wish.exe, not tclsh.exe.\n\nExample:\n  wish.exe writhdeck.tcl" \
+            -icon info
+    } err
+    if {$err ne ""} {
+        puts stderr "writhdeck: please run with wish.exe, not tclsh.exe"
+    }
+    exit 1
+}
 if {$::no_gui} {
     tui-main
 } else {
+    if {$::tcl_platform(platform) eq "windows"} {
+        proc bgerror {msg} {
+            tk_messageBox -title "Writhdeck Error" -message $msg -icon error -type ok
+        }
+    }
     if {[file exists "writhdeck.png"]} {
-        wm iconphoto . [image create photo -file "writhdeck.png"]
-} else {
-    puts "writhdeck.png is missing... no desktop icon."
-}
+        catch { wm iconphoto . [image create photo -file "writhdeck.png"] }
+    }
     if {$::argc > 0} { show-editor [lindex $::argv 0] } else { show-browser }
     if {$::cfg_key_error ne ""} {
         after 100 [list set-msg "key conflict: $::cfg_key_error"]
