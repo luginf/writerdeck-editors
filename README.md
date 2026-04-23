@@ -44,6 +44,7 @@ Similar usage for the other versions.
 - UTF-8 input support
 - Cursor position restored across sessions (`.cursors.json`)
 
+% test comment
 
 ---
 

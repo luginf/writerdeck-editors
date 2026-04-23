@@ -129,6 +129,8 @@ set ::cfg_margin_cols    6
 set ::cfg_margin_rows    4
 set ::cfg_heading_marker "="
 set ::cfg_color_heading  "#c8a060"
+set ::cfg_dim_marker     "%"
+set ::cfg_color_dim      "#606060"
 set ::cfg_line_numbers   0
 set ::cfg_cursor_restore 1
 set ::cfg_word_count     1
@@ -178,6 +180,8 @@ proc ini-load {} {
                 color_bg_sel     { set ::cfg_bg_sel         $v }
                 heading_marker   { set ::cfg_heading_marker $v }
                 color_heading    { set ::cfg_color_heading  $v }
+                dim_marker       { set ::cfg_dim_marker     $v }
+                color_dim        { set ::cfg_color_dim      $v }
                 line_numbers     { set ::cfg_line_numbers   $v }
                 cursor_restore   { set ::cfg_cursor_restore $v }
                 word_count       { set ::cfg_word_count     $v }
@@ -224,6 +228,7 @@ proc ini-save {} {
     puts $fh "margin_rows    = $::cfg_margin_rows"
     puts $fh "font_size      = $::cfg_font_size"
     puts $fh "heading_marker = $::cfg_heading_marker"
+    puts $fh "dim_marker     = $::cfg_dim_marker"
     puts $fh ""
     puts $fh "\[behaviour\]"
     puts $fh "line_numbers   = $::cfg_line_numbers"
@@ -261,6 +266,7 @@ proc ini-save {} {
     puts $fh "color_fg_bar   = $::cfg_fg_bar"
     puts $fh "color_bg_sel   = $::cfg_bg_sel"
     puts $fh "color_heading  = $::cfg_color_heading"
+    puts $fh "color_dim      = $::cfg_color_dim"
     puts $fh ""
     puts $fh "# ── light theme (solarized light) ─────────────────────────────"
     puts $fh "# To enable: uncomment the lines below and comment out the"
@@ -397,6 +403,12 @@ proc br-multi {} { return [expr {[llength [br-dirs]] > 1}] }
 proc heading-re {} {
     set m [regsub -all {[\\^$.|?*+()\[\]{}]} $::cfg_heading_marker {\\&}]
     return "^\\s*${m}\\s*(.+?)\\s*${m}\\s*$"
+}
+
+proc parse-dim {line} {
+    if {$::cfg_dim_marker eq ""} { return 0 }
+    set m [regsub -all {[\\^$.|?*+()\[\]{}]} $::cfg_dim_marker {\\&}]
+    return [regexp "^${m} " $line]
 }
 
 proc parse-heading {line} {
@@ -644,6 +656,8 @@ proc ed-yscroll {first last} {
 .ed.t tag configure heading \
     -foreground $::cfg_color_heading \
     -font [list Mono $::cfg_font_size bold]
+.ed.t tag configure dim \
+    -foreground $::cfg_color_dim
 
 frame .ed.bar -bg $bg_bar
 label .ed.bar.lbl  -textvariable ::ed_status \
@@ -958,6 +972,23 @@ proc close-editor {} {
     show-browser
 }
 
+proc quit-app {} {
+    if {$::dirty} {
+        set r [tk_messageBox \
+            -message "Save \"[file tail $::filename]\" before closing?" \
+            -type yesnocancel -icon question -default yes -parent .]
+        if {$r eq "cancel"} return
+        if {$r eq "yes"} save-file
+    }
+    if {$::filename ne ""} {
+        lassign [split [.ed.t index insert] .] cy cx
+        cursor-put $::filename $cy $cx
+    }
+    exit
+}
+
+wm protocol . WM_DELETE_WINDOW quit-app
+
 # ─── editor bindings ──────────────────────────────────────────────────────────
 
 proc ed-paste {} {
@@ -1022,11 +1053,14 @@ bind .br.mid.lst    <$::cfg_key_fullscreen> { toggle-fullscreen }
 # ─── headings & TOC ───────────────────────────────────────────────────────────
 proc highlight-headings {} {
     .ed.t tag remove heading 1.0 end
+    .ed.t tag remove dim     1.0 end
     set last [lindex [split [.ed.t index end] .] 0]
     for {set ln 1} {$ln < $last} {incr ln} {
         set line [.ed.t get $ln.0 "$ln.0 lineend"]
         if {[parse-heading $line] ne ""} {
             .ed.t tag add heading $ln.0 "$ln.0 lineend"
+        } elseif {[parse-dim $line]} {
+            .ed.t tag add dim $ln.0 "$ln.0 lineend"
         }
     }
 }
@@ -1795,6 +1829,7 @@ proc tui-editor {filepath} {
             set line_text [lindex $lines [expr {$li-1}]]
             set seg [string range $line_text $scol [expr {$ecol-1}]]
             set ish [expr {[parse-heading $line_text] ne ""}]
+            set isd [parse-dim $line_text]
 
             # left margin + line number
             tui-move $srow 0; puts -nonewline "\033\[K"
@@ -1825,14 +1860,14 @@ proc tui-editor {filepath} {
                     } elseif {$li == $ely} {
                         set in_sel [expr {$abs < $ecx_s}]
                     }
-                    if {$in_sel} { tui-attr reverse } elseif {$ish} { tui-attr bold }
+                    if {$in_sel} { tui-attr reverse } elseif {$ish} { tui-attr bold } elseif {$isd} { tui-attr dim }
                     puts -nonewline [string index $seg $ci]
-                    if {$in_sel || $ish} { tui-attr off }
+                    if {$in_sel || $ish || $isd} { tui-attr off }
                 }
             } else {
-                if {$ish} { tui-attr bold }
+                if {$ish} { tui-attr bold } elseif {$isd} { tui-attr dim }
                 puts -nonewline $seg
-                if {$ish} { tui-attr off }
+                if {$ish || $isd} { tui-attr off }
             }
         }
 
