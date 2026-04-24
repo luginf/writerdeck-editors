@@ -1595,7 +1595,8 @@ proc tui-l2v {vrows cy cx} {
         lassign [lindex $vrows $vi] li scol ecol
         if {$li == $cy && $scol <= $cx && $cx <= $ecol} {
             set nx [expr {$vi+1}]
-            if {$cx == $ecol && $ecol > $scol && $nx < $n && [lindex [lindex $vrows $nx] 0] == $li} continue
+            if {$cx == $ecol && $ecol > $scol && $nx < $n && [lindex [lindex $vrows $nx] 0] == $li \
+                    && [lindex [lindex $vrows $nx] 1] <= $cx} continue
             return [list $vi [expr {$cx - $scol}]]
         }
     }
