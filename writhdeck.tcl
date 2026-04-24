@@ -150,6 +150,8 @@ set ::cfg_dark_mode          1
 set ::cfg_key_dark_toggle    "Control-d"
 set ::cfg_line_numbers   0
 set ::cfg_cursor_restore 1
+set ::cfg_block_cursor   1
+set ::cfg_blink_cursor   0
 set ::cfg_word_count     1
 set ::cfg_show_clock     1
 set ::cfg_help_bar       "^S save   ^Q close   ^H help"
@@ -210,6 +212,8 @@ proc ini-load {} {
                 key_dark_toggle      { set ::cfg_key_dark_toggle   $v }
                 line_numbers     { set ::cfg_line_numbers   $v }
                 cursor_restore   { set ::cfg_cursor_restore $v }
+                block_cursor     { set ::cfg_block_cursor   [string is true $v] }
+                blink_cursor     { set ::cfg_blink_cursor   [string is true $v] }
                 word_count       { set ::cfg_word_count     $v }
                 show_clock       { set ::cfg_show_clock     $v }
                 help_bar         { set ::cfg_help_bar       $v }
@@ -259,6 +263,8 @@ proc ini-save {} {
     puts $fh "\[behaviour\]"
     puts $fh "line_numbers   = $::cfg_line_numbers"
     puts $fh "cursor_restore = $::cfg_cursor_restore"
+    puts $fh "block_cursor   = $::cfg_block_cursor"
+    puts $fh "blink_cursor   = $::cfg_blink_cursor"
     puts $fh "word_count     = $::cfg_word_count"
     puts $fh "show_clock     = $::cfg_show_clock"
     puts $fh "# help_bar: text shown in the shortcuts bar, empty to hide"
@@ -683,6 +689,8 @@ text .ed.t \
     -bg $bg -fg $fg \
     -insertbackground $fg \
     -selectbackground $bg_sel \
+    -blockcursor $::cfg_block_cursor \
+    -insertofftime [expr {$::cfg_blink_cursor ? 300 : 0}] \
     -borderwidth 0 -padx $::cfg_margin_width -pady $::cfg_margin_height \
     -undo 1
 
@@ -1037,7 +1045,9 @@ proc apply-theme {} {
     # editor
     catch { .ed configure -bg $bg }
     catch { .ed.t configure -bg $bg -fg $fg \
-                -insertbackground $fg -selectbackground $bg_sel }
+                -insertbackground $fg -selectbackground $bg_sel \
+                -blockcursor $::cfg_block_cursor \
+                -insertofftime [expr {$::cfg_blink_cursor ? 300 : 0}] }
     catch { .ed.t tag configure heading -foreground $c_heading }
     catch { .ed.t tag configure dim     -foreground $c_dim }
     catch { .ed.sb configure -bg $bg_bar -troughcolor $bg }
