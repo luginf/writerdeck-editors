@@ -64,6 +64,8 @@ if {!$::no_gui} {
 set ::HOME_DIR [expr {[info exists ::env(HOME)] ? $::env(HOME) : \
     ([info exists ::env(USERPROFILE)] ? $::env(USERPROFILE) : [file normalize ~])}]
 set ::DOCS_DIR_DEFAULT [file join $::HOME_DIR Documents writhdeck]
+  # set ::DOCS_DIR_DEFAULT "C:/Temp/writhdeck"       ;# Windows custom                                              
+  # set ::DOCS_DIR_DEFAULT "/tmp/writhdeck"         ;# Linux custom 
 set ::DOCS_DIR         $::DOCS_DIR_DEFAULT
 set ::INI_FILE         [file join $::DOCS_DIR_DEFAULT "writhdeck.ini"]
 set ::FILE_EXT ".txt"
