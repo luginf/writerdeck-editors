@@ -889,23 +889,38 @@ if {$::cfg_show_clock && [status-zone-of clock] ne ""} { clock-tick }
 # ─── block cursor (inverted, terminal-style) ──────────────────────────────────
 set ::cursor_blink_id      ""
 set ::cursor_blink_visible 1
+set ::cursor_prev_pos      ""
+set ::cursor_mode          ""   ;# "tag" | "block" | ""
 
 proc cursor-update {} {
     if {!$::cfg_block_cursor} return
     if {$::cursor_blink_id ne ""} { after cancel $::cursor_blink_id; set ::cursor_blink_id "" }
     set ::cursor_blink_visible 1
     catch {
-        .ed.t tag remove cur 1.0 end
         set pos [.ed.t index insert]
         set ch  [.ed.t get $pos "$pos +1c"]
         if {$ch ne "\n" && $ch ne ""} {
+            if {$::cursor_mode ne "tag"} {
+                .ed.t configure -blockcursor 0 -insertwidth 0 -insertofftime 0
+                set ::cursor_mode "tag"
+            }
+            if {$::cursor_prev_pos ne ""} {
+                .ed.t tag remove cur $::cursor_prev_pos "$::cursor_prev_pos +1c"
+            }
             .ed.t tag add cur $pos "$pos +1c"
             .ed.t tag configure cur -background $::fg -foreground $::bg
-            .ed.t configure -blockcursor 0 -insertwidth 0 -insertofftime 0
+            set ::cursor_prev_pos $pos
         } else {
-            .ed.t configure -blockcursor 1 -insertwidth 2 \
-                -insertofftime [expr {$::cfg_blink_cursor ? 300 : 0}] \
-                -insertbackground $::fg
+            if {$::cursor_prev_pos ne ""} {
+                .ed.t tag remove cur $::cursor_prev_pos "$::cursor_prev_pos +1c"
+                set ::cursor_prev_pos ""
+            }
+            if {$::cursor_mode ne "block"} {
+                .ed.t configure -blockcursor 1 -insertwidth 2 \
+                    -insertofftime [expr {$::cfg_blink_cursor ? 300 : 0}] \
+                    -insertbackground $::fg
+                set ::cursor_mode "block"
+            }
         }
     }
     if {$::cfg_blink_cursor} { set ::cursor_blink_id [after 600 cursor-blink-tick] }
@@ -930,6 +945,7 @@ proc cursor-blink-tick {} {
 
 proc cursor-setup {} {
     if {$::cursor_blink_id ne ""} { after cancel $::cursor_blink_id; set ::cursor_blink_id "" }
+    set ::cursor_mode ""; set ::cursor_prev_pos ""
     catch {
         if {$::cfg_block_cursor} {
             .ed.t configure -blockcursor 0 -insertwidth 0 -insertofftime 0 \
