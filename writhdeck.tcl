@@ -954,6 +954,7 @@ set ::gui_cc 0
 set ::ed_bar_left   ""
 set ::ed_bar_center ""
 set ::ed_bar_right  ""
+set ::status_update_pending 0
 
 proc gui-status-state {} {
     set fn    [expr {$::filename eq "" ? "\[new\]" : [file tail $::filename]}]
@@ -987,8 +988,14 @@ proc ed-status {} {
         if {$::wc_after_id ne ""} { after cancel $::wc_after_id }
         set ::wc_after_id [after 400 wc-flush]
     }
-    gui-status-update
     cursor-update
+    if {!$::status_update_pending} {
+        set ::status_update_pending 1
+        after idle {
+            set ::status_update_pending 0
+            gui-status-update
+        }
+    }
 }
 
 proc set-msg {text} {
@@ -1025,7 +1032,6 @@ proc cursor-update {} {
                 .ed.t tag remove cur $::cursor_prev_pos "$::cursor_prev_pos +1c"
             }
             .ed.t tag add cur $pos "$pos +1c"
-            .ed.t tag configure cur -background $::fg -foreground $::bg
             set ::cursor_prev_pos $pos
         } else {
             if {$::cursor_prev_pos ne ""} {
