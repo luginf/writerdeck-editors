@@ -737,8 +737,9 @@ text .ed.t \
     -bg $bg -fg $fg \
     -insertbackground $fg \
     -selectbackground $bg_sel \
-    -blockcursor $::cfg_block_cursor \
-    -insertofftime [expr {$::cfg_blink_cursor ? 300 : 0}] \
+    -blockcursor 0 \
+    -insertwidth [expr {$::cfg_block_cursor ? 0 : 2}] \
+    -insertofftime [expr {$::cfg_block_cursor ? 0 : ($::cfg_blink_cursor ? 300 : 0)}] \
     -borderwidth 0 -padx $::cfg_margin_width -pady $::cfg_margin_height \
     -undo 1
 
@@ -800,6 +801,7 @@ if {$::cfg_line_numbers} {
     pack .ed.ln -side left -fill y
 }
 pack .ed.t   -fill both   -expand 1
+after idle cursor-setup
 
 # ─── search bar (hidden until Ctrl+F) ────────────────────────────────────────
 set ::search_term  ""
@@ -869,6 +871,7 @@ proc ed-status {} {
         set ::wc_after_id [after 400 wc-flush]
     }
     gui-status-update
+    cursor-update
 }
 
 proc set-msg {text} {
@@ -882,6 +885,65 @@ proc clock-tick {} {
     after 30000 clock-tick
 }
 if {$::cfg_show_clock && [status-zone-of clock] ne ""} { clock-tick }
+
+# ─── block cursor (inverted, terminal-style) ──────────────────────────────────
+set ::cursor_blink_id      ""
+set ::cursor_blink_visible 1
+
+proc cursor-update {} {
+    if {!$::cfg_block_cursor} return
+    if {$::cursor_blink_id ne ""} { after cancel $::cursor_blink_id; set ::cursor_blink_id "" }
+    set ::cursor_blink_visible 1
+    catch {
+        .ed.t tag remove cur 1.0 end
+        set pos [.ed.t index insert]
+        set ch  [.ed.t get $pos "$pos +1c"]
+        if {$ch ne "\n" && $ch ne ""} {
+            .ed.t tag add cur $pos "$pos +1c"
+            .ed.t tag configure cur -background $::fg -foreground $::bg
+            .ed.t configure -blockcursor 0 -insertwidth 0 -insertofftime 0
+        } else {
+            .ed.t configure -blockcursor 1 -insertwidth 2 \
+                -insertofftime [expr {$::cfg_blink_cursor ? 300 : 0}] \
+                -insertbackground $::fg
+        }
+    }
+    if {$::cfg_blink_cursor} { set ::cursor_blink_id [after 600 cursor-blink-tick] }
+}
+
+proc cursor-blink-tick {} {
+    set ::cursor_blink_id ""
+    if {!$::cfg_block_cursor || !$::cfg_blink_cursor} return
+    set ::cursor_blink_visible [expr {!$::cursor_blink_visible}]
+    catch {
+        set ch [.ed.t get insert "insert +1c"]
+        if {$ch ne "\n" && $ch ne ""} {
+            if {$::cursor_blink_visible} {
+                .ed.t tag configure cur -background $::fg -foreground $::bg
+            } else {
+                .ed.t tag configure cur -background {} -foreground {}
+            }
+        }
+    }
+    set ::cursor_blink_id [after 500 cursor-blink-tick]
+}
+
+proc cursor-setup {} {
+    if {$::cursor_blink_id ne ""} { after cancel $::cursor_blink_id; set ::cursor_blink_id "" }
+    catch {
+        if {$::cfg_block_cursor} {
+            .ed.t configure -blockcursor 0 -insertwidth 0 -insertofftime 0 \
+                -insertbackground $::fg
+            .ed.t tag configure cur -background $::fg -foreground $::bg
+            .ed.t tag raise cur
+            cursor-update
+        } else {
+            .ed.t tag remove cur 1.0 end
+            .ed.t configure -blockcursor 0 -insertwidth 2 \
+                -insertofftime [expr {$::cfg_blink_cursor ? 300 : 0}]
+        }
+    }
+}
 
 bind .ed.t <KeyRelease>    { ed-status }
 bind .ed.t <ButtonRelease> { ed-status }
@@ -1125,8 +1187,10 @@ proc apply-theme {} {
     catch { .ed configure -bg $bg }
     catch { .ed.t configure -bg $bg -fg $fg \
                 -insertbackground $fg -selectbackground $bg_sel \
-                -blockcursor $::cfg_block_cursor \
-                -insertofftime [expr {$::cfg_blink_cursor ? 300 : 0}] }
+                -blockcursor 0 \
+                -insertwidth [expr {$::cfg_block_cursor ? 0 : 2}] \
+                -insertofftime [expr {$::cfg_block_cursor ? 0 : ($::cfg_blink_cursor ? 300 : 0)}] }
+    catch { cursor-setup }
     catch { .ed.t tag configure heading -foreground $c_heading }
     catch { .ed.t tag configure dim     -foreground $c_dim }
     catch { .ed.sb configure -bg $bg_bar -troughcolor $bg }
@@ -1463,8 +1527,9 @@ proc ini-reload {} {
     set f [list Mono $::cfg_font_size]
     catch { .ed.t configure -font $f \
         -padx $::cfg_margin_width -pady $::cfg_margin_height \
-        -blockcursor $::cfg_block_cursor \
-        -insertofftime [expr {$::cfg_blink_cursor ? 300 : 0}] }
+        -blockcursor 0 \
+        -insertwidth [expr {$::cfg_block_cursor ? 0 : 2}] \
+        -insertofftime [expr {$::cfg_block_cursor ? 0 : ($::cfg_blink_cursor ? 300 : 0)}] }
     catch { .ed.t tag configure heading -font [list Mono $::cfg_font_size bold] }
     catch { apply-theme }
     catch { apply-line-spacing }
@@ -1495,11 +1560,12 @@ proc tui-init {} {
     fconfigure stdin  -blocking 1 -translation binary -buffering none
     fconfigure stdout -encoding utf-8 -buffering none
     puts -nonewline "\033\[?25l\033\[2J\033\[?2004h"
+    puts -nonewline [expr {$::cfg_blink_cursor ? "\033\[1 q" : "\033\[2 q"}]
     tui-reverse-video [expr {!$::cfg_dark_mode}]
 }
 
 proc tui-cleanup {} {
-    puts -nonewline "\033\[?5l\033\[?2004l\033\[?25h\033\[2J\033\[H"
+    puts -nonewline "\033\[0 q\033\[?5l\033\[?2004l\033\[?25h\033\[2J\033\[H"
     flush stdout
     if {$::tui_stty ne ""} { catch {exec stty $::tui_stty <@stdin}
     } else                 { catch {exec stty sane <@stdin} }
