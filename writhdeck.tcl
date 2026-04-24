@@ -152,6 +152,7 @@ set ::cfg_line_numbers   0
 set ::cfg_cursor_restore 1
 set ::cfg_block_cursor   1
 set ::cfg_blink_cursor   0
+set ::cfg_line_spacing   100
 set ::cfg_word_count     1
 set ::cfg_show_clock     1
 set ::cfg_help_bar       "^S save   ^Q close   ^H help"
@@ -214,6 +215,7 @@ proc ini-load {} {
                 cursor_restore   { set ::cfg_cursor_restore $v }
                 block_cursor     { set ::cfg_block_cursor   [string is true $v] }
                 blink_cursor     { set ::cfg_blink_cursor   [string is true $v] }
+                line_spacing     { set ::cfg_line_spacing   $v }
                 word_count       { set ::cfg_word_count     $v }
                 show_clock       { set ::cfg_show_clock     $v }
                 help_bar         { set ::cfg_help_bar       $v }
@@ -257,6 +259,7 @@ proc ini-save {} {
     puts $fh "margin_cols    = $::cfg_margin_cols"
     puts $fh "margin_rows    = $::cfg_margin_rows"
     puts $fh "font_size      = $::cfg_font_size"
+    puts $fh "line_spacing   = $::cfg_line_spacing"
     puts $fh "heading_marker = $::cfg_heading_marker"
     puts $fh "dim_marker     = $::cfg_dim_marker"
     puts $fh ""
@@ -702,6 +705,7 @@ proc ed-yscroll {first last} {
     catch { .ed.ln yview moveto $first }
 }
 .ed.t configure -yscrollcommand ed-yscroll
+after idle apply-line-spacing
 .ed.t tag configure heading \
     -foreground $::cfg_color_heading \
     -font [list Mono $::cfg_font_size bold]
@@ -1238,11 +1242,19 @@ bind .ed.t <$::cfg_key_toc>          { toc-show;   break }
 bind .ed.t <$::cfg_key_line_numbers> { ln-toggle;  break }
 
 # ─── taille de police dynamique ───────────────────────────────────────────────
+proc apply-line-spacing {} {
+    set lh [font metrics [.ed.t cget -font] -linespace]
+    set extra [expr {int($lh * ($::cfg_line_spacing - 100) / 100.0)}]
+    set sp [expr {max(0, $extra)}]
+    .ed.t configure -spacing1 $sp -spacing2 $sp -spacing3 0
+}
+
 proc font-resize {delta} {
     set ::cfg_font_size [expr {max(6, min(72, $::cfg_font_size + $delta))}]
     set f [list Mono $::cfg_font_size]
     .ed.t configure -font $f
     .ed.t tag configure heading -font [list Mono $::cfg_font_size bold]
+    apply-line-spacing
 }
 
 bind .ed.t <Control-equal>    { font-resize  1; break }
@@ -1371,9 +1383,22 @@ proc show-browser {} {
     focus .br.mid.lst
 }
 
+proc ini-reload {} {
+    ini-load
+    set f [list Mono $::cfg_font_size]
+    catch { .ed.t configure -font $f \
+        -padx $::cfg_margin_width -pady $::cfg_margin_height \
+        -blockcursor $::cfg_block_cursor \
+        -insertofftime [expr {$::cfg_blink_cursor ? 300 : 0}] }
+    catch { .ed.t tag configure heading -font [list Mono $::cfg_font_size bold] }
+    catch { apply-theme }
+    catch { apply-line-spacing }
+}
+
 proc show-editor {path} {
     pack forget .br
     pack .ed -fill both -expand 1
+    ini-reload
     load-file $path
     focus .ed.t
 }
@@ -1440,7 +1465,7 @@ proc tui-help {row text cols} {
     tui-attr dim; tui-fill $row " $text" $cols; tui-attr off
 }
 
-proc tui-help-dialog {rows cols} {
+proc tui-help-dialog {rows cols wc cc} {
     set lbl_save   $::cfg_lbl_save;   set lbl_close  $::cfg_lbl_close
     set lbl_undo   $::cfg_lbl_undo;   set lbl_selall $::cfg_lbl_sel_all
     set lbl_sticky $::cfg_lbl_sticky; set lbl_copy   $::cfg_lbl_copy
@@ -1450,6 +1475,9 @@ proc tui-help-dialog {rows cols} {
     set lbl_open   $::cfg_lbl_open;   set lbl_toc    $::cfg_lbl_toc
     set lbl_help   $::cfg_lbl_help
     set lines [list \
+        "  File info" \
+        [format "  Words: %-8d  Chars: %d" $wc $cc] \
+        "" \
         "  Writhdeck — keyboard shortcuts" \
         "" \
         [format "  %-10s Save              %-10s Undo" $lbl_save $lbl_undo] \
@@ -1460,8 +1488,7 @@ proc tui-help-dialog {rows cols} {
         [format "  %-10s Go to line        %-10s Line numbers" $lbl_goto $lbl_lnum] \
         [format "  %-10s Open (browser)" $lbl_open] \
         "" \
-        "  Arrows    Move cursor       Shift+Arrows  Extend selection" \
-        "  Home/End  Line start/end    PgUp/PgDn     Scroll page" \
+        "  Shift+Arrows  Extend selection" \
         "" \
         [format "  %-16s Table of contents" $lbl_toc] \
         [format "  %-16s This help" $lbl_help] \
@@ -1940,7 +1967,7 @@ proc tui-editor {filepath} {
         lappend undo_stack [list $lines $cy $cx]
         if {[llength $undo_stack] > 100} { set undo_stack [lrange $undo_stack end-99 end] }
     }
-    set wc_dirty 1; set wc_cached 0
+    set wc_dirty 1; set wc_cached 0; set cc_cached 0
 
     while 1 {
         lassign [tui-size] rows cols
@@ -2045,15 +2072,20 @@ proc tui-editor {filepath} {
         if {$::cfg_word_count} {
             if {$wc_dirty} {
                 set wc_cached 0
-                foreach l $lines { incr wc_cached [llength [regexp -all -inline {\S+} $l]] }
+                set cc_cached 0
+                foreach l $lines {
+                    incr wc_cached [llength [regexp -all -inline {\S+} $l]]
+                    incr cc_cached [string length $l]
+                }
                 set wc_dirty 0
             }
-            set wc_str "  ${wc_cached}w"
+            set wc_str "  ${wc_cached}w ${cc_cached}c"
         }
         set clk [expr {$::cfg_show_clock ? "  [clock format [clock seconds] -format {%H:%M}]" : ""}]
-        set right [format "ln %d/%d  col %d%s%s " $cy [llength $lines] [expr {$cx+1}] $wc_str $clk]
+        set pos_str [format "  Ln %d/%d  Col %-3d%s" $cy [llength $lines] [expr {$cx+1}] $wc_str]
+        set right $clk
         if {$::cfg_key_error ne "" && $message eq ""} { set message "key conflict: $::cfg_key_error"; set msg_time [clock seconds] }
-        if {$message ne "" && [clock seconds] - $msg_time < 4} { set left " $message" }
+        if {$message ne "" && [clock seconds] - $msg_time < 4} { set left " $message" } else { append left $pos_str }
         tui-bar [expr {$rows-1}] $left $right $cols
 
         tui-move [expr {$vi - $scroll_y + $roff}] [expr {$scx + $coff}]
@@ -2316,7 +2348,15 @@ proc tui-editor {filepath} {
                     set clear_sel 0
                 } elseif {$key eq $::cfg_tui_help} {
                     lassign [tui-size] rows cols
-                    tui-help-dialog $rows $cols
+                    if {$wc_dirty} {
+                        set wc_cached 0; set cc_cached 0
+                        foreach l $lines {
+                            incr wc_cached [llength [regexp -all -inline {\S+} $l]]
+                            incr cc_cached [string length $l]
+                        }
+                        set wc_dirty 0
+                    }
+                    tui-help-dialog $rows $cols $wc_cached $cc_cached
                     set clear_sel 0
                 } elseif {[string match "F*" $key]} {                          ;# ignore unknown F-keys
                     set clear_sel 0
