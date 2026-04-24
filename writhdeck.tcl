@@ -178,6 +178,7 @@ set ::cfg_key_select_all   "Control-a"
 set ::cfg_key_sticky_sel   "Control-k"
 set ::cfg_key_toc          "F11"
 set ::cfg_key_line_numbers "Control-l"
+set ::cfg_key_next_space   "Control-space"
 set ::cfg_key_fullscreen   "Alt-Return"
 set ::cfg_key_error        ""
 set ::fullscreen 0
@@ -243,6 +244,7 @@ proc ini-load {} {
                 key_sticky_sel   { set ::cfg_key_sticky_sel   $v }
                 key_toc          { set ::cfg_key_toc          $v }
                 key_line_numbers { set ::cfg_key_line_numbers $v }
+                key_next_space   { set ::cfg_key_next_space   $v }
                 key_fullscreen   { set ::cfg_key_fullscreen   $v }
                 toc_key          { set ::cfg_key_toc          $v }
                 ln_key           { set ::cfg_key_line_numbers $v }
@@ -304,6 +306,7 @@ proc ini-save {} {
     puts $fh "key_sticky_sel   = $::cfg_key_sticky_sel"
     puts $fh "key_toc          = $::cfg_key_toc"
     puts $fh "key_line_numbers = $::cfg_key_line_numbers"
+    puts $fh "key_next_space   = $::cfg_key_next_space"
     puts $fh "key_fullscreen   = $::cfg_key_fullscreen"
     puts $fh "key_dark_toggle  = $::cfg_key_dark_toggle"
     puts $fh ""
@@ -338,6 +341,7 @@ proc tk-key-to-tui {key} {
         scan $letter %c code
         return [format %c [expr {$code - 96}]]
     }
+    if {$k eq "control-space"} { return "\x00" }
     if {[regexp {^f(\d+)$} $k -> n]} { return "F$n" }
     return $key
 }
@@ -345,6 +349,7 @@ proc tk-key-to-tui {key} {
 # Return a short human-readable label for a Tk key name
 proc key-label {key} {
     if {[regexp -nocase {^control-([a-z])$} $key -> l]} { return "^[string toupper $l]" }
+    if {[string tolower $key] eq "control-space"}        { return "^SPC" }
     if {[regexp -nocase {^f(\d+)$} $key -> n]}          { return "F$n" }
     return $key
 }
@@ -367,6 +372,7 @@ proc keys-init {} {
     set ::cfg_tui_sticky_sel [tk-key-to-tui $::cfg_key_sticky_sel]
     set ::cfg_tui_toc          [tk-key-to-tui $::cfg_key_toc]
     set ::cfg_tui_line_nums    [tk-key-to-tui $::cfg_key_line_numbers]
+    set ::cfg_tui_next_space   [tk-key-to-tui $::cfg_key_next_space]
     set ::cfg_tui_dark_toggle  [tk-key-to-tui $::cfg_key_dark_toggle]
     # labels for UI display
     set ::cfg_lbl_save       [key-label $::cfg_key_save]
@@ -383,6 +389,7 @@ proc keys-init {} {
     set ::cfg_lbl_sticky     [key-label $::cfg_key_sticky_sel]
     set ::cfg_lbl_toc        [key-label $::cfg_key_toc]
     set ::cfg_lbl_line_nums  [key-label $::cfg_key_line_numbers]
+    set ::cfg_lbl_next_space [key-label $::cfg_key_next_space]
     # conflict detection
     set pairs [list \
         key_save $::cfg_tui_save \
@@ -392,7 +399,8 @@ proc keys-init {} {
         key_undo $::cfg_tui_undo  key_copy $::cfg_tui_copy \
         key_cut $::cfg_tui_cut  key_paste $::cfg_tui_paste \
         key_select_all $::cfg_tui_select_all  key_sticky_sel $::cfg_tui_sticky_sel \
-        key_toc $::cfg_tui_toc  key_line_numbers $::cfg_tui_line_nums]
+        key_toc $::cfg_tui_toc  key_line_numbers $::cfg_tui_line_nums \
+        key_next_space $::cfg_tui_next_space]
     set seen [dict create]; set conflicts {}
     foreach {name val} $pairs {
         if {[dict exists $seen $val]} {
@@ -1379,8 +1387,9 @@ bind .br.mid.lst <$::cfg_key_dark_toggle> { toggle-dark-mode }
 
 bind .ed.t <$::cfg_key_sticky_sel> { break }
 bind .ed.t <Tab>                { .ed.t insert insert "    "; break }
-bind .ed.t <$::cfg_key_goto>    { goto-dialog;       break }
-bind .ed.t <$::cfg_key_help>    { help-dialog;       break }
+bind .ed.t <$::cfg_key_goto>       { goto-dialog;    break }
+bind .ed.t <$::cfg_key_help>       { help-dialog;    break }
+bind .ed.t <$::cfg_key_next_space> { jump-next-space; break }
 bind .ed.t <$::cfg_key_replace> { replace-open;      break }
 bind .ed.t <$::cfg_key_find>    { search-open;       break }
 bind .ed.t <$::cfg_key_open>    { open-file-dialog;  break }
@@ -1560,6 +1569,7 @@ proc help-dialog {} {
             [key-label $::cfg_key_goto]         "Go to line" \
             [key-label $::cfg_key_undo]         "Undo" \
             "Tab"                               "Insert 4 spaces" \
+            [key-label $::cfg_key_next_space]   "Jump to next space" \
             [key-label $::cfg_key_toc]          "Table of contents  (${hm}title${hm})" \
             [key-label $::cfg_key_fullscreen]   "Fullscreen" \
             [key-label $::cfg_key_help]         "Help" \
@@ -1579,7 +1589,7 @@ proc help-dialog {} {
         -font {Mono 11} -state normal \
         -bg "#1a1a1a" -fg "#e8e8e8" \
         -borderwidth 0 -padx 16 -pady 12 \
-        -width 52 -height $height \
+        -width 60 -height $height \
         -cursor arrow
     $w.t tag configure heading -foreground "#aaaaaa" -font {Mono 11 bold}
     $w.t tag configure key     -foreground "#7ab0d4"
@@ -1607,6 +1617,15 @@ proc help-dialog {} {
     bind $w <Return>    [list destroy $w]
     bind $w <Control-h> [list destroy $w]
     focus $w.ok
+}
+
+proc jump-next-space {} {
+    set pos [.ed.t search " " "insert+1c" end]
+    if {$pos ne ""} {
+        .ed.t mark set insert $pos
+        .ed.t see insert
+        cursor-update
+    }
 }
 
 proc goto-dialog {} {
@@ -1775,7 +1794,7 @@ proc tui-help-dialog {rows cols wc cc} {
     set lbl_repl   $::cfg_lbl_replace; set lbl_paste $::cfg_lbl_paste
     set lbl_goto   $::cfg_lbl_goto;   set lbl_lnum   $::cfg_lbl_line_nums
     set lbl_open   $::cfg_lbl_open;   set lbl_toc    $::cfg_lbl_toc
-    set lbl_help   $::cfg_lbl_help
+    set lbl_help   $::cfg_lbl_help;   set lbl_nsp    $::cfg_lbl_next_space
     set lines [list \
         "  File info" \
         [format "  Words: %-8d  Chars: %d" $wc $cc] \
@@ -1788,7 +1807,7 @@ proc tui-help-dialog {rows cols wc cc} {
         [format "  %-10s Find              %-10s Cut" $lbl_find $lbl_cut] \
         [format "  %-10s Replace           %-10s Paste" $lbl_repl $lbl_paste] \
         [format "  %-10s Go to line        %-10s Line numbers" $lbl_goto $lbl_lnum] \
-        [format "  %-10s Open (browser)" $lbl_open] \
+        [format "  %-10s Open (browser)    %-10s Jump to next space" $lbl_open $lbl_nsp] \
         "" \
         "  Shift+Arrows  Extend selection" \
         "" \
@@ -1798,7 +1817,7 @@ proc tui-help-dialog {rows cols wc cc} {
         "  Press any key to close" \
     ]
     set h [llength $lines]
-    set w 52
+    set w 60
     set top  [expr {max(0, ($rows - $h) / 2)}]
     set left [expr {max(0, ($cols - $w) / 2)}]
     puts -nonewline "\033\[2J"
@@ -2665,6 +2684,18 @@ proc tui-editor {filepath} {
                     set ::cfg_dark_mode [expr {!$::cfg_dark_mode}]
                     tui-reverse-video [expr {!$::cfg_dark_mode}]
                     set clear_sel 0
+                } elseif {$key eq $::cfg_tui_next_space} {
+                    set line [lindex $lines [expr {$cy-1}]]
+                    set idx [string first " " $line [expr {$cx+1}]]
+                    if {$idx >= 0} {
+                        set cx $idx
+                    } else {
+                        set nlines [llength $lines]
+                        for {set r $cy} {$r < $nlines} {incr r} {
+                            set idx [string first " " [lindex $lines $r] 0]
+                            if {$idx >= 0} { set cy [expr {$r+1}]; set cx $idx; break }
+                        }
+                    }
                 } elseif {$key eq $::cfg_tui_line_nums} {
                     set ::cfg_line_numbers [expr {$::cfg_line_numbers ? 0 : 1}]
                     set clear_sel 0
