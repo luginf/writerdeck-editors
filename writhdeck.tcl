@@ -67,11 +67,12 @@ set ::DOCS_DIR_DEFAULT [file join $::HOME_DIR Documents writhdeck]
 set ::DOCS_DIR         $::DOCS_DIR_DEFAULT
 set ::INI_FILE         [file join $::DOCS_DIR_DEFAULT "writhdeck.ini"]
 set ::FILE_EXT ".txt"
-set ::filename ""
-set ::dirty    0
-set ::msg      ""
-set ::ed_msg   ""
-set ::ed_clock ""
+set ::filename     ""
+set ::dirty        0
+set ::msg          ""
+set ::ed_msg       ""
+set ::ed_clock        ""
+set ::session_headings {}
 
 file mkdir $::DOCS_DIR_DEFAULT
 set ::CURSOR_FILE [file join $::DOCS_DIR_DEFAULT ".cursors.json"]
@@ -856,12 +857,19 @@ proc load-file {path} {
     .ed.t edit separator
 
     set ::dirty 0
+    highlight-headings
     lassign [cursor-get $path] cy cx
+    if {[dict exists $::session_headings $path]} {
+        set hs [toc-collect]
+        set hidx [dict get $::session_headings $path]
+        if {$hidx < [llength $hs]} {
+            set cy [lindex [lindex $hs $hidx] 0]; set cx 0
+        }
+    }
     .ed.t mark set insert ${cy}.${cx}
     .ed.t see insert
     ed-status
     if {$::cfg_word_count} { wc-flush }
-    highlight-headings
     ln-update
 }
 
@@ -1175,23 +1183,41 @@ proc toc-show {} {
         -width 48 -height $h
     pack $w.lst -fill both -expand 1 -padx 2 -pady 2
 
+    set presel 0
+    if {[dict exists $::session_headings $::filename]} {
+        set presel [dict get $::session_headings $::filename]
+        if {$presel >= [llength $headings]} { set presel 0 }
+    } else {
+        set curline [lindex [split [.ed.t index insert] .] 0]
+        set idx 0
+        foreach item $headings {
+            if {[lindex $item 0] <= $curline} { set presel $idx }
+            incr idx
+        }
+    }
     foreach item $headings {
         lassign $item ln title
         $w.lst insert end [format "  %4d   %s" $ln $title]
     }
-    $w.lst selection set 0
+    $w.lst selection set $presel
+    $w.lst activate $presel
+    $w.lst see $presel
 
-    bind $w.lst <Return>   [list toc-jump $w $headings]
-    bind $w.lst <Double-1> [list toc-jump $w $headings]
+    bind $w.lst <Return>          [list toc-jump $w $headings]
+    bind $w.lst <Double-1>        [list toc-jump $w $headings]
+    bind $w.lst <ButtonRelease-1> "[list toc-jump $w $headings]; break"
     bind $w     <Escape>   [list destroy $w]
     bind $w     <$::cfg_key_toc> [list destroy $w]
+    bind $w     <Destroy>  { after idle { catch { focus .ed.t } } }
     focus $w.lst
 }
 
 proc toc-jump {w headings} {
     set sel [$w.lst curselection]
     if {![llength $sel]} return
-    set ln [lindex [lindex $headings [lindex $sel 0]] 0]
+    set selIdx [lindex $sel 0]
+    lassign [lindex $headings $selIdx] ln title
+    dict set ::session_headings $::filename $selIdx
     destroy $w
     .ed.t mark set insert $ln.0
     .ed.t see insert
@@ -1807,15 +1833,26 @@ proc tui-browser {} {
 
 # ── TUI TOC ───────────────────────────────────────────────────────────────────
 
-proc tui-toc {lines rows cols} {
+proc tui-toc {lines rows cols {cy 1} {filepath ""}} {
     set headings {}; set ln 1
     foreach line $lines {
         set t [parse-heading $line]
         if {$t ne ""} { lappend headings [list $ln $t] }
         incr ln
     }
-    if {![llength $headings]} { return -1 }
-    set sel 0; set scroll 0
+    if {![llength $headings]} { return {} }
+    set sel 0
+    if {$filepath ne "" && [dict exists $::session_headings $filepath]} {
+        set sel [dict get $::session_headings $filepath]
+        if {$sel >= [llength $headings]} { set sel 0 }
+    } else {
+        set idx 0
+        foreach h $headings {
+            if {[lindex $h 0] <= $cy} { set sel $idx }
+            incr idx
+        }
+    }
+    set scroll 0
     while 1 {
         puts -nonewline "\033\[2J"
         set usable [expr {$rows-3}]
@@ -1836,12 +1873,13 @@ proc tui-toc {lines rows cols} {
         tui-bar  [expr {$rows-1}] " $nh heading${plu}" "" $cols
         flush stdout
         switch -- [tui-getch] {
-            ESC      { return -1 }
+            ESC      { return {} }
             UP - k   { if {$sel > 0} { incr sel -1 } }
             DOWN - j { if {$sel < $nh-1} { incr sel 1 } }
             HOME     { set sel 0 }
             END      { set sel [expr {$nh-1}] }
-            ENTER    { return [lindex [lindex $headings $sel] 0] }
+            ENTER    { if {$filepath ne ""} { dict set ::session_headings $filepath $sel }
+                       return [lindex $headings $sel] }
         }
     }
 }
@@ -1863,10 +1901,22 @@ proc tui-editor {filepath} {
 
     # ── cursor restore ────────────────────────────────────────────────────────
     lassign [cursor-get $filepath] cy cx
+    if {[dict exists $::session_headings $filepath]} {
+        set hidx [dict get $::session_headings $filepath]
+        set hi 0; set ln 1
+        foreach tline $lines {
+            if {[parse-heading $tline] ne ""} {
+                if {$hi == $hidx} { set cy $ln; set cx 0; break }
+                incr hi
+            }
+            incr ln
+        }
+    }
     set cy [expr {max(1, min($cy, [llength $lines]))}]
     set cx [expr {max(0, min($cx, [string length [lindex $lines [expr {$cy-1}]]]))}]
 
     set scroll_y 0
+    set toc_jumped 0
     set dirty 0; set message ""; set msg_time 0; set sticky -1
     set undo_stack {}
     set sel_anchor ""
@@ -1898,8 +1948,10 @@ proc tui-editor {filepath} {
         set vrows [tui-wrap-map $lines $tw]
         lassign [tui-l2v $vrows $cy $cx] vi scx
 
-        if {$vi < $scroll_y}        { set scroll_y $vi }
-        if {$vi >= $scroll_y + $th} { set scroll_y [expr {$vi - $th + 1}] }
+        if {$toc_jumped} { set scroll_y $vi; set toc_jumped 0 } else {
+            if {$vi < $scroll_y}        { set scroll_y $vi }
+            if {$vi >= $scroll_y + $th} { set scroll_y [expr {$vi - $th + 1}] }
+        }
         set scroll_y [expr {max(0, min($scroll_y, max(0, [llength $vrows] - $th)))}]
 
         # ── draw ──────────────────────────────────────────────────────────────
@@ -2238,9 +2290,12 @@ proc tui-editor {filepath} {
                     }
                 } elseif {$key eq $::cfg_tui_toc} {
                     lassign [tui-size] rows cols
-                    set target [tui-toc $lines $rows $cols]
+                    set target [tui-toc $lines $rows $cols $cy $filepath]
                     puts -nonewline "\033\[2J"
-                    if {$target > 0} { set cy $target; set cx 0 }
+                    if {[llength $target] == 2} {
+                        set cy [lindex $target 0]; set cx 0
+                        set toc_jumped 1
+                    }
                 } elseif {$key eq $::cfg_tui_dark_toggle} {
                     set ::cfg_dark_mode [expr {!$::cfg_dark_mode}]
                     tui-reverse-video [expr {!$::cfg_dark_mode}]
