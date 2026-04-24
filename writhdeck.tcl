@@ -71,7 +71,6 @@ set ::filename     ""
 set ::dirty        0
 set ::msg          ""
 set ::ed_msg       ""
-set ::ed_clock        ""
 set ::session_headings {}
 
 file mkdir $::DOCS_DIR_DEFAULT
@@ -156,6 +155,10 @@ set ::cfg_line_spacing   100
 set ::cfg_word_count     1
 set ::cfg_show_clock     1
 set ::cfg_help_bar       "^S save   ^Q close   ^H help"
+# status bar zones — tokens: filename dirty sel ln col words chars clock space
+set ::cfg_status_left   "filename dirty sel ln col words chars"
+set ::cfg_status_center ""
+set ::cfg_status_right  "help_bar clock"
 # shortcuts (Tk key names)
 set ::cfg_key_save         "Control-s"
 set ::cfg_key_save_as      "Control-S"
@@ -219,6 +222,9 @@ proc ini-load {} {
                 word_count       { set ::cfg_word_count     $v }
                 show_clock       { set ::cfg_show_clock     $v }
                 help_bar         { set ::cfg_help_bar       $v }
+                status_left      { set ::cfg_status_left    $v }
+                status_center    { set ::cfg_status_center  $v }
+                status_right     { set ::cfg_status_right   $v }
                 key_save         { set ::cfg_key_save         $v }
                 key_save_as      { set ::cfg_key_save_as      $v }
                 key_close        { set ::cfg_key_close        $v }
@@ -272,6 +278,10 @@ proc ini-save {} {
     puts $fh "show_clock     = $::cfg_show_clock"
     puts $fh "# help_bar: text shown in the shortcuts bar, empty to hide"
     puts $fh "help_bar       = $::cfg_help_bar"
+    puts $fh "# status bar zones — tokens: filename dirty sel ln col words chars clock space"
+    puts $fh "status_left    = $::cfg_status_left"
+    puts $fh "status_center  = $::cfg_status_center"
+    puts $fh "status_right   = $::cfg_status_right"
     puts $fh "dark_mode      = $::cfg_dark_mode"
     puts $fh ""
     puts $fh "\[keys\]"
@@ -472,6 +482,41 @@ proc fmt-meta {path} {
     set sz_str [expr {$sz < 1024 ? "${sz}B" : "[expr {$sz/1024}]K"}]
     set mt [clock format [file mtime $path] -format "%d %b %H:%M"]
     return [format "%6s  %s" $sz_str $mt]
+}
+
+proc status-zone-of {tok} {
+    if {[lsearch -exact $::cfg_status_left   $tok] >= 0} { return left }
+    if {[lsearch -exact $::cfg_status_center $tok] >= 0} { return center }
+    if {[lsearch -exact $::cfg_status_right  $tok] >= 0} { return right }
+    return right
+}
+
+proc status-build {tokens state} {
+    set fn    [dict get $state fn]
+    set dirty [dict get $state dirty]
+    set sel   [dict get $state sel]
+    set ln    [dict get $state ln]
+    set total [dict get $state total]
+    set col   [dict get $state col]
+    set words [dict get $state words]
+    set chars [dict get $state chars]
+    set clk   [dict get $state clock]
+    set result ""
+    foreach tok $tokens {
+        switch -- $tok {
+            filename { append result $fn }
+            dirty    { if {$dirty}      { append result " \[+\]" } }
+            sel      { if {$sel}        { append result " \[sel\]" } }
+            ln       { append result [format "  Ln %d/%d" $ln $total] }
+            col      { append result [format "  Col %-3d" $col] }
+            words    { if {$words >= 0} { append result "  ${words}w" } }
+            chars    { if {$chars >= 0} { append result "  ${chars}c" } }
+            clock    { if {$clk ne ""}  { append result "  $clk" } }
+            space    { append result " " }
+            help_bar {}
+        }
+    }
+    return $result
 }
 
 if {!$::no_gui} {
@@ -713,22 +758,34 @@ after idle apply-line-spacing
     -foreground $::cfg_color_dim
 
 frame .ed.bar -bg $bg_bar
-label .ed.bar.lbl  -textvariable ::ed_status \
+label .ed.bar.left   -textvariable ::ed_bar_left \
     -bg $bg_bar -fg $fg_bar -font $font_sm -anchor w -padx 8
-label .ed.bar.msg  -textvariable ::ed_msg \
+label .ed.bar.msg    -textvariable ::ed_msg \
     -bg $bg_bar -fg $fg_bar -font $font_sm -anchor center -width 10
-if {$::cfg_show_clock} {
-    label .ed.bar.clk -textvariable ::ed_clock \
-        -bg $bg_bar -fg $fg_bar -font $font_sm -anchor e -padx 8 -width 6
-}
+label .ed.bar.center -textvariable ::ed_bar_center \
+    -bg $bg_bar -fg $fg_bar -font $font_sm -anchor center
+label .ed.bar.right  -textvariable ::ed_bar_right \
+    -bg $bg_bar -fg $fg_bar -font $font_sm -anchor e -padx 8
 if {$::cfg_help_bar ne ""} {
+    set _hz [status-zone-of help_bar]
+    set _ha [expr {$_hz eq "right" ? "e" : ($_hz eq "center" ? "center" : "w")}]
     label .ed.bar.help -text $::cfg_help_bar \
-        -bg $bg_bar -fg $fg_bar -font $font_sm -anchor e -padx 8
+        -bg $bg_bar -fg $fg_bar -font $font_sm -anchor $_ha -padx 8
+    unset _hz _ha
 }
-pack .ed.bar.lbl  -side left
-if {$::cfg_show_clock} { pack .ed.bar.clk  -side right }
-if {$::cfg_help_bar ne ""} { pack .ed.bar.help -side right }
-pack .ed.bar.msg  -side right
+pack .ed.bar.left  -side left
+if {[winfo exists .ed.bar.help] && [status-zone-of help_bar] eq "left"} {
+    pack .ed.bar.help -side left
+}
+pack .ed.bar.right -side right
+if {[winfo exists .ed.bar.help] && [status-zone-of help_bar] eq "right"} {
+    pack .ed.bar.help -side right
+}
+pack .ed.bar.msg   -side right
+if {[winfo exists .ed.bar.help] && [status-zone-of help_bar] eq "center"} {
+    pack .ed.bar.help -fill x -expand 1
+}
+pack .ed.bar.center -fill x -expand 1
 pack .ed.bar -side bottom -fill x
 pack .ed.sb  -side right  -fill y
 if {$::cfg_line_numbers} {
@@ -771,29 +828,46 @@ pack .ed.sf.r.one -side left
 pack .ed.sf.r.all -side left
 
 # ─── editor status ────────────────────────────────────────────────────────────
-set ::wc_cache ""
 set ::wc_after_id ""
+set ::gui_wc 0
+set ::gui_cc 0
+set ::ed_bar_left   ""
+set ::ed_bar_center ""
+set ::ed_bar_right  ""
+
+proc gui-status-state {} {
+    set fn    [expr {$::filename eq "" ? "\[new\]" : [file tail $::filename]}]
+    lassign [split [.ed.t index insert] .] ln col
+    set total [expr {[lindex [split [.ed.t index end] .] 0] - 1}]
+    set words [expr {$::cfg_word_count ? $::gui_wc : -1}]
+    set chars [expr {$::cfg_word_count ? $::gui_cc : -1}]
+    set clk   [expr {$::cfg_show_clock ? [clock format [clock seconds] -format "%H:%M"] : ""}]
+    return [dict create fn $fn dirty $::dirty sel 0 ln $ln total $total \
+                col [expr {$col+1}] words $words chars $chars clock $clk]
+}
+
+proc gui-status-update {} {
+    set state [gui-status-state]
+    set ::ed_bar_left   " [status-build $::cfg_status_left   $state]"
+    set ::ed_bar_center [status-build $::cfg_status_center $state]
+    set ::ed_bar_right  "[status-build $::cfg_status_right  $state] "
+}
 
 proc wc-flush {} {
     if {$::wc_after_id ne ""} { after cancel $::wc_after_id }
     set ::wc_after_id ""
-    set ::wc_cache "   [llength [regexp -all -inline {\S+} [.ed.t get 1.0 end-1c]]]w"
-    set d  [expr {$::dirty ? "* " : "  "}]
-    set fn [expr {$::filename eq "" ? "\[new\]" : [file tail $::filename]}]
-    lassign [split [.ed.t index insert] .] ln col
-    set ::ed_status "${d}${fn}   Ln ${ln}  Col [expr {$col + 1}]$::wc_cache"
+    set text [.ed.t get 1.0 end-1c]
+    set ::gui_wc [llength [regexp -all -inline {\S+} $text]]
+    set ::gui_cc [string length $text]
+    gui-status-update
 }
 
 proc ed-status {} {
-    set d  [expr {$::dirty ? "* " : "  "}]
-    set fn [expr {$::filename eq "" ? "\[new\]" : [file tail $::filename]}]
-    lassign [split [.ed.t index insert] .] ln col
     if {$::cfg_word_count} {
         if {$::wc_after_id ne ""} { after cancel $::wc_after_id }
         set ::wc_after_id [after 400 wc-flush]
-        set wc $::wc_cache
-    } else { set wc "" }
-    set ::ed_status "${d}${fn}   Ln ${ln}  Col [expr {$col + 1}]${wc}"
+    }
+    gui-status-update
 }
 
 proc set-msg {text} {
@@ -803,7 +877,7 @@ proc set-msg {text} {
 }
 
 proc clock-tick {} {
-    set ::ed_clock [clock format [clock seconds] -format "%H:%M"]
+    catch { gui-status-update }
     after 30000 clock-tick
 }
 if {$::cfg_show_clock} { clock-tick }
@@ -834,7 +908,7 @@ proc ln-toggle {} {
         set ::cfg_line_numbers 0
     } else {
         set bg_bar [.ed.bar cget -bg]
-        set fg_dim [lindex [.ed.bar.lbl cget -fg] 0]
+        set fg_dim [lindex [.ed.bar.left cget -fg] 0]
         text .ed.ln \
             -width 4 -font [.ed.t cget -font] \
             -bg $bg_bar -fg $fg_dim \
@@ -1056,7 +1130,7 @@ proc apply-theme {} {
     catch { .ed.t tag configure dim     -foreground $c_dim }
     catch { .ed.sb configure -bg $bg_bar -troughcolor $bg }
     catch { .ed.bar configure -bg $bg_bar }
-    foreach w {.ed.bar.lbl .ed.bar.msg .ed.bar.clk .ed.bar.help} {
+    foreach w {.ed.bar.left .ed.bar.center .ed.bar.right .ed.bar.msg .ed.bar.help} {
         catch { $w configure -bg $bg_bar -fg $fg_bar }
     }
     catch { .ed.ln configure -bg $bg_bar -fg $fg_bar }
@@ -1454,15 +1528,38 @@ proc tui-fill {row text cols} {
     puts -nonewline "${text}[string repeat { } [expr {$cols - [string length $text]}]]"
 }
 
-proc tui-bar {row left right cols} {
+proc tui-bar {row left right cols {center ""}} {
     tui-attr reverse
-    set gap [expr {max(0, $cols - [string length $left] - [string length $right])}]
-    tui-fill $row "[string range $left 0 [expr {$cols-1}]][string repeat { } $gap]$right" $cols
+    set llen [string length $left]
+    set rlen [string length $right]
+    set clen [string length $center]
+    if {$clen > 0} {
+        set cstart [expr {($cols - $clen) / 2}]
+        set gap1   [expr {max(0, $cstart - $llen)}]
+        set gap2   [expr {max(0, $cols - $llen - $gap1 - $clen - $rlen)}]
+        set txt "${left}[string repeat { } $gap1]${center}[string repeat { } $gap2]${right}"
+    } else {
+        set gap [expr {max(0, $cols - $llen - $rlen)}]
+        set txt "${left}[string repeat { } $gap]${right}"
+    }
+    tui-fill $row $txt $cols
     tui-attr off
 }
 
-proc tui-help {row text cols} {
-    tui-attr dim; tui-fill $row " $text" $cols; tui-attr off
+proc tui-help {row text cols {zone left}} {
+    tui-attr dim
+    switch $zone {
+        right  {
+            set pad [expr {max(0, $cols - [string length $text] - 1)}]
+            tui-fill $row "[string repeat { } $pad]$text " $cols
+        }
+        center {
+            set pad [expr {max(0, ($cols - [string length $text]) / 2)}]
+            tui-fill $row "[string repeat { } $pad]$text" $cols
+        }
+        default { tui-fill $row " $text" $cols }
+    }
+    tui-attr off
 }
 
 proc tui-help-dialog {rows cols wc cc} {
@@ -2066,27 +2163,31 @@ proc tui-editor {filepath} {
         # ── bars ──────────────────────────────────────────────────────────────
         set sel_info [expr {$sel_r ne {} ? " \[sel\]" : ""}]
         set sel_hint [expr {$sel_anchor ne "" ? "$::cfg_lbl_sticky cancel-sel" : "$::cfg_lbl_sticky sel"}]
-        if {$::cfg_help_bar ne ""} { tui-help [expr {$rows-2}] $::cfg_help_bar $cols }
-        set left " [file tail $filepath][expr {$dirty ? { [+]} : {}}]${sel_info}"
-        set wc_str ""
-        if {$::cfg_word_count} {
-            if {$wc_dirty} {
-                set wc_cached 0
-                set cc_cached 0
-                foreach l $lines {
-                    incr wc_cached [llength [regexp -all -inline {\S+} $l]]
-                    incr cc_cached [string length $l]
-                }
-                set wc_dirty 0
+        if {$::cfg_help_bar ne ""} { tui-help [expr {$rows-2}] $::cfg_help_bar $cols [status-zone-of help_bar] }
+        if {$::cfg_word_count && $wc_dirty} {
+            set wc_cached 0; set cc_cached 0
+            foreach l $lines {
+                incr wc_cached [llength [regexp -all -inline {\S+} $l]]
+                incr cc_cached [string length $l]
             }
-            set wc_str "  ${wc_cached}w ${cc_cached}c"
+            set wc_dirty 0
         }
-        set clk [expr {$::cfg_show_clock ? "  [clock format [clock seconds] -format {%H:%M}]" : ""}]
-        set pos_str [format "  Ln %d/%d  Col %-3d%s" $cy [llength $lines] [expr {$cx+1}] $wc_str]
-        set right $clk
+        set clk [expr {$::cfg_show_clock ? [clock format [clock seconds] -format "%H:%M"] : ""}]
+        set tui_state [dict create \
+            fn    [file tail $filepath] \
+            dirty $dirty \
+            sel   [expr {$sel_anchor ne ""}] \
+            ln    $cy  total [llength $lines] \
+            col   [expr {$cx+1}] \
+            words [expr {$::cfg_word_count ? $wc_cached : -1}] \
+            chars [expr {$::cfg_word_count ? $cc_cached : -1}] \
+            clock $clk]
+        set bar_left   " [status-build $::cfg_status_left   $tui_state]"
+        set bar_center [status-build $::cfg_status_center $tui_state]
+        set bar_right  "[status-build $::cfg_status_right  $tui_state] "
         if {$::cfg_key_error ne "" && $message eq ""} { set message "key conflict: $::cfg_key_error"; set msg_time [clock seconds] }
-        if {$message ne "" && [clock seconds] - $msg_time < 4} { set left " $message" } else { append left $pos_str }
-        tui-bar [expr {$rows-1}] $left $right $cols
+        if {$message ne "" && [clock seconds] - $msg_time < 4} { set bar_left " $message" }
+        tui-bar [expr {$rows-1}] $bar_left $bar_right $cols $bar_center
 
         tui-move [expr {$vi - $scroll_y + $roff}] [expr {$scx + $coff}]
         puts -nonewline "\033\[?25h"; flush stdout
