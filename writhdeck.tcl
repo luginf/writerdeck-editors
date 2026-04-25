@@ -1765,7 +1765,7 @@ proc tui-init {} {
     catch { set ::tui_stty [exec stty -g <@stdin] }
     catch { exec stty raw -echo <@stdin }
     fconfigure stdin  -blocking 1 -translation binary -buffering none
-    fconfigure stdout -encoding utf-8 -buffering none
+    fconfigure stdout -encoding utf-8 -buffering full
     puts -nonewline "\033\[?25l\033\[2J\033\[?2004h"
     puts -nonewline [expr {$::cfg_blink_cursor ? "\033\[1 q" : "\033\[2 q"}]
     tui-reverse-video [expr {!$::cfg_dark_mode}]
