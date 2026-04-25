@@ -983,6 +983,8 @@ set ::ed_bar_left   ""
 set ::ed_bar_center ""
 set ::ed_bar_right  ""
 set ::status_update_pending 0
+set ::hl_after_id ""
+set ::ln_last_count 0
 
 proc gui-status-state {} {
     set fn    [expr {$::filename eq "" ? "\[new\]" : [file tail $::filename]}]
@@ -1117,18 +1119,26 @@ bind .ed.t <ButtonRelease> { ed-status }
 bind .ed.t <<Modified>> {
     if {[.ed.t edit modified]} { set ::dirty 1; .ed.t edit modified false }
     ed-status
-    after idle { highlight-headings; ln-update }
+    if {$::hl_after_id ne ""} { after cancel $::hl_after_id }
+    set ::hl_after_id [after 300 {
+        set ::hl_after_id ""
+        highlight-headings
+        ln-update
+    }]
 }
 
 proc ln-update {} {
     if {![winfo exists .ed.ln]} return
     set last [lindex [split [.ed.t index end] .] 0]
-    .ed.ln configure -state normal
-    .ed.ln delete 1.0 end
-    for {set i 1} {$i < $last} {incr i} {
-        .ed.ln insert end [format "%3d\n" $i]
+    if {$last != $::ln_last_count} {
+        set ::ln_last_count $last
+        .ed.ln configure -state normal
+        .ed.ln delete 1.0 end
+        for {set i 1} {$i < $last} {incr i} {
+            .ed.ln insert end [format "%3d\n" $i]
+        }
+        .ed.ln configure -state disabled
     }
-    .ed.ln configure -state disabled
     catch { .ed.ln yview moveto [lindex [.ed.t yview] 0] }
 }
 
@@ -1173,6 +1183,7 @@ proc load-file {path} {
     .ed.t edit separator
 
     set ::dirty 0
+    set ::ln_last_count 0
     highlight-headings
     lassign [cursor-get $path] cy cx
     if {[dict exists $::session_headings $path]} {
