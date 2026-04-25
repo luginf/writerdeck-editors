@@ -53,6 +53,7 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 - Clock (HH:MM) in status bar (`show_clock = 1`)
 - Block cursor: rectangle with inverted colors, like a classic terminal (`block_cursor = 1`)
 - Non-blinking cursor option (`blink_cursor = 0`)
+- Configurable status bar height (`bar_height`); font size adapts automatically
 
 **Shortcuts — Editor**
 
@@ -64,10 +65,13 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 | Ctrl+F | Find (inline bar, live highlight, match counter) |
 | Ctrl+R | Find & Replace (inline bar; Enter: replace one, Ctrl+Enter: all) |
 | Ctrl+Z | Undo |
+| Ctrl+Y | Redo |
 | Ctrl+O | Open any file (system dialog) |
 | Ctrl+G | Go to line |
 | Ctrl+H | Help dialog |
 | Ctrl+L | Toggle line numbers |
+| Ctrl+Space | Jump to next space |
+| Ctrl+Shift+Space | Jump to previous space |
 | F11 | Table of contents |
 | Alt+Enter | Fullscreen toggle |
 | Tab | Insert 4 spaces |
@@ -110,10 +114,12 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 | Ctrl+F | Find (prompt at bottom; repeat to find next) |
 | Ctrl+R | Find & Replace (global, with replacement counter) |
 | Ctrl+Z | Undo (100-state stack) |
+| Ctrl+Y | Redo |
 | Ctrl+O | Save and return to browser |
 | Ctrl+G | Go to line |
 | Ctrl+H | Help (includes word and char count) |
 | Ctrl+L | Toggle line numbers |
+| Ctrl+Space | Jump to next space |
 | F11 | Table of contents |
 | Ctrl+A | Select all |
 | Ctrl+K | Toggle sticky selection (first press: set anchor; second press: cancel) |

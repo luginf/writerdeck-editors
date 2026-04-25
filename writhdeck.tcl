@@ -154,6 +154,7 @@ set ::cfg_cursor_restore 1
 set ::cfg_block_cursor   1
 set ::cfg_blink_cursor   0
 set ::cfg_line_spacing   100
+set ::cfg_bar_height     20
 set ::cfg_word_count     1
 set ::cfg_show_clock     1
 set ::cfg_help_bar       "^S save   ^Q close   ^H help"
@@ -179,6 +180,8 @@ set ::cfg_key_sticky_sel   "Control-k"
 set ::cfg_key_toc          "F11"
 set ::cfg_key_line_numbers "Control-l"
 set ::cfg_key_next_space   "Control-space"
+set ::cfg_key_prev_space   "Control-Shift-space"
+set ::cfg_key_redo         "Control-y"
 set ::cfg_key_fullscreen   "Alt-Return"
 set ::cfg_key_error        ""
 set ::fullscreen 0
@@ -222,6 +225,7 @@ proc ini-load {} {
                 block_cursor     { set ::cfg_block_cursor   [string is true $v] }
                 blink_cursor     { set ::cfg_blink_cursor   [string is true $v] }
                 line_spacing     { set ::cfg_line_spacing   $v }
+                bar_height       { set ::cfg_bar_height     $v }
                 word_count       { set ::cfg_word_count     $v }
                 show_clock       { set ::cfg_show_clock     $v }
                 help_bar         { set ::cfg_help_bar       $v }
@@ -245,6 +249,8 @@ proc ini-load {} {
                 key_toc          { set ::cfg_key_toc          $v }
                 key_line_numbers { set ::cfg_key_line_numbers $v }
                 key_next_space   { set ::cfg_key_next_space   $v }
+                key_prev_space   { set ::cfg_key_prev_space   $v }
+                key_redo         { set ::cfg_key_redo         $v }
                 key_fullscreen   { set ::cfg_key_fullscreen   $v }
                 toc_key          { set ::cfg_key_toc          $v }
                 ln_key           { set ::cfg_key_line_numbers $v }
@@ -270,6 +276,7 @@ proc ini-save {} {
     puts $fh "margin_rows    = $::cfg_margin_rows"
     puts $fh "font_size      = $::cfg_font_size"
     puts $fh "line_spacing   = $::cfg_line_spacing"
+    puts $fh "bar_height     = $::cfg_bar_height"
     puts $fh "heading_marker = $::cfg_heading_marker"
     puts $fh "dim_marker     = $::cfg_dim_marker"
     puts $fh ""
@@ -307,6 +314,8 @@ proc ini-save {} {
     puts $fh "key_toc          = $::cfg_key_toc"
     puts $fh "key_line_numbers = $::cfg_key_line_numbers"
     puts $fh "key_next_space   = $::cfg_key_next_space"
+    puts $fh "key_prev_space   = $::cfg_key_prev_space"
+    puts $fh "key_redo         = $::cfg_key_redo"
     puts $fh "key_fullscreen   = $::cfg_key_fullscreen"
     puts $fh "key_dark_toggle  = $::cfg_key_dark_toggle"
     puts $fh ""
@@ -350,6 +359,7 @@ proc tk-key-to-tui {key} {
 proc key-label {key} {
     if {[regexp -nocase {^control-([a-z])$} $key -> l]} { return "^[string toupper $l]" }
     if {[string tolower $key] eq "control-space"}        { return "^SPC" }
+    if {[string tolower $key] eq "control-shift-space"}  { return "^+SPC" }
     if {[regexp -nocase {^f(\d+)$} $key -> n]}          { return "F$n" }
     return $key
 }
@@ -373,6 +383,8 @@ proc keys-init {} {
     set ::cfg_tui_toc          [tk-key-to-tui $::cfg_key_toc]
     set ::cfg_tui_line_nums    [tk-key-to-tui $::cfg_key_line_numbers]
     set ::cfg_tui_next_space   [tk-key-to-tui $::cfg_key_next_space]
+    set ::cfg_tui_prev_space   [tk-key-to-tui $::cfg_key_prev_space]
+    set ::cfg_tui_redo         [tk-key-to-tui $::cfg_key_redo]
     set ::cfg_tui_dark_toggle  [tk-key-to-tui $::cfg_key_dark_toggle]
     # labels for UI display
     set ::cfg_lbl_save       [key-label $::cfg_key_save]
@@ -390,6 +402,8 @@ proc keys-init {} {
     set ::cfg_lbl_toc        [key-label $::cfg_key_toc]
     set ::cfg_lbl_line_nums  [key-label $::cfg_key_line_numbers]
     set ::cfg_lbl_next_space [key-label $::cfg_key_next_space]
+    set ::cfg_lbl_prev_space [key-label $::cfg_key_prev_space]
+    set ::cfg_lbl_redo       [key-label $::cfg_key_redo]
     # conflict detection
     set pairs [list \
         key_save $::cfg_tui_save \
@@ -400,7 +414,9 @@ proc keys-init {} {
         key_cut $::cfg_tui_cut  key_paste $::cfg_tui_paste \
         key_select_all $::cfg_tui_select_all  key_sticky_sel $::cfg_tui_sticky_sel \
         key_toc $::cfg_tui_toc  key_line_numbers $::cfg_tui_line_nums \
-        key_next_space $::cfg_tui_next_space]
+        key_next_space $::cfg_tui_next_space \
+        key_prev_space $::cfg_tui_prev_space \
+        key_redo $::cfg_tui_redo]
     set seen [dict create]; set conflicts {}
     foreach {name val} $pairs {
         if {[dict exists $seen $val]} {
@@ -435,7 +451,11 @@ proc toggle-dark-mode {} {
 
 # ─── config ───────────────────────────────────────────────────────────────────
 set font    [list Mono $::cfg_font_size]
-set font_sm {Mono 10}
+set bar_pady [expr {$::cfg_bar_height > 0 \
+    ? min(2, max(0, ($::cfg_bar_height - 6) / 2)) : 0}]
+set font_sm  [expr {$::cfg_bar_height > 0 \
+    ? [list Mono [expr {-max(6, $::cfg_bar_height - 2*$bar_pady)}]] \
+    : {Mono 10}}]
 lassign [theme-colors] bg fg bg_bar fg_bar bg_sel
 set fg_dim  "#666666"
 # expose as globals for use in procs
@@ -665,12 +685,16 @@ pack .br.mid     -fill both  -expand 1
 frame .br.bar -bg $bg_bar
 label .br.bar.help \
     -text " ↵ open  n new  d delete  r rename  q quit  h help" \
-    -bg $bg_bar -fg $fg_bar -font $font_sm -anchor w -padx 4
+    -bg $bg_bar -fg $fg_bar -font $font_sm -anchor w -padx 4 -pady $bar_pady
 label .br.bar.cnt -textvariable ::br_status \
-    -bg $bg_bar -fg $fg_bar -font $font_sm -anchor e -padx 8
+    -bg $bg_bar -fg $fg_bar -font $font_sm -anchor e -padx 8 -pady $bar_pady
 pack .br.bar.help -side left
 pack .br.bar.cnt  -side right
 pack .br.bar -side bottom -fill x
+if {$::cfg_bar_height > 0} {
+    .br.bar configure -height $::cfg_bar_height
+    pack propagate .br.bar 0
+}
 
 # browser state — each entry: {type dir name}  (type = header | file)
 set ::br_entries {}
@@ -877,18 +901,18 @@ after idle apply-line-spacing
 
 frame .ed.bar -bg $bg_bar
 label .ed.bar.left   -textvariable ::ed_bar_left \
-    -bg $bg_bar -fg $fg_bar -font $font_sm -anchor w -padx 8
+    -bg $bg_bar -fg $fg_bar -font $font_sm -anchor w -padx 8 -pady $bar_pady
 label .ed.bar.msg    -textvariable ::ed_msg \
-    -bg $bg_bar -fg $fg_bar -font $font_sm -anchor center -width 10
+    -bg $bg_bar -fg $fg_bar -font $font_sm -anchor center -width 10 -pady $bar_pady
 label .ed.bar.center -textvariable ::ed_bar_center \
-    -bg $bg_bar -fg $fg_bar -font $font_sm -anchor center
+    -bg $bg_bar -fg $fg_bar -font $font_sm -anchor center -pady $bar_pady
 label .ed.bar.right  -textvariable ::ed_bar_right \
-    -bg $bg_bar -fg $fg_bar -font $font_sm -anchor e -padx 8
+    -bg $bg_bar -fg $fg_bar -font $font_sm -anchor e -padx 8 -pady $bar_pady
 set _helpzone [status-zone-of help_bar]
 if {$::cfg_help_bar ne "" && $_helpzone ne ""} {
     set _ha [expr {$_helpzone eq "right" ? "e" : ($_helpzone eq "center" ? "center" : "w")}]
     label .ed.bar.help -text $::cfg_help_bar \
-        -bg $bg_bar -fg $fg_bar -font $font_sm -anchor $_ha -padx 8
+        -bg $bg_bar -fg $fg_bar -font $font_sm -anchor $_ha -padx 8 -pady $bar_pady
     unset _ha
 }
 pack .ed.bar.left  -side left
@@ -905,6 +929,10 @@ if {[winfo exists .ed.bar.help] && [status-zone-of help_bar] eq "center"} {
 }
 pack .ed.bar.center -fill x -expand 1
 pack .ed.bar -side bottom -fill x
+if {$::cfg_bar_height > 0} {
+    .ed.bar configure -height $::cfg_bar_height
+    pack propagate .ed.bar 0
+}
 unset _helpzone
 pack .ed.sb  -side right  -fill y
 if {$::cfg_line_numbers} {
@@ -1396,6 +1424,8 @@ bind .ed.t <Tab>                { .ed.t insert insert "    "; break }
 bind .ed.t <$::cfg_key_goto>       { goto-dialog;    break }
 bind .ed.t <$::cfg_key_help>       { help-dialog;    break }
 bind .ed.t <$::cfg_key_next_space> { jump-next-space; break }
+bind .ed.t <$::cfg_key_prev_space> { jump-prev-space; break }
+bind .ed.t <$::cfg_key_redo>       { catch {.ed.t edit redo}; ed-status; break }
 bind .ed.t <$::cfg_key_replace> { replace-open;      break }
 bind .ed.t <$::cfg_key_find>    { search-open;       break }
 bind .ed.t <$::cfg_key_open>    { open-file-dialog;  break }
@@ -1574,8 +1604,10 @@ proc help-dialog {} {
             [key-label $::cfg_key_open]         "Open file" \
             [key-label $::cfg_key_goto]         "Go to line" \
             [key-label $::cfg_key_undo]         "Undo" \
+            [key-label $::cfg_key_redo]         "Redo" \
             "Tab"                               "Insert 4 spaces" \
             [key-label $::cfg_key_next_space]   "Jump to next space" \
+            [key-label $::cfg_key_prev_space]   "Jump to prev space" \
             [key-label $::cfg_key_toc]          "Table of contents  (${hm}title${hm})" \
             [key-label $::cfg_key_fullscreen]   "Fullscreen" \
             [key-label $::cfg_key_help]         "Help" \
@@ -1627,6 +1659,15 @@ proc help-dialog {} {
 
 proc jump-next-space {} {
     set pos [.ed.t search " " "insert+1c" end]
+    if {$pos ne ""} {
+        .ed.t mark set insert $pos
+        .ed.t see insert
+        cursor-update
+    }
+}
+
+proc jump-prev-space {} {
+    set pos [.ed.t search -backwards " " "insert" 1.0]
     if {$pos ne ""} {
         .ed.t mark set insert $pos
         .ed.t see insert
@@ -1801,6 +1842,7 @@ proc tui-help-dialog {rows cols wc cc} {
     set lbl_goto   $::cfg_lbl_goto;   set lbl_lnum   $::cfg_lbl_line_nums
     set lbl_open   $::cfg_lbl_open;   set lbl_toc    $::cfg_lbl_toc
     set lbl_help   $::cfg_lbl_help;   set lbl_nsp    $::cfg_lbl_next_space
+    set lbl_psp    $::cfg_lbl_prev_space; set lbl_redo  $::cfg_lbl_redo
     set lines [list \
         "  File info" \
         [format "  Words: %-8d  Chars: %d" $wc $cc] \
@@ -1808,12 +1850,14 @@ proc tui-help-dialog {rows cols wc cc} {
         "  Writhdeck — keyboard shortcuts" \
         "" \
         [format "  %-10s Save              %-10s Undo" $lbl_save $lbl_undo] \
+        [format "  %-10s                   %-10s Redo" {} $lbl_redo] \
         [format "  %-10s Close / Esc       %-10s Select all" $lbl_close $lbl_selall] \
         [format "  %-10s Toggle selection  %-10s Copy" $lbl_sticky $lbl_copy] \
         [format "  %-10s Find              %-10s Cut" $lbl_find $lbl_cut] \
         [format "  %-10s Replace           %-10s Paste" $lbl_repl $lbl_paste] \
         [format "  %-10s Go to line        %-10s Line numbers" $lbl_goto $lbl_lnum] \
         [format "  %-10s Open (browser)    %-10s Jump to next space" $lbl_open $lbl_nsp] \
+        [format "  %-10s                   %-10s Jump to prev space" {} $lbl_psp] \
         "" \
         "  Shift+Arrows  Extend selection" \
         "" \
@@ -2284,6 +2328,7 @@ proc tui-editor {filepath} {
     set toc_jumped 0
     set dirty 0; set message ""; set msg_time 0; set sticky -1
     set undo_stack {}
+    set redo_stack {}
     set sel_anchor ""
     set sel_sticky  0
     if {![info exists ::tui_search]}  { set ::tui_search  "" }
@@ -2293,6 +2338,7 @@ proc tui-editor {filepath} {
     set push_undo {
         lappend undo_stack [list $lines $cy $cx]
         if {[llength $undo_stack] > 100} { set undo_stack [lrange $undo_stack end-99 end] }
+        set redo_stack {}
     }
     set wc_dirty 1; set wrap_dirty 1; set wc_cached 0; set cc_cached 0
     set wrap_dirty 1; set vrows {}; set prev_tw -1
@@ -2576,8 +2622,16 @@ proc tui-editor {filepath} {
                     cursor-put $filepath $cy $cx; set dirty 0; return
                 } elseif {$key eq $::cfg_tui_undo} {
                     if {[llength $undo_stack] > 0} {
+                        lappend redo_stack [list $lines $cy $cx]
                         lassign [lindex $undo_stack end] lines cy cx
                         set undo_stack [lrange $undo_stack 0 end-1]; set dirty 1; set wc_dirty 1; set wrap_dirty 1
+                    }
+                    set clear_sel 0
+                } elseif {$key eq $::cfg_tui_redo} {
+                    if {[llength $redo_stack] > 0} {
+                        lappend undo_stack [list $lines $cy $cx]
+                        lassign [lindex $redo_stack end] lines cy cx
+                        set redo_stack [lrange $redo_stack 0 end-1]; set dirty 1; set wc_dirty 1; set wrap_dirty 1
                     }
                     set clear_sel 0
                 } elseif {$key eq $::cfg_tui_sticky_sel} {
@@ -2699,6 +2753,17 @@ proc tui-editor {filepath} {
                         set nlines [llength $lines]
                         for {set r $cy} {$r < $nlines} {incr r} {
                             set idx [string first " " [lindex $lines $r] 0]
+                            if {$idx >= 0} { set cy [expr {$r+1}]; set cx $idx; break }
+                        }
+                    }
+                } elseif {$key eq $::cfg_tui_prev_space} {
+                    set line [lindex $lines [expr {$cy-1}]]
+                    set idx [string last " " [string range $line 0 [expr {$cx-1}]]]
+                    if {$idx >= 0} {
+                        set cx $idx
+                    } else {
+                        for {set r [expr {$cy-2}]} {$r >= 0} {incr r -1} {
+                            set idx [string last " " [lindex $lines $r]]
                             if {$idx >= 0} { set cy [expr {$r+1}]; set cx $idx; break }
                         }
                     }
