@@ -154,7 +154,7 @@ set ::cfg_cursor_restore 1
 set ::cfg_block_cursor   1
 set ::cfg_blink_cursor   0
 set ::cfg_line_spacing   100
-set ::cfg_bar_height     20
+set ::cfg_bar_height     18
 set ::cfg_word_count     1
 set ::cfg_show_clock     1
 set ::cfg_help_bar       "^S save   ^Q close   ^H help"
