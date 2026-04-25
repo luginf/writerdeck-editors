@@ -1595,15 +1595,21 @@ proc help-dialog {} {
     set hm $::cfg_heading_marker
     set sections {}
     set height 22
+    set _ts [clock seconds]
+    lappend sections "DATE & TIME" [list \
+        "Current time"  [clock format $_ts -format "%H:%M:%S"] \
+        "Date"          [clock format $_ts -format "%Y-%m-%d"] \
+    ]
+    incr height 4
     if {$::filename ne ""} {
         set txt [.ed.t get 1.0 end-1c]
         set wc    [llength [regexp -all -inline {\S+} $txt]]
         set chars [string length $txt]
         lappend sections "FILE INFO" [list \
-            "Word count"    $wc \
+            "Word count"  $wc \
             "Char count"  $chars \
         ]
-        set height 25
+        incr height 4
     }
     lappend sections \
         "EDITOR" [list \
@@ -1854,7 +1860,13 @@ proc tui-help-dialog {rows cols wc cc} {
     set lbl_open   $::cfg_lbl_open;   set lbl_toc    $::cfg_lbl_toc
     set lbl_help   $::cfg_lbl_help;   set lbl_nsp    $::cfg_lbl_next_space
     set lbl_psp    $::cfg_lbl_prev_space; set lbl_redo  $::cfg_lbl_redo
+    set _ts [clock seconds]
     set lines [list \
+        "  Date & Time" \
+        [format "  Current time:  %-12s  Date: %s" \
+            [clock format $_ts -format "%H:%M:%S"] \
+            [clock format $_ts -format "%Y-%m-%d"]] \
+        "" \
         "  File info" \
         [format "  Words: %-8d  Chars: %d" $wc $cc] \
         "" \
