@@ -50,7 +50,7 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 - Fullscreen toggle (default: Alt+Enter, configurable)
 - Built-in Solarized Light theme (commented out in INI, ready to enable)
 - Optional second docs folder (`docs_dir`), shown as two labeled sections in the browser
-- Clock (HH:MM) in status bar (`show_clock = 1`)
+- Clock (HH:MM) in status bar: add `clock` token to a status zone
 - Block cursor: rectangle with inverted colors, like a classic terminal (`block_cursor = 1`)
 - Non-blinking cursor option (`blink_cursor = 0`)
 - Configurable status bar height (`bar_height`); font size adapts automatically

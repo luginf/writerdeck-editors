@@ -155,10 +155,8 @@ set ::cfg_block_cursor   1
 set ::cfg_blink_cursor   0
 set ::cfg_line_spacing   100
 set ::cfg_bar_height     18
-set ::cfg_word_count     1
-set ::cfg_show_clock     1
 set ::cfg_help_bar       "^S save   ^Q close   ^H help"
-# status bar zones — tokens: filename dirty sel ln col words chars clock space
+# status bar zones — tokens: filename dirty sel ln col words chars clock help_bar space
 set ::cfg_status_left   "filename dirty sel ln col words chars"
 set ::cfg_status_center ""
 set ::cfg_status_right  "help_bar clock"
@@ -226,8 +224,6 @@ proc ini-load {} {
                 blink_cursor     { set ::cfg_blink_cursor   [string is true $v] }
                 line_spacing     { set ::cfg_line_spacing   $v }
                 bar_height       { set ::cfg_bar_height     $v }
-                word_count       { set ::cfg_word_count     $v }
-                show_clock       { set ::cfg_show_clock     $v }
                 help_bar         { set ::cfg_help_bar       $v }
                 status_left      { set ::cfg_status_left    $v }
                 status_center    { set ::cfg_status_center  $v }
@@ -285,11 +281,9 @@ proc ini-save {} {
     puts $fh "cursor_restore = $::cfg_cursor_restore"
     puts $fh "block_cursor   = $::cfg_block_cursor"
     puts $fh "blink_cursor   = $::cfg_blink_cursor"
-    puts $fh "word_count     = $::cfg_word_count"
-    puts $fh "show_clock     = $::cfg_show_clock"
     puts $fh "# help_bar: text shown in the shortcuts bar, empty to hide"
     puts $fh "help_bar       = $::cfg_help_bar"
-    puts $fh "# status bar zones — tokens: filename dirty sel ln col words chars clock space"
+    puts $fh "# status bar zones — tokens: filename dirty sel ln col words chars clock help_bar space"
     puts $fh "status_left    = $::cfg_status_left"
     puts $fh "status_center  = $::cfg_status_center"
     puts $fh "status_right   = $::cfg_status_right"
@@ -539,9 +533,9 @@ proc status-build {tokens state} {
             sel      { if {$sel}        { append result " \[sel\]" } }
             ln       { append result [format "  Ln %d/%d" $ln $total] }
             col      { append result [format "  Col %-3d" $col] }
-            words    { if {$words >= 0} { append result "  ${words}w" } }
-            chars    { if {$chars >= 0} { append result "  ${chars}c" } }
-            clock    { if {$clk ne ""}  { append result "  $clk" } }
+            words    { append result "  ${words}w" }
+            chars    { append result "  ${chars}c" }
+            clock    { append result "  $clk" }
             space    { append result " " }
             help_bar {}
         }
@@ -990,9 +984,9 @@ proc gui-status-state {} {
     set fn    [expr {$::filename eq "" ? "\[new\]" : [file tail $::filename]}]
     lassign [split [.ed.t index insert] .] ln col
     set total [expr {[lindex [split [.ed.t index end] .] 0] - 1}]
-    set words [expr {$::cfg_word_count ? $::gui_wc : -1}]
-    set chars [expr {$::cfg_word_count ? $::gui_cc : -1}]
-    set clk   [expr {$::cfg_show_clock ? [clock format [clock seconds] -format "%H:%M"] : ""}]
+    set words $::gui_wc
+    set chars $::gui_cc
+    set clk   [clock format [clock seconds] -format "%H:%M"]
     return [dict create fn $fn dirty $::dirty sel 0 ln $ln total $total \
                 col [expr {$col+1}] words $words chars $chars clock $clk]
 }
@@ -1014,7 +1008,7 @@ proc wc-flush {} {
 }
 
 proc ed-status {} {
-    if {$::cfg_word_count} {
+    if {[status-zone-of words] ne "" || [status-zone-of chars] ne ""} {
         if {$::wc_after_id ne ""} { after cancel $::wc_after_id }
         set ::wc_after_id [after 400 wc-flush]
     }
@@ -1038,7 +1032,7 @@ proc clock-tick {} {
     catch { gui-status-update }
     after 30000 clock-tick
 }
-if {$::cfg_show_clock && [status-zone-of clock] ne ""} { clock-tick }
+if {[status-zone-of clock] ne ""} { clock-tick }
 
 # ─── block cursor (inverted, terminal-style) ──────────────────────────────────
 set ::cursor_blink_id      ""
@@ -1196,7 +1190,7 @@ proc load-file {path} {
     .ed.t mark set insert ${cy}.${cx}
     .ed.t see insert
     ed-status
-    if {$::cfg_word_count} { wc-flush }
+    if {[status-zone-of words] ne "" || [status-zone-of chars] ne ""} { wc-flush }
     ln-update
 }
 
@@ -2211,7 +2205,7 @@ proc tui-browser {} {
         }
         set plu [expr {$fcount != 1 ? "s" : ""}]
         if {$::cfg_help_bar ne ""} { tui-help [expr {$rows-2}] "\u21b5 open  n new  d delete  r rename  q quit   $::cfg_lbl_help help" $cols }
-        set clk [expr {$::cfg_show_clock ? "  [clock format [clock seconds] -format {%H:%M}]" : ""}]
+        set clk [expr {[status-zone-of clock] ne "" ? "  [clock format [clock seconds] -format {%H:%M}]" : ""}]
         if {$msg ne ""} { tui-bar [expr {$rows-1}] " $msg" "${clk} " $cols; set msg ""
         } else { tui-bar [expr {$rows-1}] " [string map [list $::HOME_DIR ~] $::DOCS_DIR_DEFAULT]" \
                          " $fcount file${plu}${clk} " $cols }
@@ -2479,7 +2473,7 @@ proc tui-editor {filepath} {
         set sel_hint [expr {$sel_anchor ne "" ? "$::cfg_lbl_sticky cancel-sel" : "$::cfg_lbl_sticky sel"}]
         set _hzone [status-zone-of help_bar]
         if {$::cfg_help_bar ne "" && $_hzone ne ""} { tui-help [expr {$rows-2}] $::cfg_help_bar $cols $_hzone }
-        if {$::cfg_word_count && $wc_dirty} {
+        if {$wc_dirty && ([status-zone-of words] ne "" || [status-zone-of chars] ne "")} {
             set wc_cached 0; set cc_cached 0
             foreach l $lines {
                 incr wc_cached [llength [regexp -all -inline {\S+} $l]]
@@ -2487,16 +2481,15 @@ proc tui-editor {filepath} {
             }
             set wc_dirty 0
         }
-        set clk [expr {$::cfg_show_clock ? [clock format [clock seconds] -format "%H:%M"] : ""}]
         set tui_state [dict create \
             fn    [file tail $filepath] \
             dirty $dirty \
             sel   [expr {$sel_anchor ne ""}] \
             ln    $cy  total [llength $lines] \
             col   [expr {$cx+1}] \
-            words [expr {$::cfg_word_count ? $wc_cached : -1}] \
-            chars [expr {$::cfg_word_count ? $cc_cached : -1}] \
-            clock $clk]
+            words $wc_cached \
+            chars $cc_cached \
+            clock [clock format [clock seconds] -format "%H:%M"]]
         set bar_left   " [status-build $::cfg_status_left   $tui_state]"
         set bar_center [status-build $::cfg_status_center $tui_state]
         set bar_right  "[status-build $::cfg_status_right  $tui_state] "
