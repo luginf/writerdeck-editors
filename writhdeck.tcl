@@ -470,6 +470,31 @@ set ::i18n {
         ed_saved           "saved"
         ed_save_before     "Save \"%s\" before closing?"
         ed_save_before_tui "save before closing?"
+        help_date_time     "Date & Time"
+        help_cur_time      "Current time:  %-12s  Date: %s"
+        help_file_info     "File info"
+        help_words_chars   "Words: %-8d  Chars: %d"
+        help_shortcuts     "Writhdeck — keyboard shortcuts"
+        help_close         "Press any key to close"
+        help_k_save        "Save"
+        help_k_undo        "Undo"
+        help_k_redo        "Redo"
+        help_k_close       "Close / Esc"
+        help_k_sel_all     "Select all"
+        help_k_sticky      "Toggle selection"
+        help_k_copy        "Copy"
+        help_k_find        "Find"
+        help_k_cut         "Cut"
+        help_k_replace     "Replace"
+        help_k_paste       "Paste"
+        help_k_goto        "Go to line"
+        help_k_lnum        "Line numbers"
+        help_k_open        "Open (browser)"
+        help_k_nsp         "Jump to next space"
+        help_k_psp         "Jump to prev space"
+        help_k_toc         "Table of contents"
+        help_k_help        "This help"
+        help_shift_arrows  "Shift+Arrows  Extend selection"
     }
     fr {
         toc_title          "Table des matières"
@@ -487,6 +512,31 @@ set ::i18n {
         ed_saved           "enregistré"
         ed_save_before     "Enregistrer \"%s\" avant de fermer ?"
         ed_save_before_tui "enregistrer avant de fermer ?"
+        help_date_time     "Date & Heure"
+        help_cur_time      "Heure actuelle: %-12s  Date : %s"
+        help_file_info     "Infos fichier"
+        help_words_chars   "Mots : %-8d  Caract. : %d"
+        help_shortcuts     "Writhdeck — raccourcis clavier"
+        help_close         "Appuyer sur une touche pour fermer"
+        help_k_save        "Enregistrer"
+        help_k_undo        "Annuler"
+        help_k_redo        "Rétablir"
+        help_k_close       "Fermer / Esc"
+        help_k_sel_all     "Tout sélectionner"
+        help_k_sticky      "Activer sélection"
+        help_k_copy        "Copier"
+        help_k_find        "Chercher"
+        help_k_cut         "Couper"
+        help_k_replace     "Remplacer"
+        help_k_paste       "Coller"
+        help_k_goto        "Aller à la ligne"
+        help_k_lnum        "Numéros de lignes"
+        help_k_open        "Ouvrir (explorateur)"
+        help_k_nsp         "Aller au prochain espace"
+        help_k_psp         "Aller à l'espace précédent"
+        help_k_toc         "Table des matières"
+        help_k_help        "Cette aide"
+        help_shift_arrows  "Maj+Flèches   Étendre la sélection"
     }
 }
 proc t {key args} {
@@ -1163,12 +1213,21 @@ proc cursor-update {} {
                 .ed.t tag remove cur $::cursor_prev_pos "$::cursor_prev_pos +1c"
                 set ::cursor_prev_pos ""
             }
-            if {$::cursor_mode ne "block"} {
-                .ed.t configure -blockcursor 1 \
-                    -insertwidth 0 \
-                    -insertofftime 0 \
-                    -insertbackground $::fg
-                set ::cursor_mode "block"
+            set _prev [.ed.t get "$pos -1c" $pos]
+            if {$_prev ne "\n" && $_prev ne ""} {
+                if {$::cursor_mode ne "tag"} {
+                    .ed.t configure -blockcursor 0 -insertwidth 0 -insertofftime 0
+                    set ::cursor_mode "tag"
+                }
+                set _lc "$pos -1c"
+                .ed.t tag add cur $_lc "$_lc +1c"
+                set ::cursor_prev_pos $_lc
+            } else {
+                if {$::cursor_mode ne "block"} {
+                    .ed.t configure -blockcursor 1 -insertwidth 0 \
+                        -insertofftime 0 -insertbackground $::fg
+                    set ::cursor_mode "block"
+                }
             }
         }
     }
@@ -1970,35 +2029,39 @@ proc tui-help-dialog {rows cols wc cc} {
     set lbl_goto   $::cfg_lbl_goto;   set lbl_lnum   $::cfg_lbl_line_nums
     set lbl_open   $::cfg_lbl_open;   set lbl_toc    $::cfg_lbl_toc
     set lbl_help   $::cfg_lbl_help;   set lbl_nsp    $::cfg_lbl_next_space
-    set lbl_psp    $::cfg_lbl_prev_space; set lbl_redo  $::cfg_lbl_redo
+    set lbl_psp    $::cfg_lbl_prev_space; set lbl_redo $::cfg_lbl_redo
     set _ts [clock seconds]
+    set _e ""
+    # two-column line: key(10) + action(19) | key(10) + action
+    set f2 "  %-10s %-19s%-10s %s"
+    # Each entry: {text inv} — inv=1 renders in reverse video
     set lines [list \
-        "  Date & Time" \
-        [format "  Current time:  %-12s  Date: %s" \
+        [list "  [t help_date_time]" 1] \
+        [list [format "  [t help_cur_time]" \
             [clock format $_ts -format "%H:%M:%S"] \
-            [clock format $_ts -format "%Y-%m-%d"]] \
-        "" \
-        "  File info" \
-        [format "  Words: %-8d  Chars: %d" $wc $cc] \
-        "" \
-        "  Writhdeck — keyboard shortcuts" \
-        "" \
-        [format "  %-10s Save              %-10s Undo" $lbl_save $lbl_undo] \
-        [format "  %-10s                   %-10s Redo" {} $lbl_redo] \
-        [format "  %-10s Close / Esc       %-10s Select all" $lbl_close $lbl_selall] \
-        [format "  %-10s Toggle selection  %-10s Copy" $lbl_sticky $lbl_copy] \
-        [format "  %-10s Find              %-10s Cut" $lbl_find $lbl_cut] \
-        [format "  %-10s Replace           %-10s Paste" $lbl_repl $lbl_paste] \
-        [format "  %-10s Go to line        %-10s Line numbers" $lbl_goto $lbl_lnum] \
-        [format "  %-10s Open (browser)    %-10s Jump to next space" $lbl_open $lbl_nsp] \
-        [format "  %-10s                   %-10s Jump to prev space" {} $lbl_psp] \
-        "" \
-        "  Shift+Arrows  Extend selection" \
-        "" \
-        [format "  %-16s Table of contents" $lbl_toc] \
-        [format "  %-16s This help" $lbl_help] \
-        "" \
-        "  Press any key to close" \
+            [clock format $_ts -format "%Y-%m-%d"]] 0] \
+        [list "" 0] \
+        [list "  [t help_file_info]" 1] \
+        [list [format "  [t help_words_chars]" $wc $cc] 0] \
+        [list "" 0] \
+        [list "  [t help_shortcuts]" 1] \
+        [list "" 0] \
+        [list [format $f2 $lbl_save   [t help_k_save]    $lbl_undo   [t help_k_undo]]    0] \
+        [list [format $f2 $_e         $_e                $lbl_redo   [t help_k_redo]]    0] \
+        [list [format $f2 $lbl_close  [t help_k_close]   $lbl_selall [t help_k_sel_all]] 0] \
+        [list [format $f2 $lbl_sticky [t help_k_sticky]  $lbl_copy   [t help_k_copy]]   0] \
+        [list [format $f2 $lbl_find   [t help_k_find]    $lbl_cut    [t help_k_cut]]    0] \
+        [list [format $f2 $lbl_repl   [t help_k_replace] $lbl_paste  [t help_k_paste]]  0] \
+        [list [format $f2 $lbl_goto   [t help_k_goto]    $lbl_lnum   [t help_k_lnum]]   0] \
+        [list [format $f2 $lbl_open   [t help_k_open]    $lbl_nsp    [t help_k_nsp]]    0] \
+        [list [format $f2 $_e         $_e                $lbl_psp    [t help_k_psp]]    0] \
+        [list "" 0] \
+        [list "  [t help_shift_arrows]" 0] \
+        [list "" 0] \
+        [list [format "  %-16s %s" $lbl_toc  [t help_k_toc]]  0] \
+        [list [format "  %-16s %s" $lbl_help [t help_k_help]] 0] \
+        [list "" 0] \
+        [list "  [t help_close]" 1] \
     ]
     set h [llength $lines]
     set w 60
@@ -2007,8 +2070,10 @@ proc tui-help-dialog {rows cols wc cc} {
     puts -nonewline "\033\[2J"
     for {set i 0} {$i < $h} {incr i} {
         tui-move [expr {$top + $i}] $left
-        set txt [lindex $lines $i]
+        lassign [lindex $lines $i] txt inv
+        if {$inv} { tui-attr reverse }
         puts -nonewline "[string range $txt 0 [expr {$w-1}]]\033\[K"
+        if {$inv} { tui-attr off }
     }
     flush stdout
     tui-getch
