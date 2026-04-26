@@ -502,6 +502,9 @@ set ::i18n {
         help_k_toc         "Table of contents"
         help_k_help        "This help"
         help_shift_arrows  "Shift+Arrows  Extend selection"
+        dlg_cancel         "Cancel"
+        goto_title         "Go to line"
+        goto_prompt        "Line:"
     }
     fr {
         toc_title          "Table des matières"
@@ -544,6 +547,9 @@ set ::i18n {
         help_k_toc         "Table des matières"
         help_k_help        "Cette aide"
         help_shift_arrows  "Maj+Flèches   Étendre la sélection"
+        dlg_cancel         "Annuler"
+        goto_title         "Aller à la ligne"
+        goto_prompt        "Ligne :"
     }
 }
 proc t {key args} {
@@ -949,8 +955,8 @@ proc input-dialog {title prompt} {
     label $w.l -text $prompt -padx 12 -pady 8 -anchor w
     entry $w.e -width 28
     frame $w.f
-    button $w.f.ok -text "OK"      -command {set ::dlg_val [.dlg.e get]; destroy .dlg}
-    button $w.f.cn -text "Annuler" -command {set ::dlg_val ""; destroy .dlg}
+    button $w.f.ok -text "OK"            -command {set ::dlg_val [.dlg.e get]; destroy .dlg}
+    button $w.f.cn -text [t dlg_cancel] -command {set ::dlg_val ""; destroy .dlg}
     pack $w.f.ok $w.f.cn -side left -padx 4 -pady 6
 
     pack $w.l -fill x
@@ -1893,38 +1899,13 @@ proc jump-prev-space {} {
 }
 
 proc goto-dialog {} {
-    set w .goto
-    catch {destroy $w}
-    toplevel $w
-    wm title $w "Aller à la ligne"
-    wm resizable $w 0 0
-    wm transient $w .
-    grab $w
-
-    label $w.l -text "Aller à la ligne :" -padx 12 -pady 8 -anchor w
-    entry $w.e -width 8
-    frame $w.f
-    button $w.f.ok -text "OK"      -command [list goto-apply $w]
-    button $w.f.cn -text "Annuler" -command [list destroy $w]
-    pack $w.f.ok $w.f.cn -side left -padx 4 -pady 6
-    pack $w.l -fill x
-    pack $w.e -fill x -padx 12
-    pack $w.f
-
-    bind $w.e <Return> [list goto-apply $w]
-    bind $w    <Escape> [list destroy $w]
-    focus $w.e
-}
-
-proc goto-apply {w} {
-    set n [$w.e get]
+    set n [input-dialog [t goto_title] [t goto_prompt]]
     if {[string is integer -strict $n] && $n >= 1} {
         set last [lindex [split [.ed.t index end] .] 0]
         .ed.t mark set insert [expr {min($n, $last - 1)}].0
         .ed.t see insert
         focus .ed.t
     }
-    destroy $w
 }
 
 # ─── frame switching ──────────────────────────────────────────────────────────
@@ -2527,6 +2508,11 @@ proc tui-toc {lines rows cols {cy 1} {filepath ""}} {
     }
 }
 
+proc tui-save-file {filepath lines} {
+    set fh [open $filepath w]; fconfigure $fh -encoding utf-8
+    puts -nonewline $fh "[join $lines \n]\n"; close $fh
+}
+
 # ── TUI Editor ────────────────────────────────────────────────────────────────
 
 proc tui-editor {filepath} {
@@ -2573,6 +2559,15 @@ proc tui-editor {filepath} {
         lappend undo_stack [list $lines $cy $cx]
         if {[llength $undo_stack] > 100} { set undo_stack [lrange $undo_stack end-99 end] }
         set redo_stack {}
+    }
+    set mark_dirty {eval $mark_dirty}
+    set compute_wc {
+        set wc_cached 0; set cc_cached 0
+        foreach l $lines {
+            incr wc_cached [llength [regexp -all -inline {\S+} $l]]
+            incr cc_cached [string length $l]
+        }
+        set wc_dirty 0
     }
     set wc_dirty 1; set wrap_dirty 1; set wc_cached 0; set cc_cached 0
     set wrap_dirty 1; set vrows {}; set prev_tw -1
@@ -2691,12 +2686,7 @@ proc tui-editor {filepath} {
         set _hzone [status-zone-of help_bar]
         if {$::cfg_help_bar ne "" && $_hzone ne ""} { tui-help [expr {$rows-2}] $::cfg_help_bar $cols $_hzone }
         if {$wc_dirty && ([status-zone-of words] ne "" || [status-zone-of chars] ne "")} {
-            set wc_cached 0; set cc_cached 0
-            foreach l $lines {
-                incr wc_cached [llength [regexp -all -inline {\S+} $l]]
-                incr cc_cached [string length $l]
-            }
-            set wc_dirty 0
+            eval $compute_wc
         }
         set tui_state [dict create \
             fn    [file tail $filepath] \
@@ -2790,53 +2780,52 @@ proc tui-editor {filepath} {
             BACKSPACE {
                 eval $push_undo
                 if {$sel_anchor ne ""} {
-                    lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; set dirty 1; set wc_dirty 1; set wrap_dirty 1
+                    lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; eval $mark_dirty
                 } elseif {$cx > 0} {
                     set l [lindex $lines [expr {$cy-1}]]
                     lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-2}]][string range $l $cx end]"
-                    incr cx -1; set dirty 1; set wc_dirty 1; set wrap_dirty 1
+                    incr cx -1; eval $mark_dirty
                 } elseif {$cy > 1} {
                     set cx [string length [lindex $lines [expr {$cy-2}]]]
                     lset lines [expr {$cy-2}] "[lindex $lines [expr {$cy-2}]][lindex $lines [expr {$cy-1}]]"
                     set lines [lreplace $lines [expr {$cy-1}] [expr {$cy-1}]]
-                    incr cy -1; set dirty 1; set wc_dirty 1; set wrap_dirty 1
+                    incr cy -1; eval $mark_dirty
                 }
             }
             DC {
                 eval $push_undo
                 if {$sel_anchor ne ""} {
-                    lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; set dirty 1; set wc_dirty 1; set wrap_dirty 1
+                    lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; eval $mark_dirty
                 } else {
                     set l [lindex $lines [expr {$cy-1}]]
                     if {$cx < [string length $l]} {
                         lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-1}]][string range $l [expr {$cx+1}] end]"
-                        set dirty 1; set wc_dirty 1; set wrap_dirty 1
+                        eval $mark_dirty
                     } elseif {$cy < [llength $lines]} {
                         lset lines [expr {$cy-1}] "${l}[lindex $lines $cy]"
-                        set lines [lreplace $lines $cy $cy]; set dirty 1; set wc_dirty 1; set wrap_dirty 1
+                        set lines [lreplace $lines $cy $cy]; eval $mark_dirty
                     }
                 }
             }
             ENTER {
                 eval $push_undo
-                if {$sel_anchor ne ""} { lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; set dirty 1; set wc_dirty 1; set wrap_dirty 1 }
+                if {$sel_anchor ne ""} { lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; eval $mark_dirty }
                 set l [lindex $lines [expr {$cy-1}]]
                 set lines [linsert [lreplace $lines [expr {$cy-1}] [expr {$cy-1}] \
                     [string range $l 0 [expr {$cx-1}]]] $cy [string range $l $cx end]]
-                incr cy; set cx 0; set dirty 1; set wc_dirty 1; set wrap_dirty 1
+                incr cy; set cx 0; eval $mark_dirty
             }
             TAB {
                 eval $push_undo
-                if {$sel_anchor ne ""} { lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; set dirty 1; set wc_dirty 1; set wrap_dirty 1 }
+                if {$sel_anchor ne ""} { lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; eval $mark_dirty }
                 set l [lindex $lines [expr {$cy-1}]]
                 lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-1}]]    [string range $l $cx end]"
-                incr cx 4; set dirty 1; set wc_dirty 1; set wrap_dirty 1
+                incr cx 4; eval $mark_dirty
             }
             default {
                 set c [scan $key %c]
                 if {$key eq $::cfg_tui_save} {
-                    set fh [open $filepath w]; fconfigure $fh -encoding utf-8
-                    puts -nonewline $fh "[join $lines \n]\n"; close $fh
+                    tui-save-file $filepath $lines
                     cursor-put $filepath $cy $cx
                     set dirty 0; set message [t ed_saved]; set msg_time [clock seconds]
                     set clear_sel 0
@@ -2844,27 +2833,25 @@ proc tui-editor {filepath} {
                     if {$dirty} {
                         lassign [tui-size] rows cols
                         if {[tui-confirm [t ed_save_before_tui] $rows $cols]} {
-                            set fh [open $filepath w]; fconfigure $fh -encoding utf-8
-                            puts -nonewline $fh "[join $lines \n]\n"; close $fh
+                            tui-save-file $filepath $lines
                         }
                     }
                     cursor-put $filepath $cy $cx; return
                 } elseif {$key eq $::cfg_tui_open} {
-                    set fh [open $filepath w]; fconfigure $fh -encoding utf-8
-                    puts -nonewline $fh "[join $lines \n]\n"; close $fh
+                    tui-save-file $filepath $lines
                     cursor-put $filepath $cy $cx; set dirty 0; return
                 } elseif {$key eq $::cfg_tui_undo} {
                     if {[llength $undo_stack] > 0} {
                         lappend redo_stack [list $lines $cy $cx]
                         lassign [lindex $undo_stack end] lines cy cx
-                        set undo_stack [lrange $undo_stack 0 end-1]; set dirty 1; set wc_dirty 1; set wrap_dirty 1
+                        set undo_stack [lrange $undo_stack 0 end-1]; eval $mark_dirty
                     }
                     set clear_sel 0
                 } elseif {$key eq $::cfg_tui_redo} {
                     if {[llength $redo_stack] > 0} {
                         lappend undo_stack [list $lines $cy $cx]
                         lassign [lindex $redo_stack end] lines cy cx
-                        set redo_stack [lrange $redo_stack 0 end-1]; set dirty 1; set wc_dirty 1; set wrap_dirty 1
+                        set redo_stack [lrange $redo_stack 0 end-1]; eval $mark_dirty
                     }
                     set clear_sel 0
                 } elseif {$key eq $::cfg_tui_sticky_sel} {
@@ -2887,7 +2874,7 @@ proc tui-editor {filepath} {
                     if {$txt ne ""} {
                         eval $push_undo; tui-copy $txt
                         lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx
-                        set dirty 1; set wc_dirty 1; set wrap_dirty 1; set message "cut"; set msg_time [clock seconds]
+                        eval $mark_dirty; set message "cut"; set msg_time [clock seconds]
                     }
                 } elseif {$key eq $::cfg_tui_paste || [string match "PASTE:*" $key]} {
                     if {[string match "PASTE:*" $key]} {
@@ -2913,7 +2900,7 @@ proc tui-editor {filepath} {
                             incr cy [expr {[llength $plines]-1}]
                             set cx [string length [lindex $plines end]]
                         }
-                        set dirty 1; set wc_dirty 1; set wrap_dirty 1
+                        eval $mark_dirty
                     }
                 } elseif {$key eq $::cfg_tui_find} {
                     lassign [tui-size] rows cols
@@ -2950,7 +2937,7 @@ proc tui-editor {filepath} {
                                 lappend new_lines $out
                             }
                             if {$count > 0} {
-                                eval $push_undo; set lines $new_lines; set dirty 1; set wc_dirty 1; set wrap_dirty 1
+                                eval $push_undo; set lines $new_lines; eval $mark_dirty
                                 set message "replaced $count occurrence[expr {$count!=1?{s}:{}}]"
                                 set msg_time [clock seconds]
                                 set cy [expr {max(1, min($cy, [llength $lines]))}]
@@ -3005,24 +2992,17 @@ proc tui-editor {filepath} {
                     set clear_sel 0
                 } elseif {$key eq $::cfg_tui_help} {
                     lassign [tui-size] rows cols
-                    if {$wc_dirty} {
-                        set wc_cached 0; set cc_cached 0
-                        foreach l $lines {
-                            incr wc_cached [llength [regexp -all -inline {\S+} $l]]
-                            incr cc_cached [string length $l]
-                        }
-                        set wc_dirty 0
-                    }
+                    if {$wc_dirty} { eval $compute_wc }
                     tui-help-dialog $rows $cols $wc_cached $cc_cached
                     set clear_sel 0
                 } elseif {[string match "F*" $key]} {                          ;# ignore unknown F-keys
                     set clear_sel 0
                 } elseif {[string length $key] >= 1 && ($c eq "" || $c >= 32)} {
                     eval $push_undo
-                    if {$sel_anchor ne ""} { lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; set dirty 1; set wc_dirty 1; set wrap_dirty 1 }
+                    if {$sel_anchor ne ""} { lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; eval $mark_dirty }
                     set l [lindex $lines [expr {$cy-1}]]
                     lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-1}]]${key}[string range $l $cx end]"
-                    incr cx [string length $key]; set dirty 1; set wc_dirty 1; set wrap_dirty 1
+                    incr cx [string length $key]; eval $mark_dirty
                 }
             }
         }
