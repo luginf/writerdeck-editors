@@ -189,7 +189,8 @@ set ::cfg_color_markup_alt   "#2a7090"
 # dark_mode: 0 = light (alt colors), 1 = dark (primary colors)
 set ::cfg_dark_mode          1
 set ::cfg_key_dark_toggle    "Control-d"
-set ::cfg_browser        1
+set ::cfg_browser              1
+set ::cfg_console_center_alert 1
 set ::cfg_line_numbers   0
 set ::cfg_cursor_restore 1
 set ::cfg_block_cursor_gui     1
@@ -270,7 +271,8 @@ proc ini-load {} {
                 color_markup_alt     { set ::cfg_color_markup_alt   $v }
                 dark_mode            { set ::cfg_dark_mode [string is true $v] }
                 key_dark_toggle      { set ::cfg_key_dark_toggle   $v }
-                browser          { set ::cfg_browser        [string is true $v] }
+                browser              { set ::cfg_browser              [string is true $v] }
+                console_center_alert { set ::cfg_console_center_alert [string is true $v] }
                 line_numbers     { set ::cfg_line_numbers   $v }
                 cursor_restore   { set ::cfg_cursor_restore $v }
                 block_cursor         { set ::cfg_block_cursor_gui     [string is true $v]
@@ -338,8 +340,9 @@ proc ini-save {} {
     puts $fh "strikethrough_marker = $::cfg_strikethrough_marker"
     puts $fh ""
     puts $fh "\[behaviour\]"
-    puts $fh "browser        = $::cfg_browser"
-    puts $fh "line_numbers   = $::cfg_line_numbers"
+    puts $fh "browser              = $::cfg_browser"
+    puts $fh "console_center_alert = $::cfg_console_center_alert"
+    puts $fh "line_numbers         = $::cfg_line_numbers"
     puts $fh "cursor_restore = $::cfg_cursor_restore"
     puts $fh "block_cursor_gui     = $::cfg_block_cursor_gui"
     puts $fh "block_cursor_console = $::cfg_block_cursor_console"
@@ -678,11 +681,17 @@ proc inline-re {marker} {
 
 proc apply-inline {ln line tag re mlen} {
     set s 0
+    set llen [string length $line]
     while {[regexp -start $s -indices -- $re $line m]} {
         lassign $m a b
-        .ed.t tag add $tag   $ln.$a "$ln.[expr {$b+1}]"
-        .ed.t tag add marker $ln.$a "$ln.[expr {$a+$mlen}]"
-        .ed.t tag add marker "$ln.[expr {$b-$mlen+1}]" "$ln.[expr {$b+1}]"
+        set pre  [expr {$a > 0       ? [string index $line [expr {$a-1}]] : ""}]
+        set post [expr {$b+1 < $llen ? [string index $line [expr {$b+1}]] : ""}]
+        if {($pre  eq "" || ![string is alpha $pre]) &&
+            ($post eq "" || ![string is alpha $post])} {
+            .ed.t tag add $tag   $ln.$a "$ln.[expr {$b+1}]"
+            .ed.t tag add marker $ln.$a "$ln.[expr {$a+$mlen}]"
+            .ed.t tag add marker "$ln.[expr {$b-$mlen+1}]" "$ln.[expr {$b+1}]"
+        }
         set s [expr {$b+1}]
     }
 }
@@ -1110,10 +1119,10 @@ after idle apply-line-spacing
     -font [list Mono $::cfg_font_size italic]
 .ed.t tag configure underline \
     -foreground $::cfg_color_markup \
-    -underline 1
+    -underline 0
 .ed.t tag configure strikethrough \
     -foreground $::cfg_color_markup \
-    -overstrike 1
+    -overstrike 0
 .ed.t tag configure marker \
     -foreground $::cfg_color_comment
 .ed.t tag raise marker
@@ -2293,7 +2302,20 @@ proc tui-prompt {label rows cols} {
 }
 
 proc tui-confirm {msg rows cols} {
-    tui-bar [expr {$rows-1}] " $msg (y/n)" "" $cols; flush stdout
+    if {$::cfg_console_center_alert} {
+        set line "  $msg (y/n)  "
+        set w [string length $line]
+        set row [expr {$rows / 2}]
+        set lcol [expr {max(0, ($cols - $w) / 2)}]
+        foreach r [list [expr {$row-1}] $row [expr {$row+1}]] {
+            tui-move $r 0; puts -nonewline "\033\[2K"
+        }
+        tui-move $row $lcol
+        tui-attr reverse; puts -nonewline $line; tui-attr off
+    } else {
+        tui-bar [expr {$rows-1}] " $msg (y/n)" "" $cols
+    }
+    flush stdout
     while 1 {
         set k [tui-getch]
         if {$k in {y Y}} { return 1 }
@@ -2595,7 +2617,7 @@ proc tui-editor {filepath} {
         if {[llength $undo_stack] > 100} { set undo_stack [lrange $undo_stack end-99 end] }
         set redo_stack {}
     }
-    set mark_dirty {eval $mark_dirty}
+    set mark_dirty {set dirty 1; set wc_dirty 1; set wrap_dirty 1}
     set compute_wc {
         set wc_cached 0; set cc_cached 0
         foreach l $lines {
