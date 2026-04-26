@@ -31,33 +31,65 @@ _w=$(stty -g 2>/dev/null); trap '[ -n "$_w" ] && stty "$_w" 2>/dev/null' EXIT IN
 # bail out immediately when invoked by bash tab-completion
 if {[info exists ::env(COMP_LINE)] || [info exists ::env(COMP_POINT)]} { exit 0 }
 
-set ::no_gui [expr {[lsearch $::argv "--no-gui"] >= 0}]
-if {$::no_gui} {
-    set ::argv [lsearch -all -inline -not $::argv "--no-gui"]
-    set ::argc [llength $::argv]
+if {[lsearch $::argv "--help"] >= 0 || [lsearch $::argv "-h"] >= 0} {
+    puts "Usage: writhdeck.tcl \[OPTIONS\] \[FILE\]
+
+Options:
+  --help, -h      Show this help and exit
+  --gui           Force GUI (Tk) mode — skip display detection
+  --no-gui        Force TUI (terminal) mode
+  --tui, --ng     Aliases for --no-gui
+
+Keyboard shortcuts (defaults — configurable in writhdeck.ini):
+  ^S  Save              ^Z  Undo           ^Y  Redo
+  ^Q  Close / Esc       ^F  Find           ^R  Find & Replace
+  ^H  Help              ^G  Go to line     ^O  Open file
+  ^A  Select all        ^K  Toggle sticky selection
+  ^C  Copy              ^X  Cut            ^V  Paste
+  ^L  Line numbers      ^D  Dark/light toggle
+  ^Space  Next space    ^Shift+Space  Prev space
+  F11  Table of contents
+  Ctrl+= / Ctrl+-  Font size
+  Alt+Enter  Fullscreen
+  Shift+Arrows  Extend selection"
+    exit 0
 }
+
+set ::no_gui    [expr {[lsearch -regexp $::argv {^(--no-gui|--tui|--ng)$}] >= 0}]
+set ::force_gui [expr {!$::no_gui && [lsearch $::argv "--gui"] >= 0}]
+foreach _f {--no-gui --tui --ng --gui} { set ::argv [lsearch -all -inline -not $::argv $_f] }
+unset _f
+set ::argc [llength $::argv]
 if {!$::no_gui} {
     if {$::tcl_platform(platform) eq "windows"} {
         if {[catch {package require Tk}]} { set ::no_gui 1 }
     } else {
-        # On Unix, check that the display socket actually exists before trying Tk —
-        # package require Tk can hang indefinitely if DISPLAY is stale/unreachable.
-        proc _display-socket-exists {} {
-            if {[info exists ::env(WAYLAND_DISPLAY)] && $::env(WAYLAND_DISPLAY) ne ""} {
-                set dir [expr {[info exists ::env(XDG_RUNTIME_DIR)] ? $::env(XDG_RUNTIME_DIR) : ""}]
-                if {$dir ne "" && [file exists [file join $dir $::env(WAYLAND_DISPLAY)]]} { return 1 }
+        if {$::force_gui} {
+            # --gui: skip display-socket heuristic, attempt Tk directly.
+            # Tk itself will error if the display is truly unavailable.
+            if {[catch {package require Tk} err]} {
+                puts stderr "writhdeck: --gui: cannot load Tk: $err"; exit 1
             }
-            if {[info exists ::env(DISPLAY)] && $::env(DISPLAY) ne ""} {
-                if {[regexp {^:(\d+)} $::env(DISPLAY) -> num]} {
-                    return [file exists "/tmp/.X11-unix/X$num"]
+        } else {
+            # On Unix, check that the display socket actually exists before trying Tk —
+            # package require Tk can hang indefinitely if DISPLAY is stale/unreachable.
+            proc _display-socket-exists {} {
+                if {[info exists ::env(WAYLAND_DISPLAY)] && $::env(WAYLAND_DISPLAY) ne ""} {
+                    set dir [expr {[info exists ::env(XDG_RUNTIME_DIR)] ? $::env(XDG_RUNTIME_DIR) : ""}]
+                    if {$dir ne "" && [file exists [file join $dir $::env(WAYLAND_DISPLAY)]]} { return 1 }
                 }
+                if {[info exists ::env(DISPLAY)] && $::env(DISPLAY) ne ""} {
+                    if {[regexp {^:(\d+)} $::env(DISPLAY) -> num]} {
+                        return [file exists "/tmp/.X11-unix/X$num"]
+                    }
+                }
+                return 0
             }
-            return 0
+            if {![_display-socket-exists] || [catch {package require Tk}]} {
+                set ::no_gui 1
+            }
+            rename _display-socket-exists {}
         }
-        if {![_display-socket-exists] || [catch {package require Tk}]} {
-            set ::no_gui 1
-        }
-        rename _display-socket-exists {}
     }
 }
 
@@ -157,6 +189,7 @@ set ::cfg_color_markup_alt   "#2a7090"
 # dark_mode: 0 = light (alt colors), 1 = dark (primary colors)
 set ::cfg_dark_mode          1
 set ::cfg_key_dark_toggle    "Control-d"
+set ::cfg_browser        1
 set ::cfg_line_numbers   0
 set ::cfg_cursor_restore 1
 set ::cfg_block_cursor_gui     1
@@ -237,6 +270,7 @@ proc ini-load {} {
                 color_markup_alt     { set ::cfg_color_markup_alt   $v }
                 dark_mode            { set ::cfg_dark_mode [string is true $v] }
                 key_dark_toggle      { set ::cfg_key_dark_toggle   $v }
+                browser          { set ::cfg_browser        [string is true $v] }
                 line_numbers     { set ::cfg_line_numbers   $v }
                 cursor_restore   { set ::cfg_cursor_restore $v }
                 block_cursor         { set ::cfg_block_cursor_gui     [string is true $v]
@@ -304,6 +338,7 @@ proc ini-save {} {
     puts $fh "strikethrough_marker = $::cfg_strikethrough_marker"
     puts $fh ""
     puts $fh "\[behaviour\]"
+    puts $fh "browser        = $::cfg_browser"
     puts $fh "line_numbers   = $::cfg_line_numbers"
     puts $fh "cursor_restore = $::cfg_cursor_restore"
     puts $fh "block_cursor_gui     = $::cfg_block_cursor_gui"
@@ -1527,7 +1562,7 @@ proc close-editor {} {
     wm title . "Writhdeck"
     .ed.t delete 1.0 end
     search-close
-    show-browser
+    if {$::cfg_browser} { show-browser } else { exit }
 }
 
 proc apply-theme {} {
@@ -3026,7 +3061,8 @@ proc tui-main {} {
             set fp [lindex $::argv 0]
             if {![file exists $fp]} { close [open $fp w] }
             tui-editor $fp
-        } else {
+        }
+        if {$::cfg_browser || $::argc == 0} {
             while 1 {
                 set fp [tui-browser]
                 if {$fp eq ""} break
