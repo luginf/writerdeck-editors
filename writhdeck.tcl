@@ -1213,21 +1213,10 @@ proc cursor-update {} {
                 .ed.t tag remove cur $::cursor_prev_pos "$::cursor_prev_pos +1c"
                 set ::cursor_prev_pos ""
             }
-            set _prev [.ed.t get "$pos -1c" $pos]
-            if {$_prev ne "\n" && $_prev ne ""} {
-                if {$::cursor_mode ne "tag"} {
-                    .ed.t configure -blockcursor 0 -insertwidth 0 -insertofftime 0
-                    set ::cursor_mode "tag"
-                }
-                set _lc "$pos -1c"
-                .ed.t tag add cur $_lc "$_lc +1c"
-                set ::cursor_prev_pos $_lc
-            } else {
-                if {$::cursor_mode ne "block"} {
-                    .ed.t configure -blockcursor 1 -insertwidth 0 \
-                        -insertofftime 0 -insertbackground $::fg
-                    set ::cursor_mode "block"
-                }
+            if {$::cursor_mode ne "block"} {
+                .ed.t configure -blockcursor 1 -insertwidth 0 \
+                    -insertofftime 0 -insertbackground $::fg
+                set ::cursor_mode "block"
             }
         }
     }
