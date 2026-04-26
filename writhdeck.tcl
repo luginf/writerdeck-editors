@@ -136,8 +136,13 @@ set ::cfg_margin_cols    6
 set ::cfg_margin_rows    4
 set ::cfg_heading_marker "="
 set ::cfg_color_heading  "#c8a060"
-set ::cfg_dim_marker     "%"
-set ::cfg_color_dim      "#606060"
+set ::cfg_comment_marker "%"
+set ::cfg_color_comment  "#606060"
+set ::cfg_bold_marker          "**"
+set ::cfg_italic_marker        "//"
+set ::cfg_underline_marker     "__"
+set ::cfg_strikethrough_marker "--"
+set ::cfg_color_markup         "#6aa9d4"
 # alternate (light) theme — used when dark_mode = 0
 set ::cfg_bg_alt             "#fdf6e3"
 set ::cfg_fg_alt             "#657b83"
@@ -145,7 +150,8 @@ set ::cfg_bg_bar_alt         "#eee8d5"
 set ::cfg_fg_bar_alt         "#93a1a1"
 set ::cfg_bg_sel_alt         "#268bd2"
 set ::cfg_color_heading_alt  "#b58900"
-set ::cfg_color_dim_alt      "#aaaaaa"
+set ::cfg_color_comment_alt  "#aaaaaa"
+set ::cfg_color_markup_alt   "#2a7090"
 # dark_mode: 0 = light (alt colors), 1 = dark (primary colors)
 set ::cfg_dark_mode          1
 set ::cfg_key_dark_toggle    "Control-d"
@@ -155,6 +161,7 @@ set ::cfg_block_cursor   1
 set ::cfg_blink_cursor   0
 set ::cfg_line_spacing   100
 set ::cfg_bar_height     18
+set ::cfg_lang           "en"
 set ::cfg_help_bar       "^S save   ^Q close   ^H help"
 # status bar zones — tokens: filename dirty sel ln col words chars clock help_bar space
 set ::cfg_status_left   "filename dirty sel ln col words chars"
@@ -205,17 +212,26 @@ proc ini-load {} {
                 margin_cols      { set ::cfg_margin_cols    $v }
                 margin_rows      { set ::cfg_margin_rows    $v }
                 color_bg_sel     { set ::cfg_bg_sel         $v }
-                heading_marker   { set ::cfg_heading_marker $v }
-                color_heading    { set ::cfg_color_heading  $v }
-                dim_marker       { set ::cfg_dim_marker     $v }
-                color_dim        { set ::cfg_color_dim      $v }
+                heading_marker   { set ::cfg_heading_marker  $v }
+                color_heading    { set ::cfg_color_heading   $v }
+                dim_marker       { set ::cfg_comment_marker  $v }
+                comment_marker   { set ::cfg_comment_marker  $v }
+                bold_marker          { set ::cfg_bold_marker          $v }
+                italic_marker        { set ::cfg_italic_marker        $v }
+                underline_marker     { set ::cfg_underline_marker     $v }
+                strikethrough_marker { set ::cfg_strikethrough_marker $v }
+                color_dim            { set ::cfg_color_comment        $v }
+                color_comment        { set ::cfg_color_comment        $v }
+                color_markup         { set ::cfg_color_markup         $v }
                 color_bg_alt         { set ::cfg_bg_alt            $v }
                 color_fg_alt         { set ::cfg_fg_alt            $v }
                 color_bg_bar_alt     { set ::cfg_bg_bar_alt        $v }
                 color_fg_bar_alt     { set ::cfg_fg_bar_alt        $v }
                 color_bg_sel_alt     { set ::cfg_bg_sel_alt        $v }
-                color_heading_alt    { set ::cfg_color_heading_alt $v }
-                color_dim_alt        { set ::cfg_color_dim_alt     $v }
+                color_heading_alt    { set ::cfg_color_heading_alt  $v }
+                color_dim_alt        { set ::cfg_color_comment_alt  $v }
+                color_comment_alt    { set ::cfg_color_comment_alt  $v }
+                color_markup_alt     { set ::cfg_color_markup_alt   $v }
                 dark_mode            { set ::cfg_dark_mode [string is true $v] }
                 key_dark_toggle      { set ::cfg_key_dark_toggle   $v }
                 line_numbers     { set ::cfg_line_numbers   $v }
@@ -224,6 +240,7 @@ proc ini-load {} {
                 blink_cursor     { set ::cfg_blink_cursor   [string is true $v] }
                 line_spacing     { set ::cfg_line_spacing   $v }
                 bar_height       { set ::cfg_bar_height     $v }
+                lang             { set ::cfg_lang           $v }
                 help_bar         { set ::cfg_help_bar       $v }
                 status_left      { set ::cfg_status_left    $v }
                 status_center    { set ::cfg_status_center  $v }
@@ -274,13 +291,19 @@ proc ini-save {} {
     puts $fh "line_spacing   = $::cfg_line_spacing"
     puts $fh "bar_height     = $::cfg_bar_height"
     puts $fh "heading_marker = $::cfg_heading_marker"
-    puts $fh "dim_marker     = $::cfg_dim_marker"
+    puts $fh "comment_marker       = $::cfg_comment_marker"
+    puts $fh "bold_marker          = $::cfg_bold_marker"
+    puts $fh "italic_marker        = $::cfg_italic_marker"
+    puts $fh "underline_marker     = $::cfg_underline_marker"
+    puts $fh "strikethrough_marker = $::cfg_strikethrough_marker"
     puts $fh ""
     puts $fh "\[behaviour\]"
     puts $fh "line_numbers   = $::cfg_line_numbers"
     puts $fh "cursor_restore = $::cfg_cursor_restore"
     puts $fh "block_cursor   = $::cfg_block_cursor"
     puts $fh "blink_cursor   = $::cfg_blink_cursor"
+    puts $fh "# lang: interface language — en or fr"
+    puts $fh "lang           = $::cfg_lang"
     puts $fh "# help_bar: text shown in the shortcuts bar, empty to hide"
     puts $fh "help_bar       = $::cfg_help_bar"
     puts $fh "# status bar zones — tokens: filename dirty sel ln col words chars clock help_bar space"
@@ -321,7 +344,8 @@ proc ini-save {} {
     puts $fh "color_fg_bar   = $::cfg_fg_bar"
     puts $fh "color_bg_sel   = $::cfg_bg_sel"
     puts $fh "color_heading  = $::cfg_color_heading"
-    puts $fh "color_dim      = $::cfg_color_dim"
+    puts $fh "color_comment  = $::cfg_color_comment"
+    puts $fh "color_markup   = $::cfg_color_markup"
     puts $fh ""
     puts $fh "# ── alternate (light) theme ───────────────────────────────────"
     puts $fh "# Used when dark_mode = 0  (active by default)"
@@ -331,7 +355,8 @@ proc ini-save {} {
     puts $fh "color_fg_bar_alt   = $::cfg_fg_bar_alt"
     puts $fh "color_bg_sel_alt   = $::cfg_bg_sel_alt"
     puts $fh "color_heading_alt  = $::cfg_color_heading_alt"
-    puts $fh "color_dim_alt      = $::cfg_color_dim_alt"
+    puts $fh "color_comment_alt  = $::cfg_color_comment_alt"
+    puts $fh "color_markup_alt   = $::cfg_color_markup_alt"
     close $fh
 }
 
@@ -427,14 +452,58 @@ if {$::cfg_docs_dir ne ""} {
     file mkdir $::DOCS_DIR
 }
 
+# ─── i18n ────────────────────────────────────────────────────────────────────
+set ::i18n {
+    en {
+        toc_title          "Table of contents"
+        toc_no_headings    "no headings found"
+        toc_jump_bar       "↵ jump  esc cancel"
+        toc_headings       "%d heading%s"
+        br_no_docs         "No documents yet. Press n to create one."
+        br_help_gui        " ↵ open  n new  d delete  r rename  q quit  h help"
+        br_help_tui        "↵ open  n new  d delete  r rename  q quit   %s help"
+        br_exists          "'%s' already exists"
+        br_deleted         "deleted '%s'"
+        br_renamed         "renamed → '%s'"
+        br_delete          "Delete \"%s\"?"
+        br_files           "%d file%s"
+        ed_saved           "saved"
+        ed_save_before     "Save \"%s\" before closing?"
+        ed_save_before_tui "save before closing?"
+    }
+    fr {
+        toc_title          "Table des matières"
+        toc_no_headings    "aucun titre trouvé"
+        toc_jump_bar       "↵ aller  esc annuler"
+        toc_headings       "%d titre%s"
+        br_no_docs         "Aucun document. Appuyez sur n pour en créer un."
+        br_help_gui        " ↵ ouvrir  n nouveau  d supprimer  r renommer  q quitter  h aide"
+        br_help_tui        "↵ ouvrir  n nouveau  d supprimer  r renommer  q quitter   %s aide"
+        br_exists          "'%s' existe déjà"
+        br_deleted         "'%s' supprimé"
+        br_renamed         "renommé → '%s'"
+        br_delete          "Supprimer \"%s\" ?"
+        br_files           "%d fichier%s"
+        ed_saved           "enregistré"
+        ed_save_before     "Enregistrer \"%s\" avant de fermer ?"
+        ed_save_before_tui "enregistrer avant de fermer ?"
+    }
+}
+proc t {key args} {
+    set lang [expr {[dict exists $::i18n $::cfg_lang] ? $::cfg_lang : "en"}]
+    set s [dict get $::i18n $lang $key]
+    if {[llength $args]} { return [format $s {*}$args] }
+    return $s
+}
+
 # ─── theme helpers ────────────────────────────────────────────────────────────
 proc theme-colors {} {
     if {$::cfg_dark_mode} {
         return [list $::cfg_bg $::cfg_fg $::cfg_bg_bar $::cfg_fg_bar \
-                     $::cfg_bg_sel $::cfg_color_heading $::cfg_color_dim]
+                     $::cfg_bg_sel $::cfg_color_heading $::cfg_color_comment $::cfg_color_markup]
     } else {
         return [list $::cfg_bg_alt $::cfg_fg_alt $::cfg_bg_bar_alt $::cfg_fg_bar_alt \
-                     $::cfg_bg_sel_alt $::cfg_color_heading_alt $::cfg_color_dim_alt]
+                     $::cfg_bg_sel_alt $::cfg_color_heading_alt $::cfg_color_comment_alt $::cfg_color_markup_alt]
     }
 }
 
@@ -489,10 +558,27 @@ proc heading-re {} {
     return "^\\s*${m}\\s*(.+?)\\s*${m}\\s*$"
 }
 
-proc parse-dim {line} {
-    if {$::cfg_dim_marker eq ""} { return 0 }
-    set m [regsub -all {[\\^$.|?*+()\[\]{}]} $::cfg_dim_marker {\\&}]
-    return [regexp "^${m} " $line]
+proc parse-comment {line} {
+    if {$::cfg_comment_marker eq ""} { return 0 }
+    set m [regsub -all {[\\^$.|?*+()\[\]{}]} $::cfg_comment_marker {\\&}]
+    return [regexp "^${m}" $line]
+}
+
+proc inline-re {marker} {
+    if {$marker eq ""} { return "" }
+    set m [regsub -all {[\\^$.|?*+()\[\]{}]} $marker {\\&}]
+    return "${m}.+?${m}"
+}
+
+proc apply-inline {ln line tag re mlen} {
+    set s 0
+    while {[regexp -start $s -indices -- $re $line m]} {
+        lassign $m a b
+        .ed.t tag add $tag   $ln.$a "$ln.[expr {$b+1}]"
+        .ed.t tag add marker $ln.$a "$ln.[expr {$a+$mlen}]"
+        .ed.t tag add marker "$ln.[expr {$b-$mlen+1}]" "$ln.[expr {$b+1}]"
+        set s [expr {$b+1}]
+    }
 }
 
 proc parse-heading {line} {
@@ -678,7 +764,7 @@ pack .br.mid     -fill both  -expand 1
 
 frame .br.bar -bg $bg_bar
 label .br.bar.help \
-    -text " ↵ open  n new  d delete  r rename  q quit  h help" \
+    -text [t br_help_gui] \
     -bg $bg_bar -fg $fg_bar -font $font_sm -anchor w -padx 4 -pady $bar_pady
 label .br.bar.cnt -textvariable ::br_status \
     -bg $bg_bar -fg $fg_bar -font $font_sm -anchor e -padx 8 -pady $bar_pady
@@ -731,7 +817,7 @@ proc br-refresh {} {
     }
 
     set s [expr {$total != 1 ? "s" : ""}]
-    set ::br_status " $total file${s} "
+    set ::br_status " [t br_files $total $s] "
 
     if {$total > 0} {
         if {$new_sel < 0} { set new_sel $first_file }
@@ -816,7 +902,7 @@ proc br-delete {} {
     set e [br-selected]
     if {![llength $e]} return
     lassign $e _ dir name
-    set r [tk_messageBox -message "Delete \"$name\"?" \
+    set r [tk_messageBox -message [t br_delete $name] \
            -type yesno -icon question -parent .]
     if {$r eq "yes"} {
         file delete [file join $dir $name]
@@ -890,8 +976,23 @@ after idle apply-line-spacing
 .ed.t tag configure heading \
     -foreground $::cfg_color_heading \
     -font [list Mono $::cfg_font_size bold]
-.ed.t tag configure dim \
-    -foreground $::cfg_color_dim
+.ed.t tag configure comment \
+    -foreground $::cfg_color_comment
+.ed.t tag configure bold \
+    -foreground $::cfg_color_markup \
+    -font [list Mono $::cfg_font_size bold]
+.ed.t tag configure italic \
+    -foreground $::cfg_color_markup \
+    -font [list Mono $::cfg_font_size italic]
+.ed.t tag configure underline \
+    -foreground $::cfg_color_markup \
+    -underline 1
+.ed.t tag configure strikethrough \
+    -foreground $::cfg_color_markup \
+    -overstrike 1
+.ed.t tag configure marker \
+    -foreground $::cfg_color_comment
+.ed.t tag raise marker
 
 frame .ed.bar -bg $bg_bar
 label .ed.bar.left   -textvariable ::ed_bar_left \
@@ -1039,6 +1140,7 @@ set ::cursor_blink_id      ""
 set ::cursor_blink_visible 1
 set ::cursor_prev_pos      ""
 set ::cursor_mode          ""   ;# "tag" | "block" | ""
+set ::cursor_char_w        0
 
 proc cursor-update {} {
     if {!$::cfg_block_cursor} return
@@ -1063,8 +1165,9 @@ proc cursor-update {} {
                 set ::cursor_prev_pos ""
             }
             if {$::cursor_mode ne "block"} {
-                .ed.t configure -blockcursor 1 -insertwidth 2 \
-                    -insertofftime [expr {$::cfg_blink_cursor ? 300 : 0}] \
+                .ed.t configure -blockcursor 1 \
+                    -insertwidth $::cursor_char_w \
+                    -insertofftime 0 \
                     -insertbackground $::fg
                 set ::cursor_mode "block"
             }
@@ -1095,6 +1198,7 @@ proc cursor-setup {} {
     set ::cursor_mode ""; set ::cursor_prev_pos ""
     catch {
         if {$::cfg_block_cursor} {
+            set ::cursor_char_w [font measure [.ed.t cget -font] "0"]
             .ed.t configure -blockcursor 0 -insertwidth 0 -insertofftime 0 \
                 -insertbackground $::fg
             .ed.t tag configure cur -background $::fg -foreground $::bg
@@ -1204,7 +1308,7 @@ proc save-file {} {
     .ed.t edit modified false
     lassign [split [.ed.t index insert] .] cy cx
     cursor-put $::filename $cy $cx
-    set-msg "saved"
+    set-msg [t ed_saved]
 }
 
 proc save-as {} {
@@ -1322,7 +1426,7 @@ proc search-prev {} {
 proc close-editor {} {
     if {$::dirty} {
         set r [tk_messageBox \
-            -message "Save \"[file tail $::filename]\" before closing?" \
+            -message [t ed_save_before [file tail $::filename]] \
             -type yesnocancel -icon question -default yes -parent .]
         if {$r eq "cancel"} return
         if {$r eq "yes"}    save-file
@@ -1342,7 +1446,7 @@ proc close-editor {} {
 }
 
 proc apply-theme {} {
-    lassign [theme-colors] bg fg bg_bar fg_bar bg_sel c_heading c_dim
+    lassign [theme-colors] bg fg bg_bar fg_bar bg_sel c_heading c_comment c_markup
     set ::bg $bg; set ::fg $fg; set ::bg_bar $bg_bar
     set ::fg_bar $fg_bar; set ::bg_sel $bg_sel
     # browser
@@ -1363,8 +1467,13 @@ proc apply-theme {} {
                 -insertwidth [expr {$::cfg_block_cursor ? 0 : 2}] \
                 -insertofftime [expr {$::cfg_block_cursor ? 0 : ($::cfg_blink_cursor ? 300 : 0)}] }
     catch { cursor-setup }
-    catch { .ed.t tag configure heading -foreground $c_heading }
-    catch { .ed.t tag configure dim     -foreground $c_dim }
+    catch { .ed.t tag configure heading       -foreground $c_heading }
+    catch { .ed.t tag configure comment       -foreground $c_comment }
+    catch { .ed.t tag configure bold          -foreground $c_markup }
+    catch { .ed.t tag configure italic        -foreground $c_markup }
+    catch { .ed.t tag configure underline     -foreground $c_markup }
+    catch { .ed.t tag configure strikethrough -foreground $c_markup }
+    catch { .ed.t tag configure marker        -foreground $c_comment }
     catch { .ed.sb configure -bg $bg_bar -troughcolor $bg }
     catch { .ed.bar configure -bg $bg_bar }
     foreach w {.ed.bar.left .ed.bar.center .ed.bar.right .ed.bar.msg .ed.bar.help} {
@@ -1386,7 +1495,7 @@ proc apply-theme {} {
 proc quit-app {} {
     if {$::dirty && $::filename ne ""} {
         set r [tk_messageBox \
-            -message "Save \"[file tail $::filename]\" before closing?" \
+            -message [t ed_save_before [file tail $::filename]] \
             -type yesnocancel -icon question -default yes -parent .]
         if {$r eq "cancel"} return
         if {$r eq "yes"} save-file
@@ -1468,15 +1577,25 @@ bind .br.mid.lst    <$::cfg_key_fullscreen> { toggle-fullscreen }
 
 # ─── headings & TOC ───────────────────────────────────────────────────────────
 proc highlight-headings {} {
-    .ed.t tag remove heading 1.0 end
-    .ed.t tag remove dim     1.0 end
+    foreach t {heading comment bold italic underline strikethrough marker} {
+        .ed.t tag remove $t 1.0 end
+    }
+    set bold_re          [inline-re $::cfg_bold_marker]
+    set italic_re        [inline-re $::cfg_italic_marker]
+    set underline_re     [inline-re $::cfg_underline_marker]
+    set strikethrough_re [inline-re $::cfg_strikethrough_marker]
     set last [lindex [split [.ed.t index end] .] 0]
     for {set ln 1} {$ln < $last} {incr ln} {
         set line [.ed.t get $ln.0 "$ln.0 lineend"]
         if {[parse-heading $line] ne ""} {
             .ed.t tag add heading $ln.0 "$ln.0 lineend"
-        } elseif {[parse-dim $line]} {
-            .ed.t tag add dim $ln.0 "$ln.0 lineend"
+        } elseif {[parse-comment $line]} {
+            .ed.t tag add comment $ln.0 "$ln.0 lineend"
+        } else {
+            if {$bold_re ne ""}          { apply-inline $ln $line bold          $bold_re          [string length $::cfg_bold_marker] }
+            if {$italic_re ne ""}        { apply-inline $ln $line italic        $italic_re        [string length $::cfg_italic_marker] }
+            if {$underline_re ne ""}     { apply-inline $ln $line underline     $underline_re     [string length $::cfg_underline_marker] }
+            if {$strikethrough_re ne ""} { apply-inline $ln $line strikethrough $strikethrough_re [string length $::cfg_strikethrough_marker] }
         }
     }
 }
@@ -1494,12 +1613,12 @@ proc toc-collect {} {
 
 proc toc-show {} {
     set headings [toc-collect]
-    if {![llength $headings]} { set-msg "aucun titre trouvé"; return }
+    if {![llength $headings]} { set-msg [t toc_no_headings]; return }
 
     set w .toc
     catch {destroy $w}
     toplevel $w
-    wm title $w "Table des matières"
+    wm title $w [t toc_title]
     wm resizable $w 1 0
     wm transient $w .
 
@@ -2168,7 +2287,7 @@ proc tui-browser {} {
         set usable [expr {$rows - 3}]
 
         if {$nf == 0} {
-            set m "No documents yet. Press n to create one."
+            set m [t br_no_docs]
             tui-move [expr {$rows/2}] [expr {max(0, ($cols-[string length $m])/2)}]
             puts -nonewline $m
         } else {
@@ -2204,11 +2323,11 @@ proc tui-browser {} {
             while {$row < $rows-2} { tui-move $row 0; puts -nonewline "\033\[K"; incr row }
         }
         set plu [expr {$fcount != 1 ? "s" : ""}]
-        if {$::cfg_help_bar ne ""} { tui-help [expr {$rows-2}] "\u21b5 open  n new  d delete  r rename  q quit   $::cfg_lbl_help help" $cols }
+        if {$::cfg_help_bar ne ""} { tui-help [expr {$rows-2}] [t br_help_tui $::cfg_lbl_help] $cols }
         set clk [expr {[status-zone-of clock] ne "" ? "  [clock format [clock seconds] -format {%H:%M}]" : ""}]
         if {$msg ne ""} { tui-bar [expr {$rows-1}] " $msg" "${clk} " $cols; set msg ""
         } else { tui-bar [expr {$rows-1}] " [string map [list $::HOME_DIR ~] $::DOCS_DIR_DEFAULT]" \
-                         " $fcount file${plu}${clk} " $cols }
+                         " [t br_files $fcount $plu]${clk} " $cols }
         flush stdout
 
         set key [tui-getch]
@@ -2228,16 +2347,16 @@ proc tui-browser {} {
                 if {$name ne ""} {
                     if {[file extension $name] eq ""} { append name $::FILE_EXT }
                     set fp [file join $dir $name]
-                    if {[file exists $fp]} { set msg "'$name' already exists"
+                    if {[file exists $fp]} { set msg [t br_exists $name]
                     } else { close [open $fp w]; return $fp }
                 }
             }
             d {
                 if {$cfi >= 0} {
                     lassign [lindex $entries $cfi] _ dir name
-                    if {[tui-confirm "delete '$name'?" $rows $cols]} {
+                    if {[tui-confirm [t br_delete $name] $rows $cols]} {
                         file delete [file join $dir $name]
-                        set msg "deleted '$name'"; if {$sel > 0} { incr sel -1 }
+                        set msg [t br_deleted $name]; if {$sel > 0} { incr sel -1 }
                     }
                 }
             }
@@ -2248,8 +2367,8 @@ proc tui-browser {} {
                     if {$new ne ""} {
                         if {[file extension $new] eq ""} { append new $::FILE_EXT }
                         set np [file join $dir $new]
-                        if {[file exists $np]} { set msg "'$new' already exists"
-                        } else { file rename [file join $dir $name] $np; set msg "renamed \u2192 '$new'" }
+                        if {[file exists $np]} { set msg [t br_exists $new]
+                        } else { file rename [file join $dir $name] $np; set msg [t br_renamed $new] }
                     }
                 }
             }
@@ -2284,7 +2403,7 @@ proc tui-toc {lines rows cols {cy 1} {filepath ""}} {
         set usable [expr {$rows-3}]
         if {$sel < $scroll}            { set scroll $sel }
         if {$sel >= $scroll + $usable} { set scroll [expr {$sel - $usable + 1}] }
-        tui-attr bold; tui-fill 0 " Table of contents" $cols; tui-attr off
+        tui-attr bold; tui-fill 0 " [t toc_title]" $cols; tui-attr off
         for {set i 0} {$i < $usable} {incr i} {
             set idx [expr {$scroll+$i}]
             if {$idx >= [llength $headings]} break
@@ -2295,8 +2414,8 @@ proc tui-toc {lines rows cols {cy 1} {filepath ""}} {
             if {$idx == $sel} { tui-attr off }
         }
         set nh [llength $headings]; set plu [expr {$nh != 1 ? "s" : ""}]
-        tui-help [expr {$rows-2}] "\u21b5 jump  esc cancel" $cols
-        tui-bar  [expr {$rows-1}] " $nh heading${plu}" "" $cols
+        tui-help [expr {$rows-2}] [t toc_jump_bar] $cols
+        tui-bar  [expr {$rows-1}] " [t toc_headings $nh $plu]" "" $cols
         flush stdout
         switch -- [tui-getch] {
             ESC      { return {} }
@@ -2381,7 +2500,7 @@ proc tui-editor {filepath} {
             set ish_cache {}; set isd_cache {}
             foreach _l $lines {
                 lappend ish_cache [expr {[parse-heading $_l] ne ""}]
-                lappend isd_cache [parse-dim $_l]
+                lappend isd_cache [parse-comment $_l]
             }
             unset _l
         }
@@ -2621,12 +2740,12 @@ proc tui-editor {filepath} {
                     set fh [open $filepath w]; fconfigure $fh -encoding utf-8
                     puts -nonewline $fh "[join $lines \n]\n"; close $fh
                     cursor-put $filepath $cy $cx
-                    set dirty 0; set message "saved"; set msg_time [clock seconds]
+                    set dirty 0; set message [t ed_saved]; set msg_time [clock seconds]
                     set clear_sel 0
                 } elseif {$key eq $::cfg_tui_close || $key eq "ESC"} {
                     if {$dirty} {
                         lassign [tui-size] rows cols
-                        if {[tui-confirm "save before closing?" $rows $cols]} {
+                        if {[tui-confirm [t ed_save_before_tui] $rows $cols]} {
                             set fh [open $filepath w]; fconfigure $fh -encoding utf-8
                             puts -nonewline $fh "[join $lines \n]\n"; close $fh
                         }
