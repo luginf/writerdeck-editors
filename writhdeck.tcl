@@ -157,8 +157,9 @@ set ::cfg_dark_mode          1
 set ::cfg_key_dark_toggle    "Control-d"
 set ::cfg_line_numbers   0
 set ::cfg_cursor_restore 1
-set ::cfg_block_cursor   1
-set ::cfg_blink_cursor   0
+set ::cfg_block_cursor_gui     1
+set ::cfg_block_cursor_console 1
+set ::cfg_blink_cursor         0
 set ::cfg_line_spacing   100
 set ::cfg_bar_height     18
 set ::cfg_lang           "en"
@@ -236,8 +237,11 @@ proc ini-load {} {
                 key_dark_toggle      { set ::cfg_key_dark_toggle   $v }
                 line_numbers     { set ::cfg_line_numbers   $v }
                 cursor_restore   { set ::cfg_cursor_restore $v }
-                block_cursor     { set ::cfg_block_cursor   [string is true $v] }
-                blink_cursor     { set ::cfg_blink_cursor   [string is true $v] }
+                block_cursor         { set ::cfg_block_cursor_gui     [string is true $v]
+                                       set ::cfg_block_cursor_console [string is true $v] }
+                block_cursor_gui     { set ::cfg_block_cursor_gui     [string is true $v] }
+                block_cursor_console { set ::cfg_block_cursor_console [string is true $v] }
+                blink_cursor         { set ::cfg_blink_cursor         [string is true $v] }
                 line_spacing     { set ::cfg_line_spacing   $v }
                 bar_height       { set ::cfg_bar_height     $v }
                 lang             { set ::cfg_lang           $v }
@@ -300,8 +304,9 @@ proc ini-save {} {
     puts $fh "\[behaviour\]"
     puts $fh "line_numbers   = $::cfg_line_numbers"
     puts $fh "cursor_restore = $::cfg_cursor_restore"
-    puts $fh "block_cursor   = $::cfg_block_cursor"
-    puts $fh "blink_cursor   = $::cfg_blink_cursor"
+    puts $fh "block_cursor_gui     = $::cfg_block_cursor_gui"
+    puts $fh "block_cursor_console = $::cfg_block_cursor_console"
+    puts $fh "blink_cursor         = $::cfg_blink_cursor"
     puts $fh "# lang: interface language — en or fr"
     puts $fh "lang           = $::cfg_lang"
     puts $fh "# help_bar: text shown in the shortcuts bar, empty to hide"
@@ -1009,8 +1014,8 @@ text .ed.t \
     -insertbackground $fg \
     -selectbackground $bg_sel \
     -blockcursor 0 \
-    -insertwidth [expr {$::cfg_block_cursor ? 0 : 2}] \
-    -insertofftime [expr {$::cfg_block_cursor ? 0 : ($::cfg_blink_cursor ? 300 : 0)}] \
+    -insertwidth [expr {$::cfg_block_cursor_gui ? 0 : 2}] \
+    -insertofftime [expr {$::cfg_block_cursor_gui ? 0 : ($::cfg_blink_cursor ? 300 : 0)}] \
     -borderwidth 0 -padx $::cfg_margin_width -pady $::cfg_margin_height \
     -undo 1
 
@@ -1192,7 +1197,7 @@ set ::cursor_prev_pos      ""
 set ::cursor_mode          ""   ;# "tag" | "block" | ""
 
 proc cursor-update {} {
-    if {!$::cfg_block_cursor} return
+    if {!$::cfg_block_cursor_gui} return
     if {$::cursor_blink_id ne ""} { after cancel $::cursor_blink_id; set ::cursor_blink_id "" }
     set ::cursor_blink_visible 1
     catch {
@@ -1225,7 +1230,7 @@ proc cursor-update {} {
 
 proc cursor-blink-tick {} {
     set ::cursor_blink_id ""
-    if {!$::cfg_block_cursor || !$::cfg_blink_cursor} return
+    if {!$::cfg_block_cursor_gui || !$::cfg_blink_cursor} return
     set ::cursor_blink_visible [expr {!$::cursor_blink_visible}]
     catch {
         set ch [.ed.t get insert "insert +1c"]
@@ -1244,7 +1249,7 @@ proc cursor-setup {} {
     if {$::cursor_blink_id ne ""} { after cancel $::cursor_blink_id; set ::cursor_blink_id "" }
     set ::cursor_mode ""; set ::cursor_prev_pos ""
     catch {
-        if {$::cfg_block_cursor} {
+        if {$::cfg_block_cursor_gui} {
             .ed.t configure -blockcursor 0 -insertwidth 0 -insertofftime 0 \
                 -insertbackground $::fg
             .ed.t tag configure cur -background $::fg -foreground $::bg
@@ -1510,8 +1515,8 @@ proc apply-theme {} {
     catch { .ed.t configure -bg $bg -fg $fg \
                 -insertbackground $fg -selectbackground $bg_sel \
                 -blockcursor 0 \
-                -insertwidth [expr {$::cfg_block_cursor ? 0 : 2}] \
-                -insertofftime [expr {$::cfg_block_cursor ? 0 : ($::cfg_blink_cursor ? 300 : 0)}] }
+                -insertwidth [expr {$::cfg_block_cursor_gui ? 0 : 2}] \
+                -insertofftime [expr {$::cfg_block_cursor_gui ? 0 : ($::cfg_blink_cursor ? 300 : 0)}] }
     catch { cursor-setup }
     catch { .ed.t tag configure heading       -foreground $c_heading }
     catch { .ed.t tag configure comment       -foreground $c_comment }
@@ -1900,8 +1905,8 @@ proc ini-reload {} {
     catch { .ed.t configure -font $f \
         -padx $::cfg_margin_width -pady $::cfg_margin_height \
         -blockcursor 0 \
-        -insertwidth [expr {$::cfg_block_cursor ? 0 : 2}] \
-        -insertofftime [expr {$::cfg_block_cursor ? 0 : ($::cfg_blink_cursor ? 300 : 0)}] }
+        -insertwidth [expr {$::cfg_block_cursor_gui ? 0 : 2}] \
+        -insertofftime [expr {$::cfg_block_cursor_gui ? 0 : ($::cfg_blink_cursor ? 300 : 0)}] }
     catch { .ed.t tag configure heading -font [list Mono $::cfg_font_size bold] }
     catch { apply-theme }
     catch { apply-line-spacing }
@@ -1932,7 +1937,11 @@ proc tui-init {} {
     fconfigure stdin  -blocking 1 -translation binary -buffering none
     fconfigure stdout -encoding utf-8 -buffering full
     puts -nonewline "\033\[?25l\033\[2J\033\[?2004h"
-    puts -nonewline [expr {$::cfg_blink_cursor ? "\033\[1 q" : "\033\[2 q"}]
+    set _cq [expr {$::cfg_block_cursor_console \
+        ? ($::cfg_blink_cursor ? 1 : 2) \
+        : ($::cfg_blink_cursor ? 5 : 6)}]
+    puts -nonewline "\033\[${_cq} q"
+    unset _cq
     tui-reverse-video [expr {!$::cfg_dark_mode}]
 }
 
