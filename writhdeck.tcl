@@ -1140,7 +1140,6 @@ set ::cursor_blink_id      ""
 set ::cursor_blink_visible 1
 set ::cursor_prev_pos      ""
 set ::cursor_mode          ""   ;# "tag" | "block" | ""
-set ::cursor_char_w        0
 
 proc cursor-update {} {
     if {!$::cfg_block_cursor} return
@@ -1166,7 +1165,7 @@ proc cursor-update {} {
             }
             if {$::cursor_mode ne "block"} {
                 .ed.t configure -blockcursor 1 \
-                    -insertwidth $::cursor_char_w \
+                    -insertwidth 0 \
                     -insertofftime 0 \
                     -insertbackground $::fg
                 set ::cursor_mode "block"
@@ -1198,7 +1197,6 @@ proc cursor-setup {} {
     set ::cursor_mode ""; set ::cursor_prev_pos ""
     catch {
         if {$::cfg_block_cursor} {
-            set ::cursor_char_w [font measure [.ed.t cget -font] "0"]
             .ed.t configure -blockcursor 0 -insertwidth 0 -insertofftime 0 \
                 -insertbackground $::fg
             .ed.t tag configure cur -background $::fg -foreground $::bg
