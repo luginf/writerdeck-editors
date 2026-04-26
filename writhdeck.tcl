@@ -77,6 +77,8 @@ set ::session_headings {}
 
 file mkdir $::DOCS_DIR_DEFAULT
 set ::CURSOR_FILE [file join $::DOCS_DIR_DEFAULT ".cursors.json"]
+set ::cursor_cache {}
+set ::cursor_cache_valid 0
 
 # ─── cursor persistence (JSON, compatible with writhdeck.lua) ──────────────────
 proc cursors-load {} {
@@ -107,9 +109,9 @@ proc cursors-save {d} {
 
 proc cursor-get {filepath} {
     if {!$::cfg_cursor_restore} { return {1 0} }
-    set d [cursors-load]
-    if {[dict exists $d $filepath]} {
-        lassign [dict get $d $filepath] cy cx
+    if {!$::cursor_cache_valid} { set ::cursor_cache [cursors-load]; set ::cursor_cache_valid 1 }
+    if {[dict exists $::cursor_cache $filepath]} {
+        lassign [dict get $::cursor_cache $filepath] cy cx
         return [list [expr {$cy + 1}] $cx]
     }
     return {1 0}
@@ -117,9 +119,9 @@ proc cursor-get {filepath} {
 
 proc cursor-put {filepath cy cx} {
     if {!$::cfg_cursor_restore} return
-    set d [cursors-load]
-    dict set d $filepath [list [expr {$cy - 1}] $cx]
-    cursors-save $d
+    if {!$::cursor_cache_valid} { set ::cursor_cache [cursors-load]; set ::cursor_cache_valid 1 }
+    dict set ::cursor_cache $filepath [list [expr {$cy - 1}] $cx]
+    cursors-save $::cursor_cache
 }
 
 # ─── ini ──────────────────────────────────────────────────────────────────────
@@ -608,15 +610,23 @@ proc br-dirs {} {
 
 proc br-multi {} { return [expr {[llength [br-dirs]] > 1}] }
 
+set ::cached_heading_re       ""
+set ::cached_comment_re       ""
+set ::cached_bold_re          ""
+set ::cached_italic_re        ""
+set ::cached_underline_re     ""
+set ::cached_strikethrough_re ""
+set ::hl_line_cache {}
+set ::hl_last_count 0
+
 proc heading-re {} {
     set m [regsub -all {[\\^$.|?*+()\[\]{}]} $::cfg_heading_marker {\\&}]
     return "^\\s*${m}\\s*(.+?)\\s*${m}\\s*$"
 }
 
 proc parse-comment {line} {
-    if {$::cfg_comment_marker eq ""} { return 0 }
-    set m [regsub -all {[\\^$.|?*+()\[\]{}]} $::cfg_comment_marker {\\&}]
-    return [regexp "^${m}" $line]
+    if {$::cached_comment_re eq ""} { return 0 }
+    return [regexp -- $::cached_comment_re $line]
 }
 
 proc inline-re {marker} {
@@ -637,9 +647,25 @@ proc apply-inline {ln line tag re mlen} {
 }
 
 proc parse-heading {line} {
-    if {[regexp [heading-re] $line -> title]}              { return [string trim $title] }
+    if {[regexp $::cached_heading_re $line -> title]}      { return [string trim $title] }
     if {[regexp {^\s*(#{1,6})\s+(.+)$} $line -> _ title]} { return [string trim $title] }
     return ""
+}
+
+proc markers-update {} {
+    set ::cached_heading_re [heading-re]
+    if {$::cfg_comment_marker ne ""} {
+        set m [regsub -all {[\\^$.|?*+()\[\]{}]} $::cfg_comment_marker {\\&}]
+        set ::cached_comment_re "^${m}"
+    } else {
+        set ::cached_comment_re ""
+    }
+    set ::cached_bold_re          [inline-re $::cfg_bold_marker]
+    set ::cached_italic_re        [inline-re $::cfg_italic_marker]
+    set ::cached_underline_re     [inline-re $::cfg_underline_marker]
+    set ::cached_strikethrough_re [inline-re $::cfg_strikethrough_marker]
+    set ::hl_line_cache {}
+    set ::hl_last_count 0
 }
 
 proc fmt-meta {path} {
@@ -683,6 +709,8 @@ proc status-build {tokens state} {
     }
     return $result
 }
+
+markers-update
 
 if {!$::no_gui} {
 wm title . "Writhdeck"
@@ -1628,25 +1656,33 @@ bind .br.mid.lst    <$::cfg_key_fullscreen> { toggle-fullscreen }
 
 # ─── headings & TOC ───────────────────────────────────────────────────────────
 proc highlight-headings {} {
-    foreach t {heading comment bold italic underline strikethrough marker} {
-        .ed.t tag remove $t 1.0 end
-    }
-    set bold_re          [inline-re $::cfg_bold_marker]
-    set italic_re        [inline-re $::cfg_italic_marker]
-    set underline_re     [inline-re $::cfg_underline_marker]
-    set strikethrough_re [inline-re $::cfg_strikethrough_marker]
     set last [lindex [split [.ed.t index end] .] 0]
+    set full [expr {$last != $::hl_last_count}]
+    if {$full} {
+        set ::hl_last_count $last
+        set ::hl_line_cache {}
+        foreach t {heading comment bold italic underline strikethrough marker} {
+            .ed.t tag remove $t 1.0 end
+        }
+    }
     for {set ln 1} {$ln < $last} {incr ln} {
         set line [.ed.t get $ln.0 "$ln.0 lineend"]
+        if {!$full} {
+            if {[dict exists $::hl_line_cache $ln] && [dict get $::hl_line_cache $ln] eq $line} continue
+            foreach t {heading comment bold italic underline strikethrough marker} {
+                .ed.t tag remove $t $ln.0 "$ln.0 lineend"
+            }
+        }
+        dict set ::hl_line_cache $ln $line
         if {[parse-heading $line] ne ""} {
             .ed.t tag add heading $ln.0 "$ln.0 lineend"
         } elseif {[parse-comment $line]} {
             .ed.t tag add comment $ln.0 "$ln.0 lineend"
         } else {
-            if {$bold_re ne ""}          { apply-inline $ln $line bold          $bold_re          [string length $::cfg_bold_marker] }
-            if {$italic_re ne ""}        { apply-inline $ln $line italic        $italic_re        [string length $::cfg_italic_marker] }
-            if {$underline_re ne ""}     { apply-inline $ln $line underline     $underline_re     [string length $::cfg_underline_marker] }
-            if {$strikethrough_re ne ""} { apply-inline $ln $line strikethrough $strikethrough_re [string length $::cfg_strikethrough_marker] }
+            if {$::cached_bold_re ne ""}          { apply-inline $ln $line bold          $::cached_bold_re          [string length $::cfg_bold_marker] }
+            if {$::cached_italic_re ne ""}        { apply-inline $ln $line italic        $::cached_italic_re        [string length $::cfg_italic_marker] }
+            if {$::cached_underline_re ne ""}     { apply-inline $ln $line underline     $::cached_underline_re     [string length $::cfg_underline_marker] }
+            if {$::cached_strikethrough_re ne ""} { apply-inline $ln $line strikethrough $::cached_strikethrough_re [string length $::cfg_strikethrough_marker] }
         }
     }
 }
@@ -1901,6 +1937,7 @@ proc show-browser {} {
 
 proc ini-reload {} {
     ini-load
+    markers-update
     set f [list Mono $::cfg_font_size]
     catch { .ed.t configure -font $f \
         -padx $::cfg_margin_width -pady $::cfg_margin_height \
