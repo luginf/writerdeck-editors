@@ -160,6 +160,7 @@ proc cursor-put {filepath cy cx} {
 set ::cfg_margin_width   60
 set ::cfg_margin_height  40
 set ::cfg_font_size      13
+set ::cfg_font_family    "Mono"
 set ::cfg_bg             "#1a1a1a"
 set ::cfg_fg             "#e8e8e8"
 set ::cfg_bg_bar         "#2a2a2a"
@@ -245,6 +246,7 @@ proc ini-load {} {
                 margin_width     { set ::cfg_margin_width   $v }
                 margin_height    { set ::cfg_margin_height  $v }
                 font_size        { set ::cfg_font_size      $v }
+                font_family      { set ::cfg_font_family    $v }
                 color_bg         { set ::cfg_bg             $v }
                 color_fg         { set ::cfg_fg             $v }
                 color_bg_bar     { set ::cfg_bg_bar         $v }
@@ -335,6 +337,7 @@ proc ini-save {} {
     puts $fh "margin_cols    = $::cfg_margin_cols"
     puts $fh "margin_rows    = $::cfg_margin_rows"
     puts $fh "font_size      = $::cfg_font_size"
+    puts $fh "font_family    = $::cfg_font_family"
     puts $fh "line_spacing   = $::cfg_line_spacing"
     puts $fh "bar_height     = $::cfg_bar_height"
     puts $fh "heading_marker = $::cfg_heading_marker"
@@ -624,12 +627,19 @@ proc toggle-dark-mode {} {
 }
 
 # ─── config ───────────────────────────────────────────────────────────────────
-set font    [list Mono $::cfg_font_size]
+# validate font family (font families is a Tk command — skip in TUI)
+if {!$::no_gui && $::cfg_font_family ne "Mono"} {
+    if {[lsearch -exact [font families] $::cfg_font_family] < 0} {
+        puts stderr "writhdeck: font family '$::cfg_font_family' not found, using Mono"
+        set ::cfg_font_family "Mono"
+    }
+}
+set font    [list $::cfg_font_family $::cfg_font_size]
 set bar_pady [expr {$::cfg_bar_height > 0 \
     ? min(2, max(0, ($::cfg_bar_height - 6) / 2)) : 0}]
 set font_sm  [expr {$::cfg_bar_height > 0 \
-    ? [list Mono [expr {-max(6, $::cfg_bar_height - 2*$bar_pady)}]] \
-    : {Mono 10}}]
+    ? [list $::cfg_font_family [expr {-max(6, $::cfg_bar_height - 2*$bar_pady)}]] \
+    : [list $::cfg_font_family 10]}]
 lassign [theme-colors] bg fg bg_bar fg_bar bg_sel
 set fg_dim  "#666666"
 # expose as globals for use in procs
@@ -1118,15 +1128,15 @@ proc ed-yscroll {first last} {
 after idle apply-line-spacing
 .ed.t tag configure heading \
     -foreground $::cfg_color_heading \
-    -font [list Mono $::cfg_font_size bold]
+    -font [list $::cfg_font_family $::cfg_font_size bold]
 .ed.t tag configure comment \
     -foreground $::cfg_color_comment
 .ed.t tag configure bold \
     -foreground $::cfg_color_markup \
-    -font [list Mono $::cfg_font_size bold]
+    -font [list $::cfg_font_family $::cfg_font_size bold]
 .ed.t tag configure italic \
     -foreground $::cfg_color_markup \
-    -font [list Mono $::cfg_font_size italic]
+    -font [list $::cfg_font_family $::cfg_font_size italic]
 .ed.t tag configure underline \
     -foreground $::cfg_color_markup \
     -underline 0
@@ -1863,10 +1873,11 @@ proc apply-line-spacing {} {
 
 proc font-resize {delta} {
     set ::cfg_font_size [expr {max(6, min(72, $::cfg_font_size + $delta))}]
-    set f [list Mono $::cfg_font_size]
+    set f [list $::cfg_font_family $::cfg_font_size]
+    set ::font $f
     .ed.t configure -font $f
     foreach side {l r} { catch { .ed.pw.${side}.t configure -font $f } }
-    .ed.t tag configure heading -font [list Mono $::cfg_font_size bold]
+    .ed.t tag configure heading -font [list $::cfg_font_family $::cfg_font_size bold]
     apply-line-spacing
 }
 
@@ -1935,12 +1946,12 @@ proc help-dialog {} {
         ]
 
     text $w.t \
-        -font {Mono 11} -state normal \
+        -font [list $::cfg_font_family 11] -state normal \
         -bg "#1a1a1a" -fg "#e8e8e8" \
         -borderwidth 0 -padx 16 -pady 12 \
         -width 60 -height $height \
         -cursor arrow
-    $w.t tag configure heading -foreground "#aaaaaa" -font {Mono 11 bold}
+    $w.t tag configure heading -foreground "#aaaaaa" -font [list $::cfg_font_family 11 bold]
     $w.t tag configure key     -foreground "#7ab0d4"
     $w.t tag configure desc    -foreground "#e8e8e8"
 
@@ -2130,13 +2141,21 @@ proc show-browser {} {
 proc ini-reload {} {
     ini-load
     markers-update
-    set f [list Mono $::cfg_font_size]
+    if {$::cfg_font_family ne "Mono" && \
+            [lsearch -exact [font families] $::cfg_font_family] < 0} {
+        set ::cfg_font_family "Mono"
+    }
+    set f [list $::cfg_font_family $::cfg_font_size]
+    set ::font $f
     catch { .ed.t configure -font $f \
         -padx $::cfg_margin_width -pady $::cfg_margin_height \
         -blockcursor 0 \
         -insertwidth [expr {$::cfg_block_cursor_gui ? 0 : 2}] \
         -insertofftime [expr {$::cfg_block_cursor_gui ? 0 : ($::cfg_blink_cursor ? 300 : 0)}] }
-    catch { .ed.t tag configure heading -font [list Mono $::cfg_font_size bold] }
+    catch { .ed.t tag configure heading -font [list $::cfg_font_family $::cfg_font_size bold] }
+    foreach side {l r} {
+        catch { .ed.pw.${side}.t configure -font $f }
+    }
     catch { apply-theme }
     catch { apply-line-spacing }
 }
