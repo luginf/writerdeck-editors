@@ -1189,6 +1189,8 @@ after idle cursor-setup
 # ─── search bar (hidden until Ctrl+F) ────────────────────────────────────────
 set ::search_term  ""
 set ::search_count ""
+set ::search_ed    ".ed.t"
+set ::toc_ed       ".ed.t"
 
 frame .ed.sf -bg $bg_bar
 label .ed.sf.lbl -text " Find: " -bg $bg_bar -fg $fg_bar -font $font_sm
@@ -1476,6 +1478,7 @@ proc save-as {} {
 }
 
 proc search-open {} {
+    set ::search_ed [active-ed]
     if {![winfo ismapped .ed.sf]} {
         pack .ed.sf -before .ed.bar -side bottom -fill x
     }
@@ -1487,6 +1490,7 @@ proc search-open {} {
 }
 
 proc replace-open {} {
+    set ::search_ed [active-ed]
     if {![winfo ismapped .ed.sf]} {
         pack .ed.sf -before .ed.bar -side bottom -fill x
     }
@@ -1499,15 +1503,16 @@ proc replace-open {} {
 
 proc replace-one {} {
     if {$::search_term eq ""} return
+    set t $::search_ed
     set repl [.ed.sf.r.e get]
     set slen [string length $::search_term]
-    set pos [.ed.t search -nocase -exact -- $::search_term insert end]
+    set pos [.ed.t search -nocase -exact -- $::search_term [$t index insert] end]
     if {$pos eq ""} { set pos [.ed.t search -nocase -exact -- $::search_term 1.0 end] }
     if {$pos ne ""} {
         .ed.t delete $pos "$pos + ${slen} chars"
         .ed.t insert $pos $repl
-        .ed.t mark set insert "$pos + [string length $repl] chars"
-        .ed.t see insert
+        $t mark set insert "$pos + [string length $repl] chars"
+        $t see insert
         search-update
     }
 }
@@ -1531,11 +1536,12 @@ proc replace-all {} {
 proc search-close {} {
     .ed.t tag remove found 1.0 end
     catch { pack forget .ed.sf }
-    focus .ed.t
+    catch { focus $::search_ed }
     set ::search_count ""
 }
 
 proc search-update {} {
+    set t $::search_ed
     set term [.ed.sf.e get]
     .ed.t tag remove found 1.0 end
     set ::search_count ""
@@ -1551,23 +1557,25 @@ proc search-update {} {
     .ed.t tag configure found -background "#5a3a00" -foreground "#ffdd88"
     set plural [expr {$count != 1 ? "s" : ""}]
     set ::search_count " $count match${plural}"
-    set pos [.ed.t search -nocase -forwards -- $term insert end]
+    set pos [.ed.t search -nocase -forwards -- $term [$t index insert] end]
     if {$pos eq ""} { set pos [.ed.t search -nocase -forwards -- $term 1.0 end] }
-    if {$pos ne ""} { .ed.t mark set insert $pos; .ed.t see insert }
+    if {$pos ne ""} { $t mark set insert $pos; $t see insert }
 }
 
 proc search-next {} {
     if {$::search_term eq ""} return
-    set pos [.ed.t search -nocase -forwards -- $::search_term "insert + 1 chars" end]
+    set t $::search_ed
+    set pos [.ed.t search -nocase -forwards -- $::search_term "[$t index insert] + 1 chars" end]
     if {$pos eq ""} { set pos [.ed.t search -nocase -forwards -- $::search_term 1.0 end] }
-    if {$pos ne ""} { .ed.t mark set insert $pos; .ed.t see insert }
+    if {$pos ne ""} { $t mark set insert $pos; $t see insert }
 }
 
 proc search-prev {} {
     if {$::search_term eq ""} return
-    set pos [.ed.t search -nocase -backwards -- $::search_term insert 1.0]
+    set t $::search_ed
+    set pos [.ed.t search -nocase -backwards -- $::search_term [$t index insert] 1.0]
     if {$pos eq ""} { set pos [.ed.t search -nocase -backwards -- $::search_term end 1.0] }
-    if {$pos ne ""} { .ed.t mark set insert $pos; .ed.t see insert }
+    if {$pos ne ""} { $t mark set insert $pos; $t see insert }
 }
 
 proc close-editor {} {
@@ -1778,6 +1786,7 @@ proc toc-collect {} {
 }
 
 proc toc-show {} {
+    set ::toc_ed [active-ed]
     set headings [toc-collect]
     if {![llength $headings]} { set-msg [t toc_no_headings]; return }
 
@@ -1821,7 +1830,7 @@ proc toc-show {} {
     bind $w.lst <ButtonRelease-1> "[list toc-jump $w $headings]; break"
     bind $w     <Escape>   [list destroy $w]
     bind $w     <$::cfg_key_toc> [list destroy $w]
-    bind $w     <Destroy>  { after idle { catch { focus .ed.t } } }
+    bind $w     <Destroy>  { after idle { catch { focus $::toc_ed } } }
     focus $w.lst
 }
 
@@ -1832,9 +1841,10 @@ proc toc-jump {w headings} {
     lassign [lindex $headings $selIdx] ln title
     dict set ::session_headings $::filename $selIdx
     destroy $w
-    .ed.t mark set insert $ln.0
-    .ed.t see insert
-    focus .ed.t
+    set t $::toc_ed
+    $t mark set insert $ln.0
+    $t see insert
+    focus $t
 }
 
 bind .ed.t <$::cfg_key_toc>          { toc-show;   break }
@@ -2019,6 +2029,7 @@ proc split-make-pane {side bg fg bg_bar bg_sel sp1 sp2} {
     scrollbar ${frame}.sb -orient vertical -bg $bg_bar -troughcolor $bg
     .ed.t peer create ${frame}.t \
         -wrap word -font [.ed.t cget -font] \
+        -width 1 \
         -bg $bg -fg $fg \
         -insertbackground $fg -selectbackground $bg_sel \
         -blockcursor 0 -insertwidth 2 -insertofftime 0 \
@@ -2061,6 +2072,7 @@ proc split-make-pane {side bg fg bg_bar bg_sel sp1 sp2} {
 }
 
 proc split-open {} {
+    wm geometry . [winfo width .]x[winfo height .]
     lassign [theme-colors] bg fg bg_bar fg_bar bg_sel
     set sp1 [.ed.t cget -spacing1]
     set sp2 [.ed.t cget -spacing2]
