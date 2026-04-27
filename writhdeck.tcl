@@ -228,6 +228,8 @@ set ::cfg_key_fullscreen   "Alt-Return"
 set ::cfg_key_error        ""
 set ::fullscreen 0
 
+proc marker-val {v} { expr {$v eq "0" ? "" : $v} }
+
 proc ini-load {} {
     if {![file exists $::INI_FILE]} { ini-save; return }
     set fh [open $::INI_FILE r]
@@ -235,7 +237,7 @@ proc ini-load {} {
     while {[gets $fh line] >= 0} {
         set line [string trim $line]
         if {$line eq "" || [string match "#*" $line] || [string match {\[*} $line]} continue
-        if {[regexp {^(\w+)\s*=\s*(.+)$} $line -> key val]} {
+        if {[regexp {^(\w+)\s*=(.*)$} $line -> key val]} {
             set v [string trim $val]
             switch [string trim $key] {
                 margin_width     { set ::cfg_margin_width   $v }
@@ -251,12 +253,12 @@ proc ini-load {} {
                 color_bg_sel     { set ::cfg_bg_sel         $v }
                 heading_marker   { set ::cfg_heading_marker  $v }
                 color_heading    { set ::cfg_color_heading   $v }
-                dim_marker       { set ::cfg_comment_marker  $v }
-                comment_marker   { set ::cfg_comment_marker  $v }
-                bold_marker          { set ::cfg_bold_marker          $v }
-                italic_marker        { set ::cfg_italic_marker        $v }
-                underline_marker     { set ::cfg_underline_marker     $v }
-                strikethrough_marker { set ::cfg_strikethrough_marker $v }
+                dim_marker       { set ::cfg_comment_marker  [marker-val $v] }
+                comment_marker   { set ::cfg_comment_marker  [marker-val $v] }
+                bold_marker          { set ::cfg_bold_marker          [marker-val $v] }
+                italic_marker        { set ::cfg_italic_marker        [marker-val $v] }
+                underline_marker     { set ::cfg_underline_marker     [marker-val $v] }
+                strikethrough_marker { set ::cfg_strikethrough_marker [marker-val $v] }
                 color_dim            { set ::cfg_color_comment        $v }
                 color_comment        { set ::cfg_color_comment        $v }
                 color_markup         { set ::cfg_color_markup         $v }

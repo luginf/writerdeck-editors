@@ -62,11 +62,11 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 | Key | Default | Description |
 |---|---|---|
 | `heading_marker` | `=` | Heading delimiter (`= title =`) |
-| `comment_marker` | `%` | Line comment prefix |
-| `bold_marker` | `**` | Bold inline marker |
-| `italic_marker` | `//` | Italic inline marker |
-| `underline_marker` | `__` | Underline inline marker |
-| `strikethrough_marker` | `--` | Strikethrough inline marker |
+| `comment_marker` | `%` | Line comment prefix; set to `0` or leave empty to disable |
+| `bold_marker` | `**` | Bold inline marker; set to `0` or leave empty to disable |
+| `italic_marker` | `//` | Italic inline marker; set to `0` or leave empty to disable |
+| `underline_marker` | `__` | Underline inline marker; set to `0` or leave empty to disable |
+| `strikethrough_marker` | `--` | Strikethrough inline marker; set to `0` or leave empty to disable |
 | `margin_width` | `60` | Horizontal padding (px, GUI) |
 | `margin_cols` | `6` | Horizontal margin (cols, TUI) |
 | `font_size` | `13` | Font size (GUI) |
