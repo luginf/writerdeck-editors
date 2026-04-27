@@ -125,6 +125,7 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 | Ctrl+Space | Jump to next space |
 | Ctrl+Shift+Space | Jump to previous space |
 | F11 | Table of contents |
+| F3 | Split view — toggle vertical split (GUI only) |
 | Alt+Enter | Fullscreen toggle |
 | Tab | Insert 4 spaces |
 | Shift+↑↓←→ | Extend selection |

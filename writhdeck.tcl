@@ -225,8 +225,10 @@ set ::cfg_key_next_space   "Control-space"
 set ::cfg_key_prev_space   "Control-Shift-space"
 set ::cfg_key_redo         "Control-y"
 set ::cfg_key_fullscreen   "Alt-Return"
+set ::cfg_key_split        "F3"
 set ::cfg_key_error        ""
 set ::fullscreen 0
+set ::split_mode 0
 
 proc marker-val {v} { expr {$v eq "0" ? "" : $v} }
 
@@ -309,6 +311,7 @@ proc ini-load {} {
                 key_prev_space   { set ::cfg_key_prev_space   $v }
                 key_redo         { set ::cfg_key_redo         $v }
                 key_fullscreen   { set ::cfg_key_fullscreen   $v }
+                key_split        { set ::cfg_key_split        $v }
                 toc_key          { set ::cfg_key_toc          $v }
                 ln_key           { set ::cfg_key_line_numbers $v }
                 fullscreen_key   { set ::cfg_key_fullscreen   $v }
@@ -381,6 +384,7 @@ proc ini-save {} {
     puts $fh "key_prev_space   = $::cfg_key_prev_space"
     puts $fh "key_redo         = $::cfg_key_redo"
     puts $fh "key_fullscreen   = $::cfg_key_fullscreen"
+    puts $fh "key_split        = $::cfg_key_split"
     puts $fh "key_dark_toggle  = $::cfg_key_dark_toggle"
     puts $fh ""
     puts $fh "\[colors\]"
@@ -452,6 +456,7 @@ proc keys-init {} {
     set ::cfg_tui_prev_space   [tk-key-to-tui $::cfg_key_prev_space]
     set ::cfg_tui_redo         [tk-key-to-tui $::cfg_key_redo]
     set ::cfg_tui_dark_toggle  [tk-key-to-tui $::cfg_key_dark_toggle]
+    set ::cfg_tui_split        [tk-key-to-tui $::cfg_key_split]
     # labels for UI display
     set ::cfg_lbl_save       [key-label $::cfg_key_save]
     set ::cfg_lbl_close      [key-label $::cfg_key_close]
@@ -470,6 +475,7 @@ proc keys-init {} {
     set ::cfg_lbl_next_space [key-label $::cfg_key_next_space]
     set ::cfg_lbl_prev_space [key-label $::cfg_key_prev_space]
     set ::cfg_lbl_redo       [key-label $::cfg_key_redo]
+    set ::cfg_lbl_split      [key-label $::cfg_key_split]
     # conflict detection
     set pairs [list \
         key_save $::cfg_tui_save \
@@ -542,6 +548,7 @@ set ::i18n {
         help_k_toc         "Table of contents"
         help_k_help        "This help"
         help_shift_arrows  "Shift+Arrows  Extend selection"
+        help_k_split       "Split view (toggle)"
         dlg_cancel         "Cancel"
         goto_title         "Go to line"
         goto_prompt        "Line:"
@@ -587,6 +594,7 @@ set ::i18n {
         help_k_toc         "Table des matières"
         help_k_help        "Cette aide"
         help_shift_arrows  "Maj+Flèches   Étendre la sélection"
+        help_k_split       "Vue partagée (bascule)"
         dlg_cancel         "Annuler"
         goto_title         "Aller à la ligne"
         goto_prompt        "Ligne :"
@@ -1217,9 +1225,10 @@ set ::hl_after_id ""
 set ::ln_last_count 0
 
 proc gui-status-state {} {
+    set t [active-ed]
     set fn    [expr {$::filename eq "" ? "\[new\]" : [file tail $::filename]}]
-    lassign [split [.ed.t index insert] .] ln col
-    set total [expr {[lindex [split [.ed.t index end] .] 0] - 1}]
+    lassign [split [$t index insert] .] ln col
+    set total [expr {[lindex [split [$t index end] .] 0] - 1}]
     set words $::gui_wc
     set chars $::gui_cc
     set clk   [clock format [clock seconds] -format "%H:%M"]
@@ -1386,7 +1395,11 @@ proc ln-toggle {} {
             -padx 4 -pady [.ed.t cget -pady] \
             -highlightthickness 0 -wrap none \
             -cursor arrow
-        pack .ed.ln -in .ed -side left -fill y -before .ed.t
+        if {$::split_mode} {
+            # in split mode, defer line numbers until split is closed
+        } else {
+            pack .ed.ln -side left -fill y -before .ed.t
+        }
         set ::cfg_line_numbers 1
         ln-update
     }
@@ -1408,6 +1421,7 @@ proc load-file {path} {
 
     .ed.t edit reset
     .ed.t edit modified false
+    catch { .ed.pw.r.t edit reset; .ed.pw.r.t edit modified false }
 
     .ed.t configure -undo 1
     .ed.t edit separator
@@ -1425,6 +1439,7 @@ proc load-file {path} {
     }
     .ed.t mark set insert ${cy}.${cx}
     .ed.t see insert
+    catch { .ed.pw.l.t mark set insert ${cy}.${cx}; .ed.pw.l.t see insert }
     ed-status
     if {[status-zone-of words] ne "" || [status-zone-of chars] ne ""} { wc-flush }
     ln-update
@@ -1438,7 +1453,7 @@ proc save-file {} {
     close $fh
     set ::dirty 0
     .ed.t edit modified false
-    lassign [split [.ed.t index insert] .] cy cx
+    lassign [split [[primary-ed] index insert] .] cy cx
     cursor-put $::filename $cy $cx
     set-msg [t ed_saved]
 }
@@ -1564,9 +1579,10 @@ proc close-editor {} {
         if {$r eq "yes"}    save-file
     }
     if {$::filename ne ""} {
-        lassign [split [.ed.t index insert] .] cy cx
+        lassign [split [[primary-ed] index insert] .] cy cx
         cursor-put $::filename $cy $cx
     }
+    split-close
     set ::filename ""
     set ::dirty    0
     set ::msg      ""
@@ -1622,6 +1638,14 @@ proc apply-theme {} {
     catch { .ed.sf.r.e configure -bg $bg -fg $fg -insertbackground $fg }
     catch { .ed.sf.r.one configure -bg $bg_bar -fg $fg_bar }
     catch { .ed.sf.r.all configure -bg $bg_bar -fg $fg_bar }
+    # split-view peers
+    catch { .ed.pw configure -bg $bg_bar }
+    foreach side {l r} {
+        catch { .ed.pw.$side configure -bg $bg }
+        catch { .ed.pw.${side}.t configure -bg $bg -fg $fg \
+                    -insertbackground $fg -selectbackground $bg_sel }
+        catch { .ed.pw.${side}.sb configure -bg $bg_bar -troughcolor $bg }
+    }
 }
 
 proc quit-app {} {
@@ -1633,7 +1657,7 @@ proc quit-app {} {
         if {$r eq "yes"} save-file
     }
     if {$::filename ne ""} {
-        lassign [split [.ed.t index insert] .] cy cx
+        lassign [split [[primary-ed] index insert] .] cy cx
         cursor-put $::filename $cy $cx
     }
     exit
@@ -1646,13 +1670,14 @@ wm protocol . WM_DELETE_WINDOW quit-app
 proc ed-paste {} {
     # On X11, Tk's default <<Paste>> does not replace the selection.
     # We delete it manually so paste behaves consistently across platforms.
-    if {![catch {::tk::GetSelection .ed.t CLIPBOARD} clip]} {
-        .ed.t configure -autoseparators 0
-        .ed.t edit separator
-        catch { .ed.t delete sel.first sel.last }
-        .ed.t insert insert $clip
-        .ed.t edit separator
-        .ed.t configure -autoseparators 1
+    set t [active-ed]
+    if {![catch {::tk::GetSelection $t CLIPBOARD} clip]} {
+        $t configure -autoseparators 0
+        $t edit separator
+        catch { $t delete sel.first sel.last }
+        $t insert insert $clip
+        $t edit separator
+        $t configure -autoseparators 1
     }
 }
 
@@ -1706,6 +1731,7 @@ proc toggle-fullscreen {} {
 
 bind .ed.t          <$::cfg_key_fullscreen> { toggle-fullscreen; break }
 bind .br.mid.lst    <$::cfg_key_fullscreen> { toggle-fullscreen }
+bind .ed.t          <$::cfg_key_split>      { split-toggle; break }
 
 # ─── headings & TOC ───────────────────────────────────────────────────────────
 proc highlight-headings {} {
@@ -1820,12 +1846,16 @@ proc apply-line-spacing {} {
     set extra [expr {int($lh * ($::cfg_line_spacing - 100) / 100.0)}]
     set sp [expr {max(0, $extra)}]
     .ed.t configure -spacing1 $sp -spacing2 $sp -spacing3 0
+    foreach side {l r} {
+        catch { .ed.pw.${side}.t configure -spacing1 $sp -spacing2 $sp -spacing3 0 }
+    }
 }
 
 proc font-resize {delta} {
     set ::cfg_font_size [expr {max(6, min(72, $::cfg_font_size + $delta))}]
     set f [list Mono $::cfg_font_size]
     .ed.t configure -font $f
+    foreach side {l r} { catch { .ed.pw.${side}.t configure -font $f } }
     .ed.t tag configure heading -font [list Mono $::cfg_font_size bold]
     apply-line-spacing
 }
@@ -1847,7 +1877,7 @@ proc help-dialog {} {
 
     set hm $::cfg_heading_marker
     set sections {}
-    set height 22
+    set height 23
     set _ts [clock seconds]
     lappend sections "DATE & TIME" [list \
         "Current time"  [clock format $_ts -format "%H:%M:%S"] \
@@ -1880,6 +1910,7 @@ proc help-dialog {} {
             [key-label $::cfg_key_prev_space]   "Jump to prev space" \
             [key-label $::cfg_key_toc]          "Table of contents  (${hm}title${hm})" \
             [key-label $::cfg_key_fullscreen]   "Fullscreen" \
+            [key-label $::cfg_key_split]        "Split view (toggle)" \
             [key-label $::cfg_key_help]         "Help" \
         ] \
         "BROWSER" [list \
@@ -1927,32 +1958,153 @@ proc help-dialog {} {
     focus $w.ok
 }
 
+proc active-ed {} {
+    if {$::split_mode} {
+        set f [focus]
+        if {$f eq ".ed.pw.r.t"} { return ".ed.pw.r.t" }
+        return ".ed.pw.l.t"
+    }
+    return ".ed.t"
+}
+
 proc jump-next-space {} {
-    set pos [.ed.t search " " "insert+1c" end]
+    set t [active-ed]
+    set pos [$t search " " "insert+1c" end]
     if {$pos ne ""} {
-        .ed.t mark set insert $pos
-        .ed.t see insert
+        $t mark set insert $pos
+        $t see insert
         cursor-update
     }
 }
 
 proc jump-prev-space {} {
-    set pos [.ed.t search -backwards " " "insert" 1.0]
+    set t [active-ed]
+    set pos [$t search -backwards " " "insert" 1.0]
     if {$pos ne ""} {
-        .ed.t mark set insert $pos
-        .ed.t see insert
+        $t mark set insert $pos
+        $t see insert
         cursor-update
     }
 }
 
 proc goto-dialog {} {
+    set t [active-ed]
     set n [input-dialog [t goto_title] [t goto_prompt]]
     if {[string is integer -strict $n] && $n >= 1} {
-        set last [lindex [split [.ed.t index end] .] 0]
-        .ed.t mark set insert [expr {min($n, $last - 1)}].0
-        .ed.t see insert
-        focus .ed.t
+        set last [lindex [split [$t index end] .] 0]
+        $t mark set insert [expr {min($n, $last - 1)}].0
+        $t see insert
+        focus $t
     }
+}
+
+# ─── split view ───────────────────────────────────────────────────────────────
+set ::split_ln_was_on 0
+
+proc primary-ed {} {
+    if {$::split_mode} { return ".ed.pw.l.t" }
+    return ".ed.t"
+}
+
+proc split-peer-modified {t} {
+    if {[$t edit modified]} { set ::dirty 1; $t edit modified false }
+    ed-status
+    if {$::hl_after_id ne ""} { after cancel $::hl_after_id }
+    set ::hl_after_id [after 300 { set ::hl_after_id ""; highlight-headings; ln-update }]
+}
+
+proc split-make-pane {side bg fg bg_bar bg_sel sp1 sp2} {
+    set frame ".ed.pw.$side"
+    frame $frame -bg $bg
+    scrollbar ${frame}.sb -orient vertical -bg $bg_bar -troughcolor $bg
+    .ed.t peer create ${frame}.t \
+        -wrap word -font [.ed.t cget -font] \
+        -bg $bg -fg $fg \
+        -insertbackground $fg -selectbackground $bg_sel \
+        -blockcursor 0 -insertwidth 2 -insertofftime 0 \
+        -borderwidth 0 -padx $::cfg_margin_width -pady $::cfg_margin_height \
+        -yscrollcommand "${frame}.sb set" \
+        -spacing1 $sp1 -spacing2 $sp2 -spacing3 0
+    ${frame}.sb configure -command "${frame}.t yview"
+    pack ${frame}.sb -side right -fill y
+    pack ${frame}.t  -fill both  -expand 1
+    set t ${frame}.t
+    bind $t <KeyRelease>                { ed-status }
+    bind $t <ButtonRelease>             { ed-status }
+    bind $t <<Modified>>                [list split-peer-modified $t]
+    bind $t <$::cfg_key_save>           { save-file; break }
+    bind $t <$::cfg_key_save_as>        { save-as; break }
+    bind $t <$::cfg_key_close>          { close-editor; break }
+    bind $t <Escape>                    { close-editor; break }
+    bind $t <$::cfg_key_paste>          { ed-paste; break }
+    bind $t <$::cfg_key_select_all>     "[list $t tag add sel 1.0 end]; break"
+    bind $t <$::cfg_key_dark_toggle>    { toggle-dark-mode; break }
+    bind $t <Tab>                       "[list $t insert insert {    }]; break"
+    bind $t <$::cfg_key_goto>           { goto-dialog; break }
+    bind $t <$::cfg_key_help>           { help-dialog; break }
+    bind $t <$::cfg_key_undo>           "[list catch [list $t edit undo]]; ed-status; break"
+    bind $t <$::cfg_key_redo>           "[list catch [list $t edit redo]]; ed-status; break"
+    bind $t <$::cfg_key_find>           { search-open; break }
+    bind $t <$::cfg_key_replace>        { replace-open; break }
+    bind $t <$::cfg_key_open>           { open-file-dialog; break }
+    bind $t <$::cfg_key_next_space>     { jump-next-space; break }
+    bind $t <$::cfg_key_prev_space>     { jump-prev-space; break }
+    bind $t <$::cfg_key_toc>            { toc-show; break }
+    bind $t <$::cfg_key_line_numbers>   { ln-toggle; break }
+    bind $t <$::cfg_key_fullscreen>     { toggle-fullscreen; break }
+    bind $t <$::cfg_key_split>          { split-toggle; break }
+    bind $t <Control-equal>             { font-resize  1; break }
+    bind $t <Control-plus>              { font-resize  1; break }
+    bind $t <Control-KP_Add>            { font-resize  1; break }
+    bind $t <Control-minus>             { font-resize -1; break }
+    bind $t <Control-KP_Subtract>       { font-resize -1; break }
+}
+
+proc split-open {} {
+    lassign [theme-colors] bg fg bg_bar fg_bar bg_sel
+    set sp1 [.ed.t cget -spacing1]
+    set sp2 [.ed.t cget -spacing2]
+    set cur [.ed.t index insert]
+
+    pack forget .ed.t .ed.sb
+    if {[winfo exists .ed.ln]} {
+        set ::split_ln_was_on 1
+        pack forget .ed.ln
+    } else {
+        set ::split_ln_was_on 0
+    }
+
+    panedwindow .ed.pw -orient horizontal -bg $bg_bar -sashwidth 4 -sashpad 0 -sashrelief flat
+    split-make-pane l $bg $fg $bg_bar $bg_sel $sp1 $sp2
+    split-make-pane r $bg $fg $bg_bar $bg_sel $sp1 $sp2
+    .ed.pw add .ed.pw.l -stretch always
+    .ed.pw add .ed.pw.r -stretch always
+    pack .ed.pw -fill both -expand 1 -before .ed.bar
+
+    .ed.pw.l.t mark set insert $cur
+    .ed.pw.l.t see insert
+
+    set ::split_mode 1
+    focus .ed.pw.l.t
+}
+
+proc split-close {} {
+    if {!$::split_mode} return
+    catch { .ed.t mark set insert [.ed.pw.l.t index insert] }
+    pack forget .ed.pw
+    destroy .ed.pw
+    pack .ed.sb  -side right -fill y
+    if {$::split_ln_was_on && [winfo exists .ed.ln]} {
+        pack .ed.ln -side left  -fill y
+    }
+    pack .ed.t   -fill both  -expand 1
+    .ed.t see insert
+    set ::split_mode 0
+    focus .ed.t
+}
+
+proc split-toggle {} {
+    if {$::split_mode} { split-close } else { split-open }
 }
 
 # ─── frame switching ──────────────────────────────────────────────────────────
