@@ -1373,6 +1373,7 @@ proc ln-toggle {} {
     if {[winfo exists .ed.ln]} {
         destroy .ed.ln
         set ::cfg_line_numbers 0
+        set ::ln_last_count 0
     } else {
         set bg_bar [.ed.bar cget -bg]
         set fg_dim [lindex [.ed.bar.left cget -fg] 0]
