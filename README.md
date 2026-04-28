@@ -121,6 +121,7 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 - Block cursor: rectangle with inverted colors (`block_cursor_gui = 1`)
 - Configurable status bar height (`bar_height`); font size adapts automatically
 - **Vertical split view** (F3): divide the editor into two independent panes on the same document; each pane scrolls and positions the cursor independently
+- Confirm dialogs: `Tab` to move between buttons, `Return` to confirm, `Escape` to cancel, `y` / `n` for direct answer
 
 **Shortcuts — Editor**
 
@@ -186,6 +187,7 @@ Those are the default keys. Most of them are fully customisable in the writhdeck
 - Help dialog shows selection word/char count when text is selected
 - Cursor shape configurable: block or bar, blinking or steady (`block_cursor_console`, `blink_cursor`)
 - Confirm dialogs centered on screen by default (`console_center_alert = 1`)
+- Confirm dialogs: `y` / `n` to answer directly, `Escape` to cancel, `Return` to confirm the focused button
 - After closing a file, returns to browser if `browser = 1` (default)
 
 **Shortcuts — Editor**
