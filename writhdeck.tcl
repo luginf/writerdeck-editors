@@ -72,24 +72,30 @@ if {!$::no_gui} {
                 puts stderr "writhdeck: --gui: cannot load Tk: $err"; exit 1
             }
         } else {
-            # On Unix, check that the display socket actually exists before trying Tk —
-            # package require Tk can hang indefinitely if DISPLAY is stale/unreachable.
-            proc _display-socket-exists {} {
+            # On Unix/POSIX, guard against hanging on a stale DISPLAY/WAYLAND_DISPLAY.
+            # Returns:  1 = socket confirmed (try Tk)
+            #           0 = no display env var (native display like Haiku — try Tk, won't hang)
+            #          -1 = env var set but socket missing (stale, skip Tk)
+            proc _display-socket-check {} {
                 if {[info exists ::env(WAYLAND_DISPLAY)] && $::env(WAYLAND_DISPLAY) ne ""} {
                     set dir [expr {[info exists ::env(XDG_RUNTIME_DIR)] ? $::env(XDG_RUNTIME_DIR) : ""}]
                     if {$dir ne "" && [file exists [file join $dir $::env(WAYLAND_DISPLAY)]]} { return 1 }
+                    return -1
                 }
                 if {[info exists ::env(DISPLAY)] && $::env(DISPLAY) ne ""} {
                     if {[regexp {^:(\d+)} $::env(DISPLAY) -> num]} {
-                        return [file exists "/tmp/.X11-unix/X$num"]
+                        if {[file exists "/tmp/.X11-unix/X$num"]} { return 1 }
                     }
+                    return -1
                 }
                 return 0
             }
-            if {![_display-socket-exists] || [catch {package require Tk}]} {
+            set _dsc [_display-socket-check]
+            if {$_dsc < 0 || [catch {package require Tk}]} {
                 set ::no_gui 1
             }
-            rename _display-socket-exists {}
+            unset _dsc
+            rename _display-socket-check {}
         }
     }
 }

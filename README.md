@@ -19,6 +19,8 @@ You will need to have Tcl/Tk on your system. On Debian-based OS, just
 
 On Windows you can get binaries for the Tcl runtime there: https://www.tcl-lang.org/software/tcltk/bindist.html
 
+On Haiku OS, Tcl/Tk is available via HaikuPorts (`pkgman install tcl tk`). GUI and TUI modes both work. Clipboard integration (copy/paste via Ctrl+C/X/V) is not supported on Haiku as it relies on xclip/xsel/wl-copy.
+
 Then:
 
 ```
@@ -261,6 +263,7 @@ WrithDeck running within termux on a Meebook M6 Android eBook Reader, using a bl
 - There is no non-wrap mode (and it's not a planned feature).
 - There is no tab mode (and it's not a planned feature).
 - On very long texts (above 80,000 words) and slow CPU computer (1.1 Ghz Celeron from 2013), the cursor and typing might be slowed down. It has been optimized in comparison to first version, but if necessary turn off the words and chars count in the status bar. You can still access writing statistics in the help.
+- On Haiku OS, clipboard integration (Ctrl+C / Ctrl+X / Ctrl+V) is not available as it relies on xclip/xsel/wl-copy which are not present on Haiku.
 
 
 ## Credits
