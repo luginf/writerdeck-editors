@@ -9,7 +9,7 @@ Whether you're writing on a Raspberry Pi Zero with an E-ink screen, on a an andr
 
 It has GUI and TUI dual mode with similar behaviors, and is fully configurable.
 
-![WrithDeck Screenshot 01](writhdeck_screen01.png)
+![WrithDeck Screenshot 01](media/writhdeck_screen01.png)
 
 ## Usage
 
@@ -59,7 +59,7 @@ When both `--gui` and `--no-gui` are given, `--no-gui` takes precedence.
 - **Help dialog**: shows selection word/char count when text is selected (GUI and TUI)
 
 
-![WrithDeck Screenshot 02](writhdeck_screen02.png)
+![WrithDeck Screenshot 02](media/writhdeck_screen02.png)
 
 ---
 
@@ -238,11 +238,11 @@ Those are the default keys. Most of them are fully customisable in the writhdeck
 
 WrithDeck running on a Raspberry Zero W (goto chapter mode):
 
-![WrithDeck Screenshot 03](writhdeck_screen03.jpg)
+![WrithDeck Screenshot 03](media/writhdeck_screen03.jpg)
 
-WrithDeck running within termux on a Meebook M6 Android eBook Reader:
+WrithDeck running within termux on a Meebook M6 Android eBook Reader, using a bluetooth keyboard:
 
-![WrithDeck Screenshot 04](writhdeck_screen04.jpg)
+![WrithDeck Screenshot 04](media/writhdeck_screen04.jpg)
 
 
 ## Known bugs and limitations
