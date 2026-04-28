@@ -2635,6 +2635,8 @@ proc tui-getch {} {
             "\x1b\[18~"   { return F7    }  "\x1b\[19~"   { return F8    }
             "\x1b\[20~"   { return F9    }  "\x1b\[21~"   { return F10   }
             "\x1b\[23~"   { return F11   }  "\x1b\[24~"   { return F12   }
+            "\x1bOA"      { return UP    }  "\x1bOB"      { return DOWN  }
+            "\x1bOC"      { return RIGHT }  "\x1bOD"      { return LEFT  }
             "\x1bOP"      { return F1    }  "\x1bOQ"      { return F2    }
             "\x1bOR"      { return F3    }  "\x1bOS"      { return F4    }
             "\x1b\[\[A"   { return F1    }  "\x1b\[\[B"   { return F2    }
@@ -2695,15 +2697,17 @@ proc tui-build-layout {lines width cacheVar} {
     foreach line $lines {
         set entry [lindex $cache $li]
         if {$entry ne "" && [lindex $entry 4] == $width && [lindex $entry 0] eq $line} {
-            set segs [lindex $entry 1]
-            set is_h [lindex $entry 2]
-            set is_d [lindex $entry 3]
+            set segs  [lindex $entry 1]
+            set is_h  [lindex $entry 2]
+            set is_d  [lindex $entry 3]
+            set spans [lindex $entry 5]          ;# may be empty on first pass
+            lset new_cache $li [list $line $segs $is_h $is_d $width $spans]
         } else {
             set segs [tui-wrap-line $line $width]
             set is_h [expr {[parse-heading $line] ne ""}]
             set is_d [parse-comment $line]
+            lset new_cache $li [list $line $segs $is_h $is_d $width {}]  ;# spans lazy
         }
-        lset new_cache $li [list $line $segs $is_h $is_d $width]
         set lnum [expr {$li + 1}]
         foreach seg $segs {
             lappend vrows [list $lnum [lindex $seg 0] [lindex $seg 1]]
@@ -2714,6 +2718,37 @@ proc tui-build-layout {lines width cacheVar} {
     }
     set cache $new_cache
     return [list $vrows $ish $isd]
+}
+
+proc tui-patch-vrows {dl} {
+    upvar 1 lines lines vrows vrows ish_cache ish_cache isd_cache isd_cache \
+            layout_cache layout_cache tw tw dirty_line dirty_line
+    set idx [expr {$dl - 1}]
+    set line [lindex $lines $idx]
+    set old_entry [lindex $layout_cache $idx]
+    if {$old_entry eq "" || [lindex $old_entry 4] != $tw} { return 0 }
+    if {[lindex $old_entry 0] eq $line} { set dirty_line -1; return 1 }
+    set old_nrows [llength [lindex $old_entry 1]]
+    set new_segs  [tui-wrap-line $line $tw]
+    set is_h      [expr {[parse-heading $line] ne ""}]
+    set is_d      [parse-comment $line]
+    set spans     [tui-parse-inline-spans $line]
+    # binary search for first vrow belonging to line dl
+    set n [llength $vrows]; set lo 0; set hi [expr {$n-1}]; set vs -1
+    while {$lo <= $hi} {
+        set mid [expr {($lo+$hi)/2}]
+        if {[lindex [lindex $vrows $mid] 0] < $dl} { set lo [expr {$mid+1}] } \
+        else { set vs $mid; set hi [expr {$mid-1}] }
+    }
+    if {$vs < 0} { return 0 }
+    set new_entries {}
+    foreach seg $new_segs { lappend new_entries [list $dl [lindex $seg 0] [lindex $seg 1]] }
+    set vrows [lreplace $vrows $vs [expr {$vs+$old_nrows-1}] {*}$new_entries]
+    lset layout_cache $idx [list $line $new_segs $is_h $is_d $tw $spans]
+    lset ish_cache $idx $is_h
+    lset isd_cache $idx $is_d
+    set dirty_line -1
+    return 1
 }
 
 proc tui-l2v {vrows cy cx} {
@@ -2900,8 +2935,26 @@ proc tui-push-undo {} {
 }
 
 proc tui-mark-dirty {} {
-    upvar 1 dirty dirty wc_dirty wc_dirty wrap_dirty wrap_dirty
-    set dirty 1; set wc_dirty 1; set wrap_dirty 1
+    upvar 1 dirty dirty wc_dirty wc_dirty wrap_dirty wrap_dirty dirty_line dirty_line
+    set dirty 1; set wc_dirty 1; set wrap_dirty 1; set dirty_line -1
+}
+
+proc tui-mark-line-dirty {} {
+    upvar 1 dirty dirty wc_dirty wc_dirty wrap_dirty wrap_dirty dirty_line dirty_line \
+            cy cy wc_cached wc_cached cc_cached cc_cached layout_cache layout_cache lines lines
+    set dirty 1
+    if {!$wrap_dirty} { set dirty_line $cy }
+    if {!$wc_dirty} {
+        set idx [expr {$cy - 1}]
+        set old_entry [lindex $layout_cache $idx]
+        if {$old_entry ne ""} {
+            set old_line [lindex $old_entry 0]
+            set new_line [lindex $lines $idx]
+            incr wc_cached [expr {[llength [regexp -all -inline {\S+} $new_line]] \
+                                 - [llength [regexp -all -inline {\S+} $old_line]]}]
+            incr cc_cached [expr {[string length $new_line] - [string length $old_line]}]
+        } else { set wc_dirty 1 }
+    }
 }
 
 proc tui-compute-wc {} {
@@ -3164,6 +3217,7 @@ proc tui-editor {filepath} {
     set ish_cache {}; set isd_cache {}
     set layout_cache {}
     set prev_rows -1; set prev_cols -1
+    set dirty_line -1
 
     while 1 {
         set ::tui_size_n 14
@@ -3186,7 +3240,12 @@ proc tui-editor {filepath} {
 
         if {$wrap_dirty || $tw != $prev_tw} {
             lassign [tui-build-layout $lines $tw layout_cache] vrows ish_cache isd_cache
-            set prev_tw $tw; set wrap_dirty 0
+            set prev_tw $tw; set wrap_dirty 0; set dirty_line -1
+        } elseif {$dirty_line > 0} {
+            if {![tui-patch-vrows $dirty_line]} {
+                lassign [tui-build-layout $lines $tw layout_cache] vrows ish_cache isd_cache
+                set dirty_line -1
+            }
         }
         lassign [tui-l2v $vrows $cy $cx] vi scx
 
@@ -3203,30 +3262,27 @@ proc tui-editor {filepath} {
         for {set i 0} {$i < $th} {incr i} {
             set vi2 [expr {$scroll_y + $i}]
             set srow [expr {$i + $roff}]
+            tui-move $srow 0
             if {$vi2 >= [llength $vrows]} {
-                tui-move $srow 0; puts -nonewline "\033\[K"
+                puts -nonewline [string repeat { } $cols]
                 continue
             }
             lassign [lindex $vrows $vi2] li scol ecol
             set seg [string range [lindex $lines [expr {$li-1}]] $scol [expr {$ecol-1}]]
             set ish [lindex $ish_cache [expr {$li-1}]]
             set isd [lindex $isd_cache [expr {$li-1}]]
+            set seg_len [string length $seg]
 
-            # left margin + line number
-            tui-move $srow 0; puts -nonewline "\033\[K"
+            # left margin + line number — written inline from col 0 (no tui-move within line)
             if {$ln_w > 0 && $scol == 0} {
                 tui-attr dim
-                tui-move $srow $marg
-                puts -nonewline [format "%[expr {$ln_w-1}]d " $li]
+                puts -nonewline "[string repeat { } $marg][format "%[expr {$ln_w-1}]d " $li]"
                 tui-attr off
-            } elseif {$ln_w > 0} {
-                tui-move $srow $marg
-                puts -nonewline [string repeat " " $ln_w]
+            } else {
+                puts -nonewline [string repeat { } $coff]
             }
 
-            # text (with selection highlight)
-            tui-move $srow $coff
-            set seg_len [string length $seg]
+            # text (with selection highlight) — cursor now at col $coff
             set sf -1; set st -1
             if {$sel_r ne {}} {
                 if      {$li > $_sly && $li < $_ely}         { set sf 0;                              set st $seg_len } \
@@ -3245,9 +3301,17 @@ proc tui-editor {filepath} {
                     tui-attr $_a; puts -nonewline $seg; tui-attr off
                 }
             } else {
-                tui-render-inline-seg $seg $scol \
-                    [tui-parse-inline-spans [lindex $lines [expr {$li-1}]]] $sf $st
+                set _lc_entry [lindex $layout_cache [expr {$li-1}]]
+                set _spans [lindex $_lc_entry 5]
+                if {$_spans eq {}} {
+                    set _spans [tui-parse-inline-spans [lindex $lines [expr {$li-1}]]]
+                    lset layout_cache [expr {$li-1}] [lreplace $_lc_entry 5 5 $_spans]
+                }
+                tui-render-inline-seg $seg $scol $_spans $sf $st
             }
+            # right padding — fill to end of line with spaces (no \033[K)
+            tui-attr off
+            puts -nonewline [string repeat { } [expr {$tw - $seg_len + $marg + 1}]]
         }
 
         # ── scroll indicator ──────────────────────────────────────────────────
@@ -3393,7 +3457,7 @@ proc tui-editor {filepath} {
                 } elseif {$cx > 0} {
                     set l [lindex $lines [expr {$cy-1}]]
                     lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-2}]][string range $l $cx end]"
-                    incr cx -1; tui-mark-dirty
+                    incr cx -1; tui-mark-line-dirty
                 } elseif {$cy > 1} {
                     set cx [string length [lindex $lines [expr {$cy-2}]]]
                     lset lines [expr {$cy-2}] "[lindex $lines [expr {$cy-2}]][lindex $lines [expr {$cy-1}]]"
@@ -3409,7 +3473,7 @@ proc tui-editor {filepath} {
                     set l [lindex $lines [expr {$cy-1}]]
                     if {$cx < [string length $l]} {
                         lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-1}]][string range $l [expr {$cx+1}] end]"
-                        tui-mark-dirty
+                        tui-mark-line-dirty
                     } elseif {$cy < [llength $lines]} {
                         lset lines [expr {$cy-1}] "${l}[lindex $lines $cy]"
                         set lines [lreplace $lines $cy $cy]; tui-mark-dirty
@@ -3429,7 +3493,7 @@ proc tui-editor {filepath} {
                 if {$sel_anchor ne ""} { lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; tui-mark-dirty }
                 set l [lindex $lines [expr {$cy-1}]]
                 lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-1}]]    [string range $l $cx end]"
-                incr cx 4; tui-mark-dirty
+                incr cx 4; tui-mark-line-dirty
             }
             default {
                 set c [scan $key %c]
@@ -3639,7 +3703,7 @@ proc tui-editor {filepath} {
                     if {$sel_anchor ne ""} { lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; tui-mark-dirty }
                     set l [lindex $lines [expr {$cy-1}]]
                     lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-1}]]${key}[string range $l $cx end]"
-                    incr cx [string length $key]; tui-mark-dirty
+                    incr cx [string length $key]; tui-mark-line-dirty
                 }
             }
         }

@@ -1,6 +1,8 @@
  
 # WrithDeck 
-  
+
+![WrithDeck Logo](media/writhdeck_logo.png)
+
 WrithDeck is a distraction-free text editor designed for writers using a dedicated writerdeck, whether it's a DIY prototype or a computer configured specifically for that purpose. It's fast and easy to customize. WrithDeck can run as a clean graphical application or directly in a terminal or TTY, all from a single file with no installation required.
 
 It includes customizable inline syntax highlighting, a file browser, split view, chapter navigation through a table of contents, and a fully themeable interface, all in under 3,800 lines (160 Kb) of Tcl/Tk.
@@ -19,7 +21,7 @@ You will need to have Tcl/Tk on your system. On Debian-based OS, just
 
 On Windows you can get binaries for the Tcl runtime there: https://www.tcl-lang.org/software/tcltk/bindist.html
 
-On Haiku OS, Tcl/Tk is available via HaikuPorts (`pkgman install tcl tk`). GUI and TUI modes both work. Clipboard integration (copy/paste via Ctrl+C/X/V) is not supported on Haiku as it relies on xclip/xsel/wl-copy.
+On Haiku OS, Tcl/Tk is available via HaikuPorts (`pkgman install tcl tk`). GUI and TUI modes both work.
 
 Then:
 
@@ -112,7 +114,7 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 | `cursor_restore` | `1` | Restore cursor position on reopen |
 | `lang` | `en` | Interface language (`en` or `fr`) |
 | `dark_mode` | `1` | Dark theme; `0` = light (Solarized-style) |
-
+ 
 **`[keys]`** — all actions are rebindable: `key_save`, `key_close`, `key_find`, `key_replace`, `key_goto`, `key_open`, `key_undo`, `key_redo`, `key_help`, `key_toc`, `key_line_numbers`, `key_fullscreen`, `key_split`, `key_dark_toggle`, `key_next_space`, `key_prev_space`. Use Tk key names (`Control-s`, `Alt-Return`, `F11`, etc.).
 
 **`[colors]`** — `color_heading`, `color_comment`, `color_markup`, `color_bg`, `color_fg`, `color_bg_bar`, `color_fg_bar`, `color_bg_sel` + `_alt` variants for light mode.
@@ -120,7 +122,9 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 
 ---
 
-## GUI mode (default, requires Tk)
+## GUI mode 
+
+It is the default, and requires Tk
 
 **Display**
 - Graphical window with scrollable editor and file browser
@@ -188,7 +192,10 @@ Those are the default keys. Most of them are fully customisable in the writhdeck
 
 ---
 
-## TUI mode (`--no-gui` / `--tui` / `--ng`, pure terminal via ANSI escapes)
+## TUI mode 
+
+Activated through `--no-gui` / `--tui` / `--ng`, or if no windowing system is available. It's pure TTY/terminal via ANSI escapes.
+
 
 **Display**
 - Identical feature set to the GUI editor, rendered in the terminal
@@ -262,8 +269,8 @@ WrithDeck running within termux on a Meebook M6 Android eBook Reader, using a bl
 - In TUI mode sometimes when you resize the terminal window, some artefacts might appear. Just load the help with ctrl+h twice, it will refresh the screen.
 - There is no non-wrap mode (and it's not a planned feature).
 - There is no tab mode (and it's not a planned feature).
+- The split window mode is only for GUI (might be adapted to TUI later)
 - On very long texts (above 80,000 words) and slow CPU computer (1.1 Ghz Celeron from 2013), the cursor and typing might be slowed down. It has been optimized in comparison to first version, but if necessary turn off the words and chars count in the status bar. You can still access writing statistics in the help.
-- On Haiku OS, clipboard integration (Ctrl+C / Ctrl+X / Ctrl+V) is not available as it relies on xclip/xsel/wl-copy which are not present on Haiku.
 
 
 ## Credits
