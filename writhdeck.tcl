@@ -241,6 +241,7 @@ set ::cfg_key_prev_space   "Control-Shift-space"
 set ::cfg_key_redo         "Control-y"
 set ::cfg_key_fullscreen   "Alt-Return"
 set ::cfg_key_split        "F3"
+set ::cfg_key_split_focus  "F4"
 set ::cfg_key_error        ""
 set ::fullscreen 0
 set ::split_mode 0
@@ -331,6 +332,7 @@ proc ini-load {} {
                 key_redo         { set ::cfg_key_redo         $v }
                 key_fullscreen   { set ::cfg_key_fullscreen   $v }
                 key_split        { set ::cfg_key_split        $v }
+                key_split_focus  { set ::cfg_key_split_focus  $v }
                 toc_key          { set ::cfg_key_toc          $v }
                 ln_key           { set ::cfg_key_line_numbers $v }
                 fullscreen_key   { set ::cfg_key_fullscreen   $v }
@@ -410,6 +412,7 @@ proc ini-save {} {
     puts $fh "key_redo         = $::cfg_key_redo"
     puts $fh "key_fullscreen   = $::cfg_key_fullscreen"
     puts $fh "key_split        = $::cfg_key_split"
+    puts $fh "key_split_focus  = $::cfg_key_split_focus"
     puts $fh "key_dark_toggle  = $::cfg_key_dark_toggle"
     puts $fh ""
     puts $fh "\[colors\]"
@@ -501,6 +504,7 @@ proc keys-init {} {
     set ::cfg_lbl_prev_space [key-label $::cfg_key_prev_space]
     set ::cfg_lbl_redo       [key-label $::cfg_key_redo]
     set ::cfg_lbl_split      [key-label $::cfg_key_split]
+    set ::cfg_lbl_split_focus [key-label $::cfg_key_split_focus]
     # conflict detection
     set pairs [list \
         key_save $::cfg_tui_save \
@@ -577,6 +581,7 @@ set ::i18n {
         help_k_help        "This help"
         help_shift_arrows  "Shift+Arrows  Extend selection"
         help_k_split       "Split view (toggle)"
+        help_k_split_focus "Split view — cycle focus"
         dlg_yes            "Yes"
         dlg_no             "No"
         dlg_cancel         "Cancel"
@@ -628,6 +633,7 @@ set ::i18n {
         help_k_help        "Cette aide"
         help_shift_arrows  "Maj+Flèches   Étendre la sélection"
         help_k_split       "Vue partagée (bascule)"
+        help_k_split_focus "Vue partagée — changer de fenêtre"
         dlg_yes            "Oui"
         dlg_no             "Non"
         dlg_cancel         "Annuler"
@@ -948,6 +954,9 @@ catch {
 
 wm minsize . 500 400
 
+bind Button <FocusIn>  { %W configure -state active }
+bind Button <FocusOut> { %W configure -state normal }
+
 # ─── browser frame ────────────────────────────────────────────────────────────
 frame .br -bg $bg
 
@@ -1128,6 +1137,8 @@ proc confirm-dialog {msg {default yes}} {
     pack $w.f -anchor e -padx 8
     bind $w <Return> { catch { [focus] invoke } }
     bind $w <Escape> { set ::dlg_val no; destroy .cdlg }
+    bind $w y        { set ::dlg_val yes; destroy .cdlg }
+    bind $w n        { set ::dlg_val no;  destroy .cdlg }
     if {$default eq "yes"} { after idle [list focus $w.f.y] } else { after idle [list focus $w.f.n] }
     set ::dlg_val no
     tkwait window $w
@@ -1795,7 +1806,8 @@ proc apply-theme {} {
     foreach side {l r} {
         catch { .ed.pw.$side configure -bg $bg }
         catch { .ed.pw.${side}.t configure -bg $bg -fg $fg \
-                    -insertbackground $fg -selectbackground $bg_sel }
+                    -insertbackground $fg -selectbackground $bg_sel \
+                    -highlightbackground $bg -highlightcolor $fg }
         catch { .ed.pw.${side}.sb configure -bg $bg_bar -troughcolor $bg }
     }
 }
@@ -1880,7 +1892,8 @@ proc toggle-fullscreen {} {
 
 bind .ed.t          <$::cfg_key_fullscreen> { toggle-fullscreen; break }
 bind .br.mid.lst    <$::cfg_key_fullscreen> { toggle-fullscreen }
-bind .ed.t          <$::cfg_key_split>      { split-toggle; break }
+bind .ed.t          <$::cfg_key_split>       { split-toggle; break }
+bind .ed.t          <$::cfg_key_split_focus> { split-cycle-focus; break }
 
 # ─── headings & TOC ───────────────────────────────────────────────────────────
 proc highlight-headings {} {
@@ -2079,6 +2092,7 @@ proc help-dialog {} {
             [key-label $::cfg_key_toc]          "Table of contents  (${hm}title${hm})" \
             [key-label $::cfg_key_fullscreen]   "Fullscreen" \
             [key-label $::cfg_key_split]        "Split view (toggle)" \
+            [key-label $::cfg_key_split_focus]  "Split view — cycle focus" \
             [key-label $::cfg_key_help]         "Help" \
         ] \
         "BROWSER" [list \
@@ -2195,6 +2209,7 @@ proc split-make-pane {side bg fg bg_bar bg_sel sp1 sp2} {
         -insertbackground $fg -selectbackground $bg_sel \
         -blockcursor 0 -insertwidth 2 -insertofftime 0 \
         -borderwidth 0 -padx $_padx -pady $::cfg_margin_height \
+        -highlightthickness 2 -highlightbackground $bg -highlightcolor $fg \
         -yscrollcommand "${frame}.sb set" \
         -spacing1 $sp1 -spacing2 $sp2 -spacing3 0
     ${frame}.sb configure -command "${frame}.t yview"
@@ -2224,6 +2239,7 @@ proc split-make-pane {side bg fg bg_bar bg_sel sp1 sp2} {
     bind $t <$::cfg_key_line_numbers>   { ln-toggle; break }
     bind $t <$::cfg_key_fullscreen>     { toggle-fullscreen; break }
     bind $t <$::cfg_key_split>          { split-toggle; break }
+    bind $t <$::cfg_key_split_focus>    { split-cycle-focus; break }
     bind $t <Control-equal>             { font-resize  1; break }
     bind $t <Control-plus>              { font-resize  1; break }
     bind $t <Control-KP_Add>            { font-resize  1; break }
@@ -2277,6 +2293,15 @@ proc split-close {} {
 
 proc split-toggle {} {
     if {$::split_mode} { split-close } else { split-open }
+}
+
+proc split-cycle-focus {} {
+    if {!$::split_mode} return
+    if {[focus] eq ".ed.pw.r.t"} {
+        focus .ed.pw.l.t
+    } else {
+        focus .ed.pw.r.t
+    }
 }
 
 # ─── frame switching ──────────────────────────────────────────────────────────

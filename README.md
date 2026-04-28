@@ -115,7 +115,7 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 | `lang` | `en` | Interface language (`en` or `fr`) |
 | `dark_mode` | `1` | Dark theme; `0` = light (Solarized-style) |
  
-**`[keys]`** — all actions are rebindable: `key_save`, `key_close`, `key_find`, `key_replace`, `key_goto`, `key_open`, `key_undo`, `key_redo`, `key_help`, `key_toc`, `key_line_numbers`, `key_fullscreen`, `key_split`, `key_dark_toggle`, `key_next_space`, `key_prev_space`. Use Tk key names (`Control-s`, `Alt-Return`, `F11`, etc.).
+**`[keys]`** — all actions are rebindable: `key_save`, `key_close`, `key_find`, `key_replace`, `key_goto`, `key_open`, `key_undo`, `key_redo`, `key_help`, `key_toc`, `key_line_numbers`, `key_fullscreen`, `key_split`, `key_split_focus`, `key_dark_toggle`, `key_next_space`, `key_prev_space`. Use Tk key names (`Control-s`, `Alt-Return`, `F11`, etc.).
 
 **`[colors]`** — `color_heading`, `color_comment`, `color_markup`, `color_bg`, `color_fg`, `color_bg_bar`, `color_fg_bar`, `color_bg_sel` + `_alt` variants for light mode.
 
@@ -138,7 +138,7 @@ It is the default, and requires Tk
 - Clock (HH:MM) in status bar: add `clock` token to a status zone
 - Block cursor: rectangle with inverted colors (`block_cursor_gui = 1`)
 - Configurable status bar height (`bar_height`); font size adapts automatically
-- **Vertical split view** (F3): divide the editor into two independent panes on the same document; each pane scrolls and positions the cursor independently
+- **Vertical split view** (F3): divide the editor into two independent panes on the same document; each pane scrolls and positions the cursor independently; F4 cycles focus between panes; the active pane is highlighted with a border
 - Confirm dialogs: `Tab` to move between buttons, `Return` to confirm, `Escape` to cancel, `y` / `n` for direct answer
 
 **Shortcuts — Editor**
@@ -163,6 +163,7 @@ Those are the default keys. Most of them are fully customisable in the writhdeck
 | Ctrl+Shift+Space | Jump to previous space |
 | F11 | Table of contents — jumps in the focused pane |
 | F3 | Split view toggle (GUI only) |
+| F4 | Split view — cycle focus between panes |
 | Alt+Enter | Fullscreen toggle |
 | Tab | Insert 4 spaces |
 | Shift+↑↓←→ | Extend selection |
@@ -184,6 +185,8 @@ Those are the default keys. Most of them are fully customisable in the writhdeck
 
 **Split view notes**
 - F3 splits the current document into two side-by-side panes; press F3 again to close the split
+- F4 cycles focus between the two panes (configurable via `key_split_focus`)
+- The active pane is highlighted with a colored border; the inactive pane has none
 - Both panes share the same text — edits in one are immediately visible in the other
 - Cursor, scroll position, and undo history are independent per pane
 - Find, Replace, Go to line, and TOC all operate on the pane that had focus when they were opened
