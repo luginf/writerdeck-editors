@@ -2731,8 +2731,13 @@ proc tui-sel-delete {lines anchor cy cx} {
 
 proc tui-browser {} {
     set sel 0; set scroll 0; set msg ""
+    set prev_rows -1; set prev_cols -1
     while 1 {
+        set ::tui_size_n 14
         lassign [tui-size] rows cols
+        if {$rows != $prev_rows || $cols != $prev_cols} {
+            set prev_rows $rows; set prev_cols $cols
+        }
         # build entries
         set entries {}; set fcount 0
         foreach dir [br-dirs] {
@@ -2980,9 +2985,15 @@ proc tui-editor {filepath} {
     set wc_dirty 1; set wrap_dirty 1; set wc_cached 0; set cc_cached 0
     set wrap_dirty 1; set vrows {}; set prev_tw -1
     set ish_cache {}; set isd_cache {}
+    set prev_rows -1; set prev_cols -1
 
     while 1 {
+        set ::tui_size_n 14
         lassign [tui-size] rows cols
+        if {$rows != $prev_rows || $cols != $prev_cols} {
+            set prev_rows $rows; set prev_cols $cols
+            set wrap_dirty 1
+        }
 
         # ── layout ────────────────────────────────────────────────────────────
         set roff  $::cfg_margin_rows
