@@ -1,7 +1,14 @@
 
-# WRITHDECK 
+# WrithDeck 
 
-A distraction-free text editor for writerdecks — GUI and TUI dual mode, fully configurable.
+WrithDeck is a distraction-free text editor designed for writers using a dedicated writerdeck, whether it's a DIY prototype or a computer built specifically for that purpose. It's fast and easy to customize. WrithDeck can run as a clean graphical application or directly in a terminal or TTY, all from a single file with no installation required.
+
+It includes customizable inline syntax highlighting, a file browser, split view, chapter navigation through a table of contents, and a fully themeable interface, all in under 3,500 lines of Tcl/Tk.
+
+Whether you're writing on a Raspberry Pi with an LCD screen, on a tablet, over SSH, or on your desktop, WrithDeck stays lightweight and lets you focus on what matters most: your text.
+
+It has GUI and TUI dual mode with similar behaviors, and is fully configurable.
+
 
 ```
 wish writhdeck.tcl                     # GUI, file browser
@@ -9,8 +16,6 @@ wish writhdeck.tcl file.txt            # GUI, open file directly
 tclsh writhdeck.tcl --no-gui           # TUI, file browser
 tclsh writhdeck.tcl --no-gui file.txt  # TUI, open file directly
 ```
-
-Nano, micro or scite are also great tools for a simple writerdeck.
 
 
 ## Command-line options
@@ -80,6 +85,7 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 | Key | Default | Description |
 |---|---|---|
 | `browser` | `1` | Return to file browser after closing a file |
+| `split_shrink_margin` | `1` | Halve `margin_width` in split view (GUI); `0` to keep the full margin |
 | `console_center_alert` | `1` | Center confirm dialogs (TUI); `0` = bottom bar |
 | `block_cursor_gui` | `1` | Block cursor in GUI mode |
 | `block_cursor_console` | `1` | Block cursor in TUI mode |
@@ -114,11 +120,13 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 
 **Shortcuts — Editor**
 
+Those are the default keys. Most of them are fully customisable in the writhdeck.ini configuration file!
+
 | Key | Action |
 |---|---|
 | Ctrl+S | Save |
 | Ctrl+Shift+S | Save as… (with overwrite confirmation) |
-| Ctrl+Q / Esc | Close file, return to browser |
+| Ctrl+Q | Close file, return to browser |
 | Ctrl+F | Find (inline bar, live highlight, match counter) — operates on the focused pane in split view |
 | Ctrl+R | Find & Replace (inline bar; Enter: replace one, Ctrl+Enter: all) |
 | Ctrl+Z | Undo |
@@ -216,12 +224,28 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 
 ---
 
+## Known bugs and limitations
+
+- In GUI mode, end of lines inside a wrapped text can lead to inconsistent block cursor appearence. To fix it, use non-block cursor in the .ini file (block_cursor_gui = 0).
+- There is sometimes a slight delay to show the inverted letters under the block cursor in GUI mode. See fix above or use TUI mode.  
+- There is no non-wrap mode (and it's not a planned feature).
+- There is no tab mode (and it's not a planned feature).
+- On very long texts (above 80,000 words) and slow CPU computer (1.1 Ghz Celeron from 2013), the cursor and typing might be slowed down. It has been optimized in comparison to first version, but if necessary turn off the words and chars count in the status bar. You can still access writing statistics in the help.
+
+
 ## Credits
 
 Based on <https://github.com/lallero7/writhdeckForCMD>,
 itself based on <https://github.com/shmimel/bee-write-back/>
 
-Designed to run on tcl with the help of LLM (Claude Code).
+Designed to run on Tcl/Tk with the help of LLM (Claude Code).
+
+Tcl is an amazing language! https://en.wikipedia.org/wiki/Tcl_(programming_language)
+
+
+Nano, micro or scite are also great tools for a simple writerdeck. 
+
+
 
 
 ## Licence

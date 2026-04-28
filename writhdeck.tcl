@@ -101,11 +101,13 @@ set ::DOCS_DIR_DEFAULT [file join $::HOME_DIR Documents writhdeck]
 set ::DOCS_DIR         $::DOCS_DIR_DEFAULT
 set ::INI_FILE         [file join $::DOCS_DIR_DEFAULT "writhdeck.ini"]
 set ::FILE_EXT ".txt"
-set ::filename     ""
-set ::dirty        0
-set ::msg          ""
-set ::ed_msg       ""
-set ::scratchpad   0
+set ::filename        ""
+set ::dirty           0
+set ::msg             ""
+set ::ed_msg          ""
+set ::scratchpad      0
+set ::file_mtime_known 0
+set ::watch_after_id  ""
 set ::session_headings {}
 
 file mkdir $::DOCS_DIR_DEFAULT
@@ -158,8 +160,10 @@ proc cursor-put {filepath cy cx} {
 }
 
 # ─── ini ──────────────────────────────────────────────────────────────────────
-set ::cfg_margin_width   60
-set ::cfg_margin_height  40
+set ::cfg_margin_width        60
+set ::cfg_margin_height       40
+set ::cfg_split_shrink_margin 1
+set ::cfg_watch_file          1
 set ::cfg_font_size      13
 set ::cfg_font_family    "Mono"
 set ::cfg_bg             "#1a1a1a"
@@ -244,8 +248,10 @@ proc ini-load {} {
         if {[regexp {^(\w+)\s*=(.*)$} $line -> key val]} {
             set v [string trim $val]
             switch [string trim $key] {
-                margin_width     { set ::cfg_margin_width   $v }
-                margin_height    { set ::cfg_margin_height  $v }
+                margin_width          { set ::cfg_margin_width        $v }
+                margin_height         { set ::cfg_margin_height       $v }
+                split_shrink_margin   { set ::cfg_split_shrink_margin [string is true $v] }
+                watch_file            { set ::cfg_watch_file          [string is true $v] }
                 font_size        { set ::cfg_font_size      $v }
                 font_family      { set ::cfg_font_family    $v }
                 color_bg         { set ::cfg_bg             $v }
@@ -332,8 +338,8 @@ proc ini-save {} {
     puts $fh "\[editor\]"
     puts $fh "# docs_dir = ~/Documents/writerdeck"
     puts $fh "# (default: ~/Documents/writhdeck)"
-    puts $fh "margin_width   = $::cfg_margin_width"
-    puts $fh "margin_height  = $::cfg_margin_height"
+    puts $fh "margin_width         = $::cfg_margin_width"
+    puts $fh "margin_height        = $::cfg_margin_height"
     puts $fh "# ── terminal version — values in columns/lines"
     puts $fh "margin_cols    = $::cfg_margin_cols"
     puts $fh "margin_rows    = $::cfg_margin_rows"
@@ -350,6 +356,8 @@ proc ini-save {} {
     puts $fh ""
     puts $fh "\[behaviour\]"
     puts $fh "browser              = $::cfg_browser"
+    puts $fh "watch_file           = $::cfg_watch_file"
+    puts $fh "split_shrink_margin  = $::cfg_split_shrink_margin"
     puts $fh "console_center_alert = $::cfg_console_center_alert"
     puts $fh "line_numbers         = $::cfg_line_numbers"
     puts $fh "cursor_restore = $::cfg_cursor_restore"
@@ -525,6 +533,7 @@ set ::i18n {
         br_delete          "Delete \"%s\"?"
         br_files           "%d file%s"
         ed_saved           "saved"
+        ed_watch_reload    "\"%s\" was modified externally. Reload?"
         ed_save_before     "Save \"%s\" before closing?"
         ed_save_before_tui "save before closing?"
         help_date_time     "Date & Time"
@@ -572,6 +581,7 @@ set ::i18n {
         br_delete          "Supprimer \"%s\" ?"
         br_files           "%d fichier%s"
         ed_saved           "enregistré"
+        ed_watch_reload    "\"%s\" a été modifié externement. Recharger ?"
         ed_save_before     "Enregistrer \"%s\" avant de fermer ?"
         ed_save_before_tui "enregistrer avant de fermer ?"
         help_date_time     "Date & Heure"
@@ -1445,6 +1455,9 @@ proc load-file {path} {
 
     set ::dirty 0
     set ::ln_last_count 0
+    set ::file_mtime_known [expr {[file exists $path] ? [file mtime $path] : 0}]
+    if {$::watch_after_id ne ""} { after cancel $::watch_after_id }
+    set ::watch_after_id [after 2000 watch-file]
     highlight-headings
     lassign [cursor-get $path] cy cx
     if {[dict exists $::session_headings $path]} {
@@ -1470,6 +1483,7 @@ proc save-file {} {
     close $fh
     set ::dirty 0
     .ed.t edit modified false
+    set ::file_mtime_known [file mtime $::filename]
     lassign [split [[primary-ed] index insert] .] cy cx
     cursor-put $::filename $cy $cx
     set-msg [t ed_saved]
@@ -1607,9 +1621,11 @@ proc close-editor {} {
         lassign [split [[primary-ed] index insert] .] cy cx
         cursor-put $::filename $cy $cx
     }
+    if {$::watch_after_id ne ""} { after cancel $::watch_after_id; set ::watch_after_id "" }
     split-close
-    set ::filename  ""
+    set ::filename   ""
     set ::scratchpad 0
+    set ::file_mtime_known 0
     set ::dirty     0
     set ::msg       ""
     set ::ed_msg    ""
@@ -1710,7 +1726,6 @@ proc ed-paste {} {
 bind .ed.t <$::cfg_key_save>    { save-file;         break }
 bind .ed.t <$::cfg_key_save_as> { save-as;           break }
 bind .ed.t <$::cfg_key_close>   { close-editor;      break }
-bind .ed.t <Escape>             { close-editor;      break }
 bind .ed.t <$::cfg_key_paste>        { ed-paste;          break }
 bind .ed.t <$::cfg_key_select_all>  { .ed.t tag add sel 1.0 end; break }
 bind .ed.t <$::cfg_key_dark_toggle> { toggle-dark-mode;  break }
@@ -1938,7 +1953,7 @@ proc help-dialog {} {
         "EDITOR" [list \
             [key-label $::cfg_key_save]         "Save" \
             [key-label $::cfg_key_save_as]      "Save as" \
-            "[key-label $::cfg_key_close] / ESC" "Return to browser" \
+            [key-label $::cfg_key_close]          "Return to browser" \
             [key-label $::cfg_key_find]         "Find (Enter: next  Shift+Enter: prev)" \
             [key-label $::cfg_key_replace]      "Find & Replace (Enter: replace one  Ctrl+Enter: all)" \
             [key-label $::cfg_key_open]         "Open file" \
@@ -2057,13 +2072,15 @@ proc split-make-pane {side bg fg bg_bar bg_sel sp1 sp2} {
     set frame ".ed.pw.$side"
     frame $frame -bg $bg
     scrollbar ${frame}.sb -orient vertical -bg $bg_bar -troughcolor $bg
+    set _padx [expr {$::cfg_split_shrink_margin \
+        ? max(1, $::cfg_margin_width / 2) : $::cfg_margin_width}]
     .ed.t peer create ${frame}.t \
         -wrap word -font [.ed.t cget -font] \
         -width 1 \
         -bg $bg -fg $fg \
         -insertbackground $fg -selectbackground $bg_sel \
         -blockcursor 0 -insertwidth 2 -insertofftime 0 \
-        -borderwidth 0 -padx $::cfg_margin_width -pady $::cfg_margin_height \
+        -borderwidth 0 -padx $_padx -pady $::cfg_margin_height \
         -yscrollcommand "${frame}.sb set" \
         -spacing1 $sp1 -spacing2 $sp2 -spacing3 0
     ${frame}.sb configure -command "${frame}.t yview"
@@ -2076,7 +2093,6 @@ proc split-make-pane {side bg fg bg_bar bg_sel sp1 sp2} {
     bind $t <$::cfg_key_save>           { save-file; break }
     bind $t <$::cfg_key_save_as>        { save-as; break }
     bind $t <$::cfg_key_close>          { close-editor; break }
-    bind $t <Escape>                    { close-editor; break }
     bind $t <$::cfg_key_paste>          { ed-paste; break }
     bind $t <$::cfg_key_select_all>     "[list $t tag add sel 1.0 end]; break"
     bind $t <$::cfg_key_dark_toggle>    { toggle-dark-mode; break }
@@ -2150,6 +2166,22 @@ proc split-toggle {} {
 }
 
 # ─── frame switching ──────────────────────────────────────────────────────────
+proc watch-file {} {
+    set ::watch_after_id ""
+    if {$::cfg_watch_file && $::filename ne "" && !$::scratchpad \
+            && [file exists $::filename]} {
+        set mtime [file mtime $::filename]
+        if {$mtime != $::file_mtime_known} {
+            set ::file_mtime_known $mtime
+            set r [tk_messageBox \
+                -message [t ed_watch_reload [file tail $::filename]] \
+                -type yesno -icon question -default yes -parent .]
+            if {$r eq "yes"} { load-file $::filename }
+        }
+    }
+    set ::watch_after_id [after 2000 watch-file]
+}
+
 proc show-browser {} {
     pack forget .ed
     pack .br -fill both -expand 1
@@ -2856,6 +2888,8 @@ proc tui-editor {filepath} {
     set dirty 0; set message ""; set msg_time 0; set sticky -1
     set undo_stack {}
     set redo_stack {}
+    set file_mtime_known [expr {$filepath ne "" && [file exists $filepath] \
+        ? [file mtime $filepath] : 0}]
     set sel_anchor ""
     set sel_sticky  0
     if {![info exists ::tui_search]}  { set ::tui_search  "" }
@@ -3018,6 +3052,29 @@ proc tui-editor {filepath} {
         set rst       1
         set clear_sel 1
 
+        # ── external modification check ───────────────────────────────────────
+        if {$::cfg_watch_file && $filepath ne "" && [file exists $filepath]} {
+            set _mtime [file mtime $filepath]
+            if {$_mtime != $file_mtime_known} {
+                set file_mtime_known $_mtime
+                if {[tui-confirm [t ed_watch_reload [file tail $filepath]] $rows $cols]} {
+                    set lines {}
+                    if {[file size $filepath] > 0} {
+                        set fh [open $filepath r]; fconfigure $fh -encoding utf-8
+                        foreach line [split [read $fh] "\n"] { lappend lines $line }
+                        close $fh
+                        if {[llength $lines] > 1 && [lindex $lines end] eq ""} {
+                            set lines [lrange $lines 0 end-1]
+                        }
+                    }
+                    if {[llength $lines] == 0} { set lines [list ""] }
+                    set cy 1; set cx 0; set scroll_y 0
+                    set undo_stack {}; set redo_stack {}
+                    set dirty 0; set wrap_dirty 1
+                }
+            }
+        }
+
         switch -- $key {
             UP {
                 if {$vi > 0} { if {$sticky<0} {set sticky $scx}; lassign [tui-v2l $vrows [expr {$vi-1}] $sticky] cy cx }
@@ -3134,9 +3191,13 @@ proc tui-editor {filepath} {
                 if {$key eq $::cfg_tui_save} {
                     if {$filepath eq ""} {
                         tui-scratchpad-save $rows $cols lines filepath dirty
-                        if {$filepath ne ""} { set message [t ed_saved]; set msg_time [clock seconds] }
+                        if {$filepath ne ""} {
+                            set file_mtime_known [file mtime $filepath]
+                            set message [t ed_saved]; set msg_time [clock seconds]
+                        }
                     } else {
                         tui-save-file $filepath $lines
+                        set file_mtime_known [file mtime $filepath]
                         cursor-put $filepath $cy $cx
                         set dirty 0; set message [t ed_saved]; set msg_time [clock seconds]
                     }
