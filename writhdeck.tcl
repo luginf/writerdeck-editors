@@ -1019,11 +1019,11 @@ proc input-dialog {title prompt} {
     wm transient $w .
     grab $w
 
-    label $w.l -text $prompt -padx 12 -pady 8 -anchor w
-    entry $w.e -width 28
-    frame $w.f
-    button $w.f.ok -text "OK"            -command {set ::dlg_val [.dlg.e get]; destroy .dlg}
-    button $w.f.cn -text [t dlg_cancel] -command {set ::dlg_val ""; destroy .dlg}
+    label  $w.l   -text $prompt -font $::font_sm -padx 12 -pady 8 -anchor w
+    entry  $w.e   -width 28    -font $::font_sm
+    frame  $w.f
+    button $w.f.ok -text "OK"           -font $::font_sm -command {set ::dlg_val [.dlg.e get]; destroy .dlg}
+    button $w.f.cn -text [t dlg_cancel] -font $::font_sm -command {set ::dlg_val ""; destroy .dlg}
     pack $w.f.ok $w.f.cn -side left -padx 4 -pady 6
 
     pack $w.l -fill x
