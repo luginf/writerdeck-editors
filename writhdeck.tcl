@@ -729,7 +729,9 @@ proc apply-inline {ln line tag re mlen} {
         set pre  [expr {$a > 0       ? [string index $line [expr {$a-1}]] : ""}]
         set post [expr {$b+1 < $llen ? [string index $line [expr {$b+1}]] : ""}]
         if {($pre  eq "" || ![string is alpha $pre]) &&
-            ($post eq "" || ![string is alpha $post])} {
+            ($post eq "" || ![string is alpha $post]) &&
+            ![string is space [string index $line [expr {$a + $mlen}]]] &&
+            ![string is space [string index $line [expr {$b - $mlen}]]]} {
             .ed.t tag add $tag   $ln.$a "$ln.[expr {$b+1}]"
             .ed.t tag add marker $ln.$a "$ln.[expr {$a+$mlen}]"
             .ed.t tag add marker "$ln.[expr {$b-$mlen+1}]" "$ln.[expr {$b+1}]"
@@ -1137,8 +1139,11 @@ proc yesnocancel-dialog {msg} {
     pack $w.f.y $w.f.n $w.f.c -side left -padx 4 -pady 6
     pack $w.l -fill x
     pack $w.f -anchor e -padx 8
-    bind $w <Escape> {set ::dlg_val cancel; destroy .yncdlg}
-    focus $w.f.y
+    bind $w <Return> { catch { [focus] invoke } }
+    bind $w <Escape> { set ::dlg_val cancel; destroy .yncdlg }
+    bind $w y        { set ::dlg_val yes;    destroy .yncdlg }
+    bind $w n        { set ::dlg_val no;     destroy .yncdlg }
+    after idle [list focus $w.f.y]
     set ::dlg_val cancel
     tkwait window $w
     return $::dlg_val
