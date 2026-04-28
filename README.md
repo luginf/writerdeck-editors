@@ -13,6 +13,14 @@ It has GUI and TUI dual mode with similar behaviors, and is fully configurable.
 
 ## Usage
 
+You will need to have Tcl/Tk on your system. On Debian-based OS, just 
+
+``apt install tk``
+
+On Windows you can get binaries for the Tcl runtime there: https://www.tcl-lang.org/software/tcltk/bindist.html
+
+Then:
+
 ```
 wish writhdeck.tcl                     # GUI, file browser
 wish writhdeck.tcl file.txt            # GUI, open file directly
