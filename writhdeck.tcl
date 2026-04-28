@@ -533,7 +533,8 @@ set ::i18n {
         br_delete          "Delete \"%s\"?"
         br_files           "%d file%s"
         ed_saved           "saved"
-        ed_watch_reload    "\"%s\" was modified externally. Reload?"
+        ed_watch_reload       "\"%s\" was modified externally. Reload?"
+        ed_watch_reload_dirty "\"%s\" was modified externally and you have unsaved changes. Reload?"
         ed_save_before     "Save \"%s\" before closing?"
         ed_save_before_tui "save before closing?"
         help_date_time     "Date & Time"
@@ -563,6 +564,8 @@ set ::i18n {
         help_k_help        "This help"
         help_shift_arrows  "Shift+Arrows  Extend selection"
         help_k_split       "Split view (toggle)"
+        dlg_yes            "Yes"
+        dlg_no             "No"
         dlg_cancel         "Cancel"
         goto_title         "Go to line"
         goto_prompt        "Line:"
@@ -581,7 +584,8 @@ set ::i18n {
         br_delete          "Supprimer \"%s\" ?"
         br_files           "%d fichier%s"
         ed_saved           "enregistré"
-        ed_watch_reload    "\"%s\" a été modifié externement. Recharger ?"
+        ed_watch_reload       "\"%s\" a été modifié externement. Recharger ?"
+        ed_watch_reload_dirty "\"%s\" a été modifié externement et vous avez des modifications non sauvegardées. Recharger ?"
         ed_save_before     "Enregistrer \"%s\" avant de fermer ?"
         ed_save_before_tui "enregistrer avant de fermer ?"
         help_date_time     "Date & Heure"
@@ -611,6 +615,8 @@ set ::i18n {
         help_k_help        "Cette aide"
         help_shift_arrows  "Maj+Flèches   Étendre la sélection"
         help_k_split       "Vue partagée (bascule)"
+        dlg_yes            "Oui"
+        dlg_no             "Non"
         dlg_cancel         "Annuler"
         goto_title         "Aller à la ligne"
         goto_prompt        "Ligne :"
@@ -1049,6 +1055,75 @@ proc input-dialog {title prompt} {
     return $::dlg_val
 }
 
+proc info-dialog {msg} {
+    set w .idlg
+    catch {destroy $w}
+    toplevel $w
+    wm title $w "Writhdeck"
+    wm resizable $w 0 0
+    wm transient $w .
+    grab $w
+    label  $w.l -text $msg -font $::font_sm -padx 16 -pady 12 -anchor w -wraplength 340
+    button $w.b -text "OK" -font $::font_sm -command [list destroy $w]
+    pack $w.l -fill x
+    pack $w.b -anchor e -padx 8 -pady 6
+    bind $w <Return> [list destroy $w]
+    bind $w <Escape> [list destroy $w]
+    focus $w.b
+    tkwait window $w
+}
+
+proc confirm-dialog {msg {default yes}} {
+    set w .cdlg
+    catch {destroy $w}
+    toplevel $w
+    wm title $w "Writhdeck"
+    wm resizable $w 0 0
+    wm transient $w .
+    grab $w
+    label  $w.l   -text $msg -font $::font_sm -padx 16 -pady 12 -anchor w -wraplength 340
+    frame  $w.f
+    button $w.f.y -text [t dlg_yes] -font $::font_sm \
+        -command {set ::dlg_val yes; destroy .cdlg}
+    button $w.f.n -text [t dlg_no]  -font $::font_sm \
+        -command {set ::dlg_val no;  destroy .cdlg}
+    pack $w.f.y $w.f.n -side left -padx 4 -pady 6
+    pack $w.l -fill x
+    pack $w.f -anchor e -padx 8
+    bind $w <Return> {set ::dlg_val yes; destroy .cdlg}
+    bind $w <Escape> {set ::dlg_val no;  destroy .cdlg}
+    if {$default eq "yes"} { focus $w.f.y } else { focus $w.f.n }
+    set ::dlg_val no
+    tkwait window $w
+    return $::dlg_val
+}
+
+proc yesnocancel-dialog {msg} {
+    set w .yncdlg
+    catch {destroy $w}
+    toplevel $w
+    wm title $w "Writhdeck"
+    wm resizable $w 0 0
+    wm transient $w .
+    grab $w
+    label  $w.l   -text $msg -font $::font_sm -padx 16 -pady 12 -anchor w -wraplength 340
+    frame  $w.f
+    button $w.f.y -text [t dlg_yes]    -font $::font_sm \
+        -command {set ::dlg_val yes;    destroy .yncdlg}
+    button $w.f.n -text [t dlg_no]     -font $::font_sm \
+        -command {set ::dlg_val no;     destroy .yncdlg}
+    button $w.f.c -text [t dlg_cancel] -font $::font_sm \
+        -command {set ::dlg_val cancel; destroy .yncdlg}
+    pack $w.f.y $w.f.n $w.f.c -side left -padx 4 -pady 6
+    pack $w.l -fill x
+    pack $w.f -anchor e -padx 8
+    bind $w <Escape> {set ::dlg_val cancel; destroy .yncdlg}
+    focus $w.f.y
+    set ::dlg_val cancel
+    tkwait window $w
+    return $::dlg_val
+}
+
 proc br-new {} {
     set dir  [br-active-dir]
     set name [input-dialog "New file" "File name:"]
@@ -1057,7 +1132,7 @@ proc br-new {} {
     if {[file extension $name] eq ""} { append name $::FILE_EXT }
     set full [file join $dir $name]
     if {[file exists $full]} {
-        tk_messageBox -message "\"$name\" already exists." -icon warning -parent .
+        info-dialog [t br_exists $name]
         return
     }
     close [open $full w]
@@ -1068,9 +1143,7 @@ proc br-delete {} {
     set e [br-selected]
     if {![llength $e]} return
     lassign $e _ dir name
-    set r [tk_messageBox -message [t br_delete $name] \
-           -type yesno -icon question -parent .]
-    if {$r eq "yes"} {
+    if {[confirm-dialog [t br_delete $name]] eq "yes"} {
         file delete [file join $dir $name]
         br-refresh
     }
@@ -1086,7 +1159,7 @@ proc br-rename {} {
     if {[file extension $new] eq ""} { append new $::FILE_EXT }
     set new_path [file join $dir $new]
     if {[file exists $new_path]} {
-        tk_messageBox -message "\"$new\" already exists." -icon warning -parent .
+        info-dialog [t br_exists $new]
         return
     }
     file rename [file join $dir $name] $new_path
@@ -1497,9 +1570,7 @@ proc save-as {} {
     if {[file extension $name] eq ""} { append name $::FILE_EXT }
     set new_path [file join $dir $name]
     if {[file exists $new_path] && $new_path ne $::filename} {
-        set r [tk_messageBox -message "\"$name\" already exists. Overwrite?" \
-               -type yesno -icon question -parent .]
-        if {$r ne "yes"} return
+        if {[confirm-dialog "\"$name\" already exists. Overwrite?"] ne "yes"} return
     }
     set ::filename $new_path
     set ::scratchpad 0
@@ -1611,9 +1682,7 @@ proc search-prev {} {
 proc close-editor {} {
     if {$::dirty} {
         set _label [expr {$::scratchpad ? "scratchpad" : [file tail $::filename]}]
-        set r [tk_messageBox \
-            -message [t ed_save_before $_label] \
-            -type yesnocancel -icon question -default yes -parent .]
+        set r [yesnocancel-dialog [t ed_save_before $_label]]
         if {$r eq "cancel"} return
         if {$r eq "yes"}    save-file
     }
@@ -1692,9 +1761,7 @@ proc apply-theme {} {
 
 proc quit-app {} {
     if {$::dirty && $::filename ne ""} {
-        set r [tk_messageBox \
-            -message [t ed_save_before [file tail $::filename]] \
-            -type yesnocancel -icon question -default yes -parent .]
+        set r [yesnocancel-dialog [t ed_save_before [file tail $::filename]]]
         if {$r eq "cancel"} return
         if {$r eq "yes"} save-file
     }
@@ -2173,10 +2240,10 @@ proc watch-file {} {
         set mtime [file mtime $::filename]
         if {$mtime != $::file_mtime_known} {
             set ::file_mtime_known $mtime
-            set r [tk_messageBox \
-                -message [t ed_watch_reload [file tail $::filename]] \
-                -type yesno -icon question -default yes -parent .]
-            if {$r eq "yes"} { load-file $::filename }
+            set _key [expr {$::dirty ? "ed_watch_reload_dirty" : "ed_watch_reload"}]
+            if {[confirm-dialog [t $_key [file tail $::filename]]] eq "yes"} {
+                load-file $::filename
+            }
         }
     }
     set ::watch_after_id [after 2000 watch-file]
@@ -3057,7 +3124,8 @@ proc tui-editor {filepath} {
             set _mtime [file mtime $filepath]
             if {$_mtime != $file_mtime_known} {
                 set file_mtime_known $_mtime
-                if {[tui-confirm [t ed_watch_reload [file tail $filepath]] $rows $cols]} {
+                set _wkey [expr {$dirty ? "ed_watch_reload_dirty" : "ed_watch_reload"}]
+                if {[tui-confirm [t $_wkey [file tail $filepath]] $rows $cols]} {
                     set lines {}
                     if {[file size $filepath] > 0} {
                         set fh [open $filepath r]; fconfigure $fh -encoding utf-8

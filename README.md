@@ -1,6 +1,6 @@
-
+ 
 # WrithDeck 
-
+  
 WrithDeck is a distraction-free text editor designed for writers using a dedicated writerdeck, whether it's a DIY prototype or a computer built specifically for that purpose. It's fast and easy to customize. WrithDeck can run as a clean graphical application or directly in a terminal or TTY, all from a single file with no installation required.
 
 It includes customizable inline syntax highlighting, a file browser, split view, chapter navigation through a table of contents, and a fully themeable interface, all in under 3,500 lines of Tcl/Tk.
@@ -85,6 +85,7 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 | Key | Default | Description |
 |---|---|---|
 | `browser` | `1` | Return to file browser after closing a file |
+| `watch_file` | `1` | Detect external file modifications and prompt to reload; `0` to disable |
 | `split_shrink_margin` | `1` | Halve `margin_width` in split view (GUI); `0` to keep the full margin |
 | `console_center_alert` | `1` | Center confirm dialogs (TUI); `0` = bottom bar |
 | `block_cursor_gui` | `1` | Block cursor in GUI mode |
@@ -245,7 +246,7 @@ Tcl is an amazing language! https://en.wikipedia.org/wiki/Tcl_(programming_langu
 
 Nano, micro or scite are also great tools for a simple writerdeck. 
 
-
+  
 
 
 ## Licence
