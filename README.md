@@ -3,9 +3,9 @@
   
 WrithDeck is a distraction-free text editor designed for writers using a dedicated writerdeck, whether it's a DIY prototype or a computer configured specifically for that purpose. It's fast and easy to customize. WrithDeck can run as a clean graphical application or directly in a terminal or TTY, all from a single file with no installation required.
 
-It includes customizable inline syntax highlighting, a file browser, split view, chapter navigation through a table of contents, and a fully themeable interface, all in under 3,500 lines of Tcl/Tk.
+It includes customizable inline syntax highlighting, a file browser, split view, chapter navigation through a table of contents, and a fully themeable interface, all in under 3,600 lines (150 Kb) of Tcl/Tk.
 
-Whether you're writing on a Raspberry Pi with an LCD screen, on a tablet, over SSH, or on your desktop, WrithDeck stays lightweight and lets you focus on what matters most: your text.
+Whether you're writing on a Raspberry Pi with an LCD screen, on a tablet, over SSH, or on your desktop, WrithDeck stays lightweight and lets you focus on your text.
 
 It has GUI and TUI dual mode with similar behaviors, and is fully configurable.
 

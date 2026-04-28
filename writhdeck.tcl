@@ -721,18 +721,22 @@ proc inline-re {marker} {
     return "${m}.+?${m}"
 }
 
-proc apply-inline {ln line tag re mlen} {
+proc apply-inline {ln line tag re mlen {content_only 0}} {
     set s 0
     set llen [string length $line]
     while {[regexp -start $s -indices -- $re $line m]} {
         lassign $m a b
         set pre  [expr {$a > 0       ? [string index $line [expr {$a-1}]] : ""}]
         set post [expr {$b+1 < $llen ? [string index $line [expr {$b+1}]] : ""}]
-        if {($pre  eq "" || ![string is alpha $pre]) &&
-            ($post eq "" || ![string is alpha $post]) &&
+        if {($pre  eq "" || ![string is alnum $pre]) &&
+            ($post eq "" || ![string is alnum $post]) &&
             ![string is space [string index $line [expr {$a + $mlen}]]] &&
             ![string is space [string index $line [expr {$b - $mlen}]]]} {
-            .ed.t tag add $tag   $ln.$a "$ln.[expr {$b+1}]"
+            if {$content_only} {
+                .ed.t tag add $tag "$ln.[expr {$a+$mlen}]" "$ln.[expr {$b-$mlen+1}]"
+            } else {
+                .ed.t tag add $tag $ln.$a "$ln.[expr {$b+1}]"
+            }
             .ed.t tag add marker $ln.$a "$ln.[expr {$a+$mlen}]"
             .ed.t tag add marker "$ln.[expr {$b-$mlen+1}]" "$ln.[expr {$b+1}]"
         }
@@ -1112,9 +1116,9 @@ proc confirm-dialog {msg {default yes}} {
     pack $w.f.y $w.f.n -side left -padx 4 -pady 6
     pack $w.l -fill x
     pack $w.f -anchor e -padx 8
-    bind $w <Return> {set ::dlg_val yes; destroy .cdlg}
-    bind $w <Escape> {set ::dlg_val no;  destroy .cdlg}
-    if {$default eq "yes"} { focus $w.f.y } else { focus $w.f.n }
+    bind $w <Return> { catch { [focus] invoke } }
+    bind $w <Escape> { set ::dlg_val no; destroy .cdlg }
+    if {$default eq "yes"} { after idle [list focus $w.f.y] } else { after idle [list focus $w.f.n] }
     set ::dlg_val no
     tkwait window $w
     return $::dlg_val
@@ -1251,9 +1255,9 @@ after idle apply-line-spacing
     -font [list $::cfg_font_family $::cfg_font_size italic]
 .ed.t tag configure underline \
     -foreground $::cfg_color_markup \
-    -underline 0
+    -underline 1
 .ed.t tag configure strikethrough \
-    -foreground $::cfg_color_markup \
+    -foreground $::cfg_color_comment \
     -overstrike 0
 .ed.t tag configure marker \
     -foreground $::cfg_color_comment
@@ -1495,10 +1499,12 @@ proc ln-update {} {
     set last [lindex [split [.ed.t index end] .] 0]
     if {$last != $::ln_last_count} {
         set ::ln_last_count $last
-        .ed.ln configure -state normal
+        set digits [expr {$last >= 1000 ? [string length [expr {$last - 1}]] : 3}]
+        .ed.ln configure -state normal -width [expr {$digits + 1}]
         .ed.ln delete 1.0 end
+        set fmt "%${digits}d\n"
         for {set i 1} {$i < $last} {incr i} {
-            .ed.ln insert end [format "%3d\n" $i]
+            .ed.ln insert end [format $fmt $i]
         }
         .ed.ln configure -state disabled
     }
@@ -1756,7 +1762,7 @@ proc apply-theme {} {
     catch { .ed.t tag configure bold          -foreground $c_markup }
     catch { .ed.t tag configure italic        -foreground $c_markup }
     catch { .ed.t tag configure underline     -foreground $c_markup }
-    catch { .ed.t tag configure strikethrough -foreground $c_markup }
+    catch { .ed.t tag configure strikethrough -foreground $c_comment }
     catch { .ed.t tag configure marker        -foreground $c_comment }
     catch { .ed.sb configure -bg $bg_bar -troughcolor $bg }
     catch { .ed.bar configure -bg $bg_bar }
@@ -1893,8 +1899,8 @@ proc highlight-headings {} {
         } else {
             if {$::cached_bold_re ne ""}          { apply-inline $ln $line bold          $::cached_bold_re          [string length $::cfg_bold_marker] }
             if {$::cached_italic_re ne ""}        { apply-inline $ln $line italic        $::cached_italic_re        [string length $::cfg_italic_marker] }
-            if {$::cached_underline_re ne ""}     { apply-inline $ln $line underline     $::cached_underline_re     [string length $::cfg_underline_marker] }
-            if {$::cached_strikethrough_re ne ""} { apply-inline $ln $line strikethrough $::cached_strikethrough_re [string length $::cfg_strikethrough_marker] }
+            if {$::cached_underline_re ne ""}     { apply-inline $ln $line underline     $::cached_underline_re     [string length $::cfg_underline_marker]     1 }
+            if {$::cached_strikethrough_re ne ""} { apply-inline $ln $line strikethrough $::cached_strikethrough_re [string length $::cfg_strikethrough_marker] 1 }
         }
     }
 }
@@ -2388,9 +2394,77 @@ proc tui-attr {a} {
         heading  { puts -nonewline "\033\[1m" }
         dim-text { puts -nonewline "\033\[2m" }
         dim      { puts -nonewline "\033\[2m" }
+        underline { puts -nonewline "\033\[4m" }
         reverse  { puts -nonewline "\033\[7m" }
         off      { puts -nonewline "\033\[0m" }
     }
+}
+
+proc tui-parse-inline-spans {line} {
+    set spans {}
+    set llen [string length $line]
+    foreach {tag re mlen} [list \
+            bold          $::cached_bold_re          [string length $::cfg_bold_marker] \
+            italic        $::cached_italic_re        [string length $::cfg_italic_marker] \
+            underline     $::cached_underline_re     [string length $::cfg_underline_marker] \
+            strikethrough $::cached_strikethrough_re [string length $::cfg_strikethrough_marker]] {
+        if {$re eq ""} continue
+        set s 0
+        while {[regexp -start $s -indices -- $re $line m]} {
+            lassign $m a b
+            set pre  [expr {$a > 0       ? [string index $line [expr {$a-1}]] : ""}]
+            set post [expr {$b+1 < $llen ? [string index $line [expr {$b+1}]] : ""}]
+            if {($pre eq "" || ![string is alnum $pre]) &&
+                ($post eq "" || ![string is alnum $post]) &&
+                ![string is space [string index $line [expr {$a+$mlen}]]] &&
+                ![string is space [string index $line [expr {$b-$mlen}]]]} {
+                lappend spans [list $a          [expr {$a+$mlen-1}]  marker]
+                lappend spans [list [expr {$a+$mlen}] [expr {$b-$mlen}] $tag]
+                lappend spans [list [expr {$b-$mlen+1}] $b            marker]
+            }
+            set s [expr {$b+1}]
+        }
+    }
+    return $spans
+}
+
+proc tui-inline-esc {style in_sel} {
+    set codes {}
+    switch $style {
+        bold          { lappend codes 1 }
+        italic        { lappend codes 3 }
+        underline     { lappend codes 4 }
+        strikethrough -
+        marker        { lappend codes 2 }
+    }
+    if {$in_sel} { lappend codes 7 }
+    if {$codes eq {}} { return [expr {$in_sel ? "\033\[7m" : ""}] }
+    return "\033\[[join $codes {;}]m"
+}
+
+proc tui-render-inline-seg {seg scol spans sf st} {
+    set slen [string length $seg]
+    set char_style [lrepeat $slen ""]
+    foreach sp $spans {
+        lassign $sp sa sb stype
+        for {set k [expr {max(0, $sa-$scol)}]} {$k <= [expr {min($slen-1, $sb-$scol)}]} {incr k} {
+            if {[lindex $char_style $k] eq ""} { lset char_style $k $stype }
+        }
+    }
+    set result ""
+    set prev_esc ""
+    for {set k 0} {$k < $slen} {incr k} {
+        set in_sel [expr {$sf >= 0 && $k >= $sf && $k < $st}]
+        set esc [tui-inline-esc [lindex $char_style $k] $in_sel]
+        if {$esc ne $prev_esc} {
+            if {$prev_esc ne ""} { append result "\033\[0m" }
+            if {$esc ne ""} { append result $esc }
+            set prev_esc $esc
+        }
+        append result [string index $seg $k]
+    }
+    if {$prev_esc ne ""} { append result "\033\[0m" }
+    puts -nonewline $result
 }
 
 proc tui-fill {row text cols} {
@@ -3116,7 +3190,7 @@ proc tui-editor {filepath} {
             # text (with selection highlight)
             tui-move $srow $coff
             set seg_len [string length $seg]
-            set sf -1
+            set sf -1; set st -1
             if {$sel_r ne {}} {
                 if      {$li > $_sly && $li < $_ely}         { set sf 0;                              set st $seg_len } \
                 elseif  {$li == $_sly && $li == $_ely}        { set sf [expr {max(0,$_scx_s-$scol)}]; set st [expr {min($seg_len,$_ecx_s-$scol)}] } \
@@ -3124,24 +3198,18 @@ proc tui-editor {filepath} {
                 elseif  {$li == $_ely}                        { set sf 0;                              set st [expr {min($seg_len,$_ecx_s-$scol)}] }
                 if {$sf >= 0 && $sf >= $st} { set sf -1 }
             }
-            if {$sf >= 0} {
-                if {$sf > 0} {
-                    if {$ish} { tui-attr heading } elseif {$isd} { tui-attr dim-text }
-                    puts -nonewline [string range $seg 0 [expr {$sf-1}]]
-                    if {$ish || $isd} { tui-attr off }
-                }
-                tui-attr reverse
-                puts -nonewline [string range $seg $sf [expr {$st-1}]]
-                tui-attr off
-                if {$st < $seg_len} {
-                    if {$ish} { tui-attr heading } elseif {$isd} { tui-attr dim-text }
-                    puts -nonewline [string range $seg $st end]
-                    if {$ish || $isd} { tui-attr off }
+            if {$ish || $isd} {
+                set _a [expr {$ish ? "heading" : "dim-text"}]
+                if {$sf >= 0} {
+                    if {$sf > 0} { tui-attr $_a; puts -nonewline [string range $seg 0 [expr {$sf-1}]]; tui-attr off }
+                    tui-attr reverse; puts -nonewline [string range $seg $sf [expr {$st-1}]]; tui-attr off
+                    if {$st < $seg_len} { tui-attr $_a; puts -nonewline [string range $seg $st end]; tui-attr off }
+                } else {
+                    tui-attr $_a; puts -nonewline $seg; tui-attr off
                 }
             } else {
-                if {$ish} { tui-attr heading } elseif {$isd} { tui-attr dim-text }
-                puts -nonewline $seg
-                if {$ish || $isd} { tui-attr off }
+                tui-render-inline-seg $seg $scol \
+                    [tui-parse-inline-spans [lindex $lines [expr {$li-1}]]] $sf $st
             }
         }
 
