@@ -75,20 +75,21 @@ if {!$::no_gui} {
             # On Unix/POSIX, guard against hanging on a stale DISPLAY/WAYLAND_DISPLAY.
             # Returns:  1 = socket confirmed (try Tk)
             #           0 = no display env var (native display like Haiku — try Tk, won't hang)
-            #          -1 = env var set but socket missing (stale, skip Tk)
+            #          -1 = env var(s) set but no socket found (stale, skip Tk to avoid hang)
             proc _display-socket-check {} {
+                set has_var 0
                 if {[info exists ::env(WAYLAND_DISPLAY)] && $::env(WAYLAND_DISPLAY) ne ""} {
+                    set has_var 1
                     set dir [expr {[info exists ::env(XDG_RUNTIME_DIR)] ? $::env(XDG_RUNTIME_DIR) : ""}]
                     if {$dir ne "" && [file exists [file join $dir $::env(WAYLAND_DISPLAY)]]} { return 1 }
-                    return -1
                 }
                 if {[info exists ::env(DISPLAY)] && $::env(DISPLAY) ne ""} {
+                    set has_var 1
                     if {[regexp {^:(\d+)} $::env(DISPLAY) -> num]} {
                         if {[file exists "/tmp/.X11-unix/X$num"]} { return 1 }
                     }
-                    return -1
                 }
-                return 0
+                return [expr {$has_var ? -1 : 0}]
             }
             set _dsc [_display-socket-check]
             if {$_dsc < 0 || [catch {package require Tk}]} {
@@ -1972,8 +1973,10 @@ proc toc-show {} {
     bind $w.lst <Return>          [list toc-jump $w $headings]
     bind $w.lst <Double-1>        [list toc-jump $w $headings]
     bind $w.lst <ButtonRelease-1> "[list toc-jump $w $headings]; break"
-    bind $w     <Escape>   [list destroy $w]
-    bind $w     <$::cfg_key_toc> [list destroy $w]
+    bind $w     <Escape>          [list destroy $w]
+    bind $w     <Control-q>       [list destroy $w]
+    bind $w.lst <Control-q>       [list destroy $w]
+    bind $w     <$::cfg_key_toc>  [list destroy $w]
     bind $w     <Destroy>  { after idle { catch { focus $::toc_ed } } }
     focus $w.lst
 }
