@@ -528,7 +528,7 @@ set ::i18n {
     en {
         toc_title          "Table of contents"
         toc_no_headings    "no headings found"
-        toc_jump_bar       "↵ jump  esc cancel"
+        toc_jump_bar       "↵ jump  esc/ctrl+q cancel"
         toc_headings       "%d heading%s"
         br_no_docs         "No documents yet. Press n to create one."
         br_help_gui        " ↵ open  n new  t scratchpad  d delete  r rename  q quit  h help"
@@ -542,7 +542,7 @@ set ::i18n {
         ed_watch_reload       "\"%s\" was modified externally. Reload?"
         ed_watch_reload_dirty "\"%s\" was modified externally and you have unsaved changes. Reload?"
         ed_save_before     "Save \"%s\" before closing?"
-        ed_save_before_tui "save before closing?"
+        ed_save_before_tui "save before closing? (y/n/c=cancel)"
         help_date_time     "Date & Time"
         help_cur_time      "Current time:  %-12s  Date: %s"
         help_file_info     "File info"
@@ -579,7 +579,7 @@ set ::i18n {
     fr {
         toc_title          "Table des matières"
         toc_no_headings    "aucun titre trouvé"
-        toc_jump_bar       "↵ aller  esc annuler"
+        toc_jump_bar       "↵ aller  esc/ctrl+q annuler"
         toc_headings       "%d titre%s"
         br_no_docs         "Aucun document. Appuyez sur n pour en créer un."
         br_help_gui        " ↵ ouvrir  n nouveau  t bloc-notes  d supprimer  r renommer  q quitter  h aide"
@@ -593,7 +593,7 @@ set ::i18n {
         ed_watch_reload       "\"%s\" a été modifié externement. Recharger ?"
         ed_watch_reload_dirty "\"%s\" a été modifié externement et vous avez des modifications non sauvegardées. Recharger ?"
         ed_save_before     "Enregistrer \"%s\" avant de fermer ?"
-        ed_save_before_tui "enregistrer avant de fermer ?"
+        ed_save_before_tui "enregistrer avant de fermer ? (o/n/c=annuler)"
         help_date_time     "Date & Heure"
         help_cur_time      "Heure actuelle: %-12s  Date : %s"
         help_file_info     "Infos fichier"
@@ -2393,7 +2393,7 @@ proc tui-move {row col} { puts -nonewline "\033\[[expr {$row+1}];[expr {$col+1}]
 
 proc tui-attr {a} {
     switch $a {
-        bold     -
+        bold     { puts -nonewline "\033\[1m" }
         heading  { puts -nonewline "\033\[1m" }
         dim-text { puts -nonewline "\033\[2m" }
         dim      { puts -nonewline "\033\[2m" }
@@ -2781,6 +2781,29 @@ proc tui-confirm {msg rows cols} {
     }
 }
 
+proc tui-yesnocancel {msg rows cols} {
+    if {$::cfg_console_center_alert} {
+        set line "  $msg  "
+        set w [string length $line]
+        set row [expr {$rows / 2}]
+        set lcol [expr {max(0, ($cols - $w) / 2)}]
+        foreach r [list [expr {$row-1}] $row [expr {$row+1}]] {
+            tui-move $r 0; puts -nonewline "\033\[2K"
+        }
+        tui-move $row $lcol
+        tui-attr reverse; puts -nonewline $line; tui-attr off
+    } else {
+        tui-bar [expr {$rows-1}] " $msg" "" $cols
+    }
+    flush stdout
+    while 1 {
+        set k [tui-getch]
+        if {$k in {y Y o O}} { return yes }
+        if {$k in {n N}}     { return no }
+        if {$k in {c C ESC}} { return cancel }
+    }
+}
+
 proc tui-active-dir {entries cfi} {
     set i [expr {$cfi >= 0 ? $cfi : 0}]
     while {$i >= 0} {
@@ -3030,14 +3053,16 @@ proc tui-toc {lines rows cols {cy 1} {filepath ""}} {
     }
     set scroll 0
     while 1 {
-        puts -nonewline "\033\[2J"
         set usable [expr {$rows-3}]
         if {$sel < $scroll}            { set scroll $sel }
         if {$sel >= $scroll + $usable} { set scroll [expr {$sel - $usable + 1}] }
         tui-attr bold; tui-fill 0 " [t toc_title]" $cols; tui-attr off
         for {set i 0} {$i < $usable} {incr i} {
             set idx [expr {$scroll+$i}]
-            if {$idx >= [llength $headings]} break
+            if {$idx >= [llength $headings]} {
+                tui-move [expr {$i+1}] 0; puts -nonewline "\033\[K"
+                continue
+            }
             lassign [lindex $headings $idx] ln title level
             set indent [string repeat "- " [expr {$level - 1}]]
             set line [format "  %4d   %s%s" $ln $indent $title]
@@ -3050,7 +3075,7 @@ proc tui-toc {lines rows cols {cy 1} {filepath ""}} {
         tui-bar  [expr {$rows-1}] " [t toc_headings $nh $plu]" "" $cols
         flush stdout
         switch -- [tui-getch] {
-            ESC      { return {} }
+            ESC - "\x11" { return {} }
             UP - k   { if {$sel > 0} { incr sel -1 } }
             DOWN - j { if {$sel < $nh-1} { incr sel 1 } }
             HOME     { set sel 0 }
@@ -3416,16 +3441,24 @@ proc tui-editor {filepath} {
                 } elseif {$key eq $::cfg_tui_close || $key eq "ESC"} {
                     if {$dirty} {
                         lassign [tui-size] rows cols
-                        if {[tui-confirm [t ed_save_before_tui] $rows $cols]} {
-                            if {$filepath eq ""} {
-                                tui-scratchpad-save $rows $cols lines filepath dirty
-                            } else {
-                                tui-save-file $filepath $lines
+                        set r [tui-yesnocancel [t ed_save_before_tui] $rows $cols]
+                        if {$r eq "cancel"} {
+                            set clear_sel 0
+                        } else {
+                            if {$r eq "yes"} {
+                                if {$filepath eq ""} {
+                                    tui-scratchpad-save $rows $cols lines filepath dirty
+                                } else {
+                                    tui-save-file $filepath $lines
+                                }
                             }
+                            if {$filepath ne ""} { cursor-put $filepath $cy $cx }
+                            return
                         }
+                    } else {
+                        if {$filepath ne ""} { cursor-put $filepath $cy $cx }
+                        return
                     }
-                    if {$filepath ne ""} { cursor-put $filepath $cy $cx }
-                    return
                 } elseif {$key eq $::cfg_tui_open} {
                     if {$filepath ne ""} { tui-save-file $filepath $lines; cursor-put $filepath $cy $cx }
                     set dirty 0; return

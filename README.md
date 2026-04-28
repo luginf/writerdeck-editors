@@ -5,9 +5,11 @@ WrithDeck is a distraction-free text editor designed for writers using a dedicat
 
 It includes customizable inline syntax highlighting, a file browser, split view, chapter navigation through a table of contents, and a fully themeable interface, all in under 3,800 lines (160 Kb) of Tcl/Tk.
 
-Whether you're writing on a Raspberry Pi with an LCD screen, on a tablet, over SSH, or on your desktop, WrithDeck stays lightweight and lets you focus on your text.
+Whether you're writing on a Raspberry Pi Zero with an E-ink screen, on a an android tablet, over SSH, or on your desktop, WrithDeck stays lightweight and lets you focus on your text.
 
 It has GUI and TUI dual mode with similar behaviors, and is fully configurable.
+
+![WrithDeck Screenshot 01](writhdeck_screen01.png)
 
 ## Usage
 
@@ -56,6 +58,8 @@ When both `--gui` and `--no-gui` are given, `--no-gui` takes precedence.
 - **Scratchpad**: temporary in-memory buffer, no disk file until explicitly saved
 - **Help dialog**: shows selection word/char count when text is selected (GUI and TUI)
 
+
+![WrithDeck Screenshot 02](writhdeck_screen02.png)
 
 ---
 
@@ -206,7 +210,7 @@ Those are the default keys. Most of them are fully customisable in the writhdeck
 | Ctrl+L | Toggle line numbers |
 | Ctrl+D | Toggle dark/light theme (reverse video) |
 | Ctrl+Space | Jump to next space |
-| F11 | Table of contents |
+| F11 | Table of contents (Esc / Ctrl+Q to close, Enter to jump) |
 | Ctrl+A | Select all |
 | Ctrl+K | Toggle sticky selection (first press: set anchor; second press: cancel) |
 | Shift+↑↓←→ | Extend selection |
@@ -230,10 +234,22 @@ Those are the default keys. Most of them are fully customisable in the writhdeck
 
 ---
 
+## Screenshots 
+
+WrithDeck running on a Raspberry Zero W (goto chapter mode):
+
+![WrithDeck Screenshot 03](writhdeck_screen03.jpg)
+
+WrithDeck running within termux on a Meebook M6 Android eBook Reader:
+
+![WrithDeck Screenshot 04](writhdeck_screen04.jpg)
+
+
 ## Known bugs and limitations
 
 - In GUI mode, end of lines inside a wrapped text can lead to inconsistent block cursor appearence. To fix it, use non-block cursor in the .ini file (block_cursor_gui = 0).
 - There is sometimes a slight delay to show the inverted letters under the block cursor in GUI mode. See fix above or use TUI mode.  
+- In TUI mode sometimes when you resize the terminal window, some artefacts might appear. Just load the help with ctrl+h twice, it will refresh the screen.
 - There is no non-wrap mode (and it's not a planned feature).
 - There is no tab mode (and it's not a planned feature).
 - On very long texts (above 80,000 words) and slow CPU computer (1.1 Ghz Celeron from 2013), the cursor and typing might be slowed down. It has been optimized in comparison to first version, but if necessary turn off the words and chars count in the status bar. You can still access writing statistics in the help.
@@ -241,7 +257,7 @@ Those are the default keys. Most of them are fully customisable in the writhdeck
 
 ## Credits
 
-Based on <https://github.com/lallero7/writhdeckForCMD>,
+Based on <https://github.com/lallero7/writerdeckForCMD>,
 itself based on <https://github.com/shmimel/bee-write-back/>
 
 Designed to run on Tcl/Tk with the help of LLM (Claude Code).
