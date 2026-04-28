@@ -29,7 +29,7 @@ When both `--gui` and `--no-gui` are given, `--no-gui` takes precedence.
 
 - Plain `.txt` file editor focused on distraction-free writing
 - Documents stored in `~/Documents/writhdeck/` (auto-created)
-- File browser: files sorted by modification date, open / create / rename / delete
+- File browser: files sorted by modification date, open / create / rename / delete / scratchpad
 - Word-wrapped display with configurable margins
 - **Inline syntax highlighting** (GUI and TUI):
   - Headings: configurable marker (`= title =`) and Markdown (`# title`)
@@ -45,6 +45,8 @@ When both `--gui` and `--no-gui` are given, `--no-gui` takes precedence.
 - Dark/light theme toggle (`Ctrl+D` by default, configurable)
 - Interface language: `lang = en` or `fr`
 - **Unified browser behavior**: after closing a file, both GUI and TUI return to the file browser (configurable via `browser`)
+- **Scratchpad**: temporary in-memory buffer, no disk file until explicitly saved
+- **Help dialog**: shows selection word/char count when text is selected (GUI and TUI)
 
 
 ---
@@ -70,6 +72,7 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 | `margin_width` | `60` | Horizontal padding (px, GUI) |
 | `margin_cols` | `6` | Horizontal margin (cols, TUI) |
 | `font_size` | `13` | Font size (GUI) |
+| `font_family` | `Mono` | Font family (GUI); Tk resolves `Mono` to the best available monospace per OS — override with e.g. `JetBrains Mono`, `Consolas`, `Fira Code` |
 | `line_spacing` | `100` | Line spacing in % (GUI) |
 
 **`[behaviour]`**
@@ -86,6 +89,8 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 | `lang` | `en` | Interface language (`en` or `fr`) |
 | `dark_mode` | `1` | Dark theme; `0` = light (Solarized-style) |
 
+**`[keys]`** — all actions are rebindable: `key_save`, `key_close`, `key_find`, `key_replace`, `key_goto`, `key_open`, `key_undo`, `key_redo`, `key_help`, `key_toc`, `key_line_numbers`, `key_fullscreen`, `key_split`, `key_dark_toggle`, `key_next_space`, `key_prev_space`. Use Tk key names (`Control-s`, `Alt-Return`, `F11`, etc.).
+
 **`[colors]`** — `color_heading`, `color_comment`, `color_markup`, `color_bg`, `color_fg`, `color_bg_bar`, `color_fg_bar`, `color_bg_sel` + `_alt` variants for light mode.
 
 
@@ -95,7 +100,7 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 
 **Display**
 - Graphical window with scrollable editor and file browser
-- Configurable pixel margins, font size, line spacing, colors (via INI)
+- Configurable pixel margins, font size, font family, line spacing, colors (via INI)
 - Inline syntax highlighting: headings, comments, bold, italic, underline, strikethrough
 - Line numbers: synchronized with scroll (`line_numbers = 1`)
 - Dynamic font resize: Ctrl++ / Ctrl+-  (keyboard and numpad)
@@ -105,6 +110,7 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 - Clock (HH:MM) in status bar: add `clock` token to a status zone
 - Block cursor: rectangle with inverted colors (`block_cursor_gui = 1`)
 - Configurable status bar height (`bar_height`); font size adapts automatically
+- **Vertical split view** (F3): divide the editor into two independent panes on the same document; each pane scrolls and positions the cursor independently
 
 **Shortcuts — Editor**
 
@@ -113,19 +119,19 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 | Ctrl+S | Save |
 | Ctrl+Shift+S | Save as… (with overwrite confirmation) |
 | Ctrl+Q / Esc | Close file, return to browser |
-| Ctrl+F | Find (inline bar, live highlight, match counter) |
+| Ctrl+F | Find (inline bar, live highlight, match counter) — operates on the focused pane in split view |
 | Ctrl+R | Find & Replace (inline bar; Enter: replace one, Ctrl+Enter: all) |
 | Ctrl+Z | Undo |
 | Ctrl+Y | Redo |
 | Ctrl+O | Open any file (system dialog) |
-| Ctrl+G | Go to line |
-| Ctrl+H | Help dialog (includes date/time and file word/char count) |
+| Ctrl+G | Go to line — jumps in the focused pane |
+| Ctrl+H | Help dialog (date/time, file stats, selection stats if text selected) |
 | Ctrl+L | Toggle line numbers |
 | Ctrl+D | Toggle dark/light theme |
 | Ctrl+Space | Jump to next space |
 | Ctrl+Shift+Space | Jump to previous space |
-| F11 | Table of contents |
-| F3 | Split view — toggle vertical split (GUI only) |
+| F11 | Table of contents — jumps in the focused pane |
+| F3 | Split view toggle (GUI only) |
 | Alt+Enter | Fullscreen toggle |
 | Tab | Insert 4 spaces |
 | Shift+↑↓←→ | Extend selection |
@@ -136,6 +142,7 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 |---|---|
 | Enter / double-click | Open file |
 | n | New file |
+| t | Scratchpad (in-memory buffer, no disk file; Ctrl+S prompts for a name to save) |
 | d | Delete file |
 | r | Rename file |
 | h / Ctrl+H | Help |
@@ -143,6 +150,13 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 | Ctrl+D | Toggle dark/light theme |
 | Alt+Enter | Fullscreen toggle |
 | q | Quit |
+
+**Split view notes**
+- F3 splits the current document into two side-by-side panes; press F3 again to close the split
+- Both panes share the same text — edits in one are immediately visible in the other
+- Cursor, scroll position, and undo history are independent per pane
+- Find, Replace, Go to line, and TOC all operate on the pane that had focus when they were opened
+- Line numbers are hidden while split is active
 
 
 ---
@@ -157,7 +171,7 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 - Scroll indicator: `▐/│` bar in the rightmost column when content overflows
 - Line numbers: left column (`line_numbers = 1`), shown on first visual row of each paragraph
 - Status bar: filename, position, word/char count, clock
-- Word and char count also available in help dialog (Ctrl+H)
+- Help dialog shows selection word/char count when text is selected
 - Cursor shape configurable: block or bar, blinking or steady (`block_cursor_console`, `blink_cursor`)
 - Confirm dialogs centered on screen by default (`console_center_alert = 1`)
 - After closing a file, returns to browser if `browser = 1` (default)
@@ -166,7 +180,7 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 
 | Key | Action |
 |---|---|
-| Ctrl+S | Save |
+| Ctrl+S | Save (scratchpad: prompts for filename, then saves to disk) |
 | Ctrl+Q / Esc | Close file, return to browser |
 | Ctrl+F | Find (prompt; repeat to find next) |
 | Ctrl+R | Find & Replace (global, with replacement counter) |
@@ -174,7 +188,7 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 | Ctrl+Y | Redo |
 | Ctrl+O | Save and return to browser |
 | Ctrl+G | Go to line |
-| Ctrl+H | Help (includes date/time and file word/char count) |
+| Ctrl+H | Help (date/time, file stats, selection stats if text selected) |
 | Ctrl+L | Toggle line numbers |
 | Ctrl+D | Toggle dark/light theme (reverse video) |
 | Ctrl+Space | Jump to next space |
@@ -193,9 +207,10 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 |---|---|
 | Enter | Open file |
 | n | New file |
+| t | Scratchpad (in-memory buffer, no disk file; Ctrl+S prompts for a name to save) |
 | d | Delete file |
 | r | Rename file |
-| Ctrl+H | Help |
+| h / Ctrl+H | Help |
 | q / Ctrl+Q | Quit |
 
 

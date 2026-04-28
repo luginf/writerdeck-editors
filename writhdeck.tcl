@@ -517,8 +517,8 @@ set ::i18n {
         toc_jump_bar       "↵ jump  esc cancel"
         toc_headings       "%d heading%s"
         br_no_docs         "No documents yet. Press n to create one."
-        br_help_gui        " ↵ open  n new  d delete  r rename  q quit  h help"
-        br_help_tui        "↵ open  n new  d delete  r rename  q quit   %s help"
+        br_help_gui        " ↵ open  n new  t scratchpad  d delete  r rename  q quit  h help"
+        br_help_tui        "↵ open  n new  t scratchpad  d delete  r rename  q quit   %s help"
         br_exists          "'%s' already exists"
         br_deleted         "deleted '%s'"
         br_renamed         "renamed → '%s'"
@@ -564,8 +564,8 @@ set ::i18n {
         toc_jump_bar       "↵ aller  esc annuler"
         toc_headings       "%d titre%s"
         br_no_docs         "Aucun document. Appuyez sur n pour en créer un."
-        br_help_gui        " ↵ ouvrir  n nouveau  d supprimer  r renommer  q quitter  h aide"
-        br_help_tui        "↵ ouvrir  n nouveau  d supprimer  r renommer  q quitter   %s aide"
+        br_help_gui        " ↵ ouvrir  n nouveau  t bloc-notes  d supprimer  r renommer  q quitter  h aide"
+        br_help_tui        "↵ ouvrir  n nouveau  t bloc-notes  d supprimer  r renommer  q quitter   %s aide"
         br_exists          "'%s' existe déjà"
         br_deleted         "'%s' supprimé"
         br_renamed         "renommé → '%s'"
@@ -2716,6 +2716,9 @@ proc tui-browser {} {
                 }
             }
             t { return "__scratchpad__" }
+            h {
+                tui-help-dialog $rows $cols 0 0
+            }
             d {
                 if {$cfi >= 0} {
                     lassign [lindex $entries $cfi] _ dir name
@@ -2737,6 +2740,9 @@ proc tui-browser {} {
                     }
                 }
             }
+        }
+        if {$key eq $::cfg_tui_help && $key ne "h"} {
+            tui-help-dialog $rows $cols 0 0
         }
     }
 }
