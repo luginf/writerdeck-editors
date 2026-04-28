@@ -105,6 +105,7 @@ set ::filename     ""
 set ::dirty        0
 set ::msg          ""
 set ::ed_msg       ""
+set ::scratchpad   0
 set ::session_headings {}
 
 file mkdir $::DOCS_DIR_DEFAULT
@@ -529,6 +530,7 @@ set ::i18n {
         help_date_time     "Date & Time"
         help_cur_time      "Current time:  %-12s  Date: %s"
         help_file_info     "File info"
+        help_sel_info      "Selection"
         help_words_chars   "Words: %-8d  Chars: %d"
         help_shortcuts     "Writhdeck — keyboard shortcuts"
         help_close         "Press any key to close"
@@ -575,6 +577,7 @@ set ::i18n {
         help_date_time     "Date & Heure"
         help_cur_time      "Heure actuelle: %-12s  Date : %s"
         help_file_info     "Infos fichier"
+        help_sel_info      "Sélection"
         help_words_chars   "Mots : %-8d  Caract. : %d"
         help_shortcuts     "Writhdeck — raccourcis clavier"
         help_close         "Appuyer sur une touche pour fermer"
@@ -1083,6 +1086,7 @@ proc br-rename {} {
 bind .br.mid.lst <Return>      { br-open }
 bind .br.mid.lst <Double-1>    { br-open }
 bind .br.mid.lst <n>           { br-new }
+bind .br.mid.lst <t>           { open-scratchpad }
 bind .br.mid.lst <d>           { br-delete }
 bind .br.mid.lst <r>           { br-rename }
 bind .br.mid.lst <q>           { exit }
@@ -1238,7 +1242,8 @@ set ::ln_last_count 0
 
 proc gui-status-state {} {
     set t [active-ed]
-    set fn    [expr {$::filename eq "" ? "\[new\]" : [file tail $::filename]}]
+    set fn    [expr {$::scratchpad ? "** scratchpad **" : \
+                    ($::filename eq "" ? "\[new\]" : [file tail $::filename])}]
     lassign [split [$t index insert] .] ln col
     set total [expr {[lindex [split [$t index end] .] 0] - 1}]
     set words $::gui_wc
@@ -1458,7 +1463,7 @@ proc load-file {path} {
 }
 
 proc save-file {} {
-    if {$::filename eq ""} return
+    if {$::filename eq ""} { if {$::scratchpad} { save-as }; return }
     set fh [open $::filename w]
     fconfigure $fh -encoding utf-8
     puts -nonewline $fh [.ed.t get 1.0 {end - 1 chars}]
@@ -1483,6 +1488,7 @@ proc save-as {} {
         if {$r ne "yes"} return
     }
     set ::filename $new_path
+    set ::scratchpad 0
     wm title . "Writhdeck — [file tail $new_path]"
     save-file
 }
@@ -1590,8 +1596,9 @@ proc search-prev {} {
 
 proc close-editor {} {
     if {$::dirty} {
+        set _label [expr {$::scratchpad ? "scratchpad" : [file tail $::filename]}]
         set r [tk_messageBox \
-            -message [t ed_save_before [file tail $::filename]] \
+            -message [t ed_save_before $_label] \
             -type yesnocancel -icon question -default yes -parent .]
         if {$r eq "cancel"} return
         if {$r eq "yes"}    save-file
@@ -1601,10 +1608,11 @@ proc close-editor {} {
         cursor-put $::filename $cy $cx
     }
     split-close
-    set ::filename ""
-    set ::dirty    0
-    set ::msg      ""
-    set ::ed_msg   ""
+    set ::filename  ""
+    set ::scratchpad 0
+    set ::dirty     0
+    set ::msg       ""
+    set ::ed_msg    ""
     wm title . "Writhdeck"
     .ed.t delete 1.0 end
     search-close
@@ -1905,13 +1913,24 @@ proc help-dialog {} {
         "Date"          [clock format $_ts -format "%Y-%m-%d"] \
     ]
     incr height 4
+    set _sel_txt ""
+    catch { set _sel_txt [[active-ed] get sel.first sel.last] }
+    if {$_sel_txt ne ""} {
+        set _sel_wc [llength [regexp -all -inline {\S+} $_sel_txt]]
+        set _sel_cc [string length $_sel_txt]
+        lappend sections [t help_sel_info] [list \
+            "Words"  $_sel_wc \
+            "Chars"  $_sel_cc \
+        ]
+        incr height 4
+    }
     if {$::filename ne ""} {
         set txt [.ed.t get 1.0 end-1c]
         set wc    [llength [regexp -all -inline {\S+} $txt]]
         set chars [string length $txt]
-        lappend sections "FILE INFO" [list \
-            "Word count"  $wc \
-            "Char count"  $chars \
+        lappend sections [t help_file_info] [list \
+            "Words"  $wc \
+            "Chars"  $chars \
         ]
         incr height 4
     }
@@ -1926,7 +1945,6 @@ proc help-dialog {} {
             [key-label $::cfg_key_goto]         "Go to line" \
             [key-label $::cfg_key_undo]         "Undo" \
             [key-label $::cfg_key_redo]         "Redo" \
-            "Tab"                               "Insert 4 spaces" \
             [key-label $::cfg_key_next_space]   "Jump to next space" \
             [key-label $::cfg_key_prev_space]   "Jump to prev space" \
             [key-label $::cfg_key_toc]          "Table of contents  (${hm}title${hm})" \
@@ -1937,6 +1955,7 @@ proc help-dialog {} {
         "BROWSER" [list \
             "↵ / double-click"                  "Open" \
             "n"                                 "New file" \
+            "t"                                 "Scratchpad (temp, no disk file)" \
             "d"                                 "Delete" \
             "r"                                 "Rename" \
             [key-label $::cfg_key_fullscreen]   "Fullscreen" \
@@ -2160,7 +2179,27 @@ proc ini-reload {} {
     catch { apply-line-spacing }
 }
 
+proc open-scratchpad {} {
+    pack forget .br
+    pack .ed -fill both -expand 1
+    ini-reload
+    .ed.t configure -undo 0
+    .ed.t delete 1.0 end
+    .ed.t edit reset
+    .ed.t edit modified false
+    .ed.t configure -undo 1
+    set ::filename  ""
+    set ::scratchpad 1
+    set ::dirty     0
+    set ::ln_last_count 0
+    wm title . "Writhdeck — ** scratchpad **"
+    highlight-headings
+    ed-status
+    focus .ed.t
+}
+
 proc show-editor {path} {
+    set ::scratchpad 0
     pack forget .br
     pack .ed -fill both -expand 1
     ini-reload
@@ -2266,7 +2305,7 @@ proc tui-help {row text cols {zone left}} {
     tui-attr off
 }
 
-proc tui-help-dialog {rows cols wc cc} {
+proc tui-help-dialog {rows cols wc cc {sel_wc -1} {sel_cc -1}} {
     set lbl_save   $::cfg_lbl_save;   set lbl_close  $::cfg_lbl_close
     set lbl_undo   $::cfg_lbl_undo;   set lbl_selall $::cfg_lbl_sel_all
     set lbl_sticky $::cfg_lbl_sticky; set lbl_copy   $::cfg_lbl_copy
@@ -2275,7 +2314,7 @@ proc tui-help-dialog {rows cols wc cc} {
     set lbl_goto   $::cfg_lbl_goto;   set lbl_lnum   $::cfg_lbl_line_nums
     set lbl_open   $::cfg_lbl_open;   set lbl_toc    $::cfg_lbl_toc
     set lbl_help   $::cfg_lbl_help;   set lbl_nsp    $::cfg_lbl_next_space
-    set lbl_psp    $::cfg_lbl_prev_space; set lbl_redo $::cfg_lbl_redo
+    set lbl_redo   $::cfg_lbl_redo
     set _ts [clock seconds]
     set _e ""
     # two-column line: key(10) + action(19) | key(10) + action
@@ -2287,6 +2326,13 @@ proc tui-help-dialog {rows cols wc cc} {
             [clock format $_ts -format "%H:%M:%S"] \
             [clock format $_ts -format "%Y-%m-%d"]] 0] \
         [list "" 0] \
+    ]
+    if {$sel_wc >= 0} {
+        lappend lines [list "  [t help_sel_info]" 1]
+        lappend lines [list [format "  [t help_words_chars]" $sel_wc $sel_cc] 0]
+        lappend lines [list "" 0]
+    }
+    lappend lines \
         [list "  [t help_file_info]" 1] \
         [list [format "  [t help_words_chars]" $wc $cc] 0] \
         [list "" 0] \
@@ -2300,15 +2346,11 @@ proc tui-help-dialog {rows cols wc cc} {
         [list [format $f2 $lbl_repl   [t help_k_replace] $lbl_paste  [t help_k_paste]]  0] \
         [list [format $f2 $lbl_goto   [t help_k_goto]    $lbl_lnum   [t help_k_lnum]]   0] \
         [list [format $f2 $lbl_open   [t help_k_open]    $lbl_nsp    [t help_k_nsp]]    0] \
-        [list [format $f2 $_e         $_e                $lbl_psp    [t help_k_psp]]    0] \
-        [list "" 0] \
-        [list "  [t help_shift_arrows]" 0] \
         [list "" 0] \
         [list [format "  %-16s %s" $lbl_toc  [t help_k_toc]]  0] \
         [list [format "  %-16s %s" $lbl_help [t help_k_help]] 0] \
         [list "" 0] \
-        [list "  [t help_close]" 1] \
-    ]
+        [list "  [t help_close]" 1]
     set h [llength $lines]
     set w 60
     set top  [expr {max(0, ($rows - $h) / 2)}]
@@ -2673,6 +2715,7 @@ proc tui-browser {} {
                     } else { close [open $fp w]; return $fp }
                 }
             }
+            t { return "__scratchpad__" }
             d {
                 if {$cfi >= 0} {
                     lassign [lindex $entries $cfi] _ dir name
@@ -2758,10 +2801,25 @@ proc tui-save-file {filepath lines} {
 
 # ── TUI Editor ────────────────────────────────────────────────────────────────
 
+proc tui-scratchpad-save {rows cols linesVar filepathVar dirtyVar} {
+    upvar 1 $linesVar lines $filepathVar filepath $dirtyVar dirty
+    lassign [tui-size] rows cols
+    set name [string trim [tui-prompt "save as: " $rows $cols]]
+    if {$name eq ""} return
+    if {[file extension $name] eq ""} { append name $::FILE_EXT }
+    set fp [file join $::DOCS_DIR_DEFAULT $name]
+    if {[file exists $fp]} {
+        if {![tui-confirm "\"$name\" exists. Overwrite?" $rows $cols]} return
+    }
+    set filepath $fp
+    tui-save-file $filepath $lines
+    set dirty 0
+}
+
 proc tui-editor {filepath} {
     # ── load ──────────────────────────────────────────────────────────────────
     set lines {}
-    if {[file exists $filepath] && [file size $filepath] > 0} {
+    if {$filepath ne "" && [file exists $filepath] && [file size $filepath] > 0} {
         set fh [open $filepath r]; fconfigure $fh -encoding utf-8
         set content [read $fh]; close $fh
         foreach line [split $content "\n"] { lappend lines $line }
@@ -2772,7 +2830,7 @@ proc tui-editor {filepath} {
     if {[llength $lines] == 0} { set lines [list ""] }
 
     # ── cursor restore ────────────────────────────────────────────────────────
-    lassign [cursor-get $filepath] cy cx
+    if {$filepath eq ""} { set cy 1; set cx 0 } else { lassign [cursor-get $filepath] cy cx }
     if {[dict exists $::session_headings $filepath]} {
         set hidx [dict get $::session_headings $filepath]
         set hi 0; set ln 1
@@ -2932,7 +2990,7 @@ proc tui-editor {filepath} {
             eval $compute_wc
         }
         set tui_state [dict create \
-            fn    [file tail $filepath] \
+            fn    [expr {$filepath eq "" ? "** scratchpad **" : [file tail $filepath]}] \
             dirty $dirty \
             sel   [expr {$sel_anchor ne ""}] \
             ln    $cy  total [llength $lines] \
@@ -3068,21 +3126,31 @@ proc tui-editor {filepath} {
             default {
                 set c [scan $key %c]
                 if {$key eq $::cfg_tui_save} {
-                    tui-save-file $filepath $lines
-                    cursor-put $filepath $cy $cx
-                    set dirty 0; set message [t ed_saved]; set msg_time [clock seconds]
+                    if {$filepath eq ""} {
+                        tui-scratchpad-save $rows $cols lines filepath dirty
+                        if {$filepath ne ""} { set message [t ed_saved]; set msg_time [clock seconds] }
+                    } else {
+                        tui-save-file $filepath $lines
+                        cursor-put $filepath $cy $cx
+                        set dirty 0; set message [t ed_saved]; set msg_time [clock seconds]
+                    }
                     set clear_sel 0
                 } elseif {$key eq $::cfg_tui_close || $key eq "ESC"} {
                     if {$dirty} {
                         lassign [tui-size] rows cols
                         if {[tui-confirm [t ed_save_before_tui] $rows $cols]} {
-                            tui-save-file $filepath $lines
+                            if {$filepath eq ""} {
+                                tui-scratchpad-save $rows $cols lines filepath dirty
+                            } else {
+                                tui-save-file $filepath $lines
+                            }
                         }
                     }
-                    cursor-put $filepath $cy $cx; return
+                    if {$filepath ne ""} { cursor-put $filepath $cy $cx }
+                    return
                 } elseif {$key eq $::cfg_tui_open} {
-                    tui-save-file $filepath $lines
-                    cursor-put $filepath $cy $cx; set dirty 0; return
+                    if {$filepath ne ""} { tui-save-file $filepath $lines; cursor-put $filepath $cy $cx }
+                    set dirty 0; return
                 } elseif {$key eq $::cfg_tui_undo} {
                     if {[llength $undo_stack] > 0} {
                         lappend redo_stack [list $lines $cy $cx]
@@ -3236,7 +3304,13 @@ proc tui-editor {filepath} {
                 } elseif {$key eq $::cfg_tui_help} {
                     lassign [tui-size] rows cols
                     if {$wc_dirty} { eval $compute_wc }
-                    tui-help-dialog $rows $cols $wc_cached $cc_cached
+                    set _sel_wc -1; set _sel_cc -1
+                    if {$sel_anchor ne ""} {
+                        set _stxt [tui-sel-text $lines $sel_anchor $cy $cx]
+                        set _sel_wc [llength [regexp -all -inline {\S+} $_stxt]]
+                        set _sel_cc [string length $_stxt]
+                    }
+                    tui-help-dialog $rows $cols $wc_cached $cc_cached $_sel_wc $_sel_cc
                     set clear_sel 0
                 } elseif {[string match "F*" $key]} {                          ;# ignore unknown F-keys
                     set clear_sel 0
@@ -3275,7 +3349,7 @@ proc tui-main {} {
                 set fp [tui-browser]
                 if {$fp eq ""} break
                 puts -nonewline "\033\[2J"; flush stdout
-                tui-editor $fp
+                if {$fp eq "__scratchpad__"} { tui-editor "" } else { tui-editor $fp }
             }
         }
     } err info]
