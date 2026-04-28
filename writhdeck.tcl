@@ -6,11 +6,12 @@ _w=$(stty -g 2>/dev/null); trap '[ -n "$_w" ] && stty "$_w" 2>/dev/null' EXIT IN
 #
 #     writhdeck.tcl 
 #     
-#  ~  Tk/TUI text editor for writerdecks ~
+#  ~  Tcl/Tk (console/GUI) text editor for writerdecks ~
 #
-# Usage: tclsh writhdeck.tcl [--no-gui] [filename]
+#     Usage: tclsh writhdeck.tcl [--no-gui] [filename]
 # 
-# 
+#    https://github.com/luginf/writhdeck
+#    -----------------------------
 #    Copyright (C) 2026 by Luginfo
 #    
 #    BSD Zero Clause License
@@ -335,16 +336,18 @@ proc ini-load {} {
 proc ini-save {} {
     set fh [open $::INI_FILE w]
     fconfigure $fh -encoding utf-8
-    puts $fh "# Writhdeck — configuration"
+    puts $fh "# WrithDeck - configuration"
+    puts $fh "# https://github.com/luginf/writhdeck"
     puts $fh ""
     puts $fh "\[editor\]"
     puts $fh "# docs_dir = ~/Documents/writerdeck"
-    puts $fh "# (default: ~/Documents/writhdeck)"
+    puts $fh "# (main default document and conf folder: ~/Documents/writhdeck)"
     puts $fh "margin_width         = $::cfg_margin_width"
     puts $fh "margin_height        = $::cfg_margin_height"
-    puts $fh "# ── terminal version — values in columns/lines"
+    puts $fh "# terminal version — values in columns/lines"
     puts $fh "margin_cols    = $::cfg_margin_cols"
     puts $fh "margin_rows    = $::cfg_margin_rows"
+    puts $fh ""
     puts $fh "font_size      = $::cfg_font_size"
     puts $fh "font_family    = $::cfg_font_family"
     puts $fh "line_spacing   = $::cfg_line_spacing"
@@ -543,7 +546,7 @@ set ::i18n {
         help_date_time     "Date & Time"
         help_cur_time      "Current time:  %-12s  Date: %s"
         help_file_info     "File info"
-        help_sel_info      "Selection"
+        help_sel_info      "Selection info"
         help_words_chars   "Words: %-8d  Chars: %d"
         help_shortcuts     "Writhdeck — keyboard shortcuts"
         help_close         "Press any key to close"
@@ -594,7 +597,7 @@ set ::i18n {
         help_date_time     "Date & Heure"
         help_cur_time      "Heure actuelle: %-12s  Date : %s"
         help_file_info     "Infos fichier"
-        help_sel_info      "Sélection"
+        help_sel_info      "Infos sélection"
         help_words_chars   "Mots : %-8d  Caract. : %d"
         help_shortcuts     "Writhdeck — raccourcis clavier"
         help_close         "Appuyer sur une touche pour fermer"
