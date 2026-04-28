@@ -1,7 +1,7 @@
  
 # WrithDeck 
   
-WrithDeck is a distraction-free text editor designed for writers using a dedicated writerdeck, whether it's a DIY prototype or a computer built specifically for that purpose. It's fast and easy to customize. WrithDeck can run as a clean graphical application or directly in a terminal or TTY, all from a single file with no installation required.
+WrithDeck is a distraction-free text editor designed for writers using a dedicated writerdeck, whether it's a DIY prototype or a computer configured specifically for that purpose. It's fast and easy to customize. WrithDeck can run as a clean graphical application or directly in a terminal or TTY, all from a single file with no installation required.
 
 It includes customizable inline syntax highlighting, a file browser, split view, chapter navigation through a table of contents, and a fully themeable interface, all in under 3,500 lines of Tcl/Tk.
 
@@ -9,6 +9,7 @@ Whether you're writing on a Raspberry Pi with an LCD screen, on a tablet, over S
 
 It has GUI and TUI dual mode with similar behaviors, and is fully configurable.
 
+## Usage
 
 ```
 wish writhdeck.tcl                     # GUI, file browser
@@ -16,6 +17,8 @@ wish writhdeck.tcl file.txt            # GUI, open file directly
 tclsh writhdeck.tcl --no-gui           # TUI, file browser
 tclsh writhdeck.tcl --no-gui file.txt  # TUI, open file directly
 ```
+
+you can also run it from the terminal with ./writhdeck.tcl or, better, copy it into your path (into /usr/local/bin/ for example) for a direct access.
 
 
 ## Command-line options
@@ -247,8 +250,6 @@ Tcl is an amazing language! https://en.wikipedia.org/wiki/Tcl_(programming_langu
 Nano, micro or scite are also great tools for a simple writerdeck. 
 
   
-
-
 ## Licence
 
 Copyright (C) 2026 by Luginfo
