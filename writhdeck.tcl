@@ -172,6 +172,7 @@ set ::cfg_margin_width        60
 set ::cfg_margin_height       40
 set ::cfg_split_shrink_margin 1
 set ::cfg_watch_file          1
+set ::cfg_hemingway_mode      0
 set ::cfg_font_size      13
 set ::cfg_font_family    "Mono"
 set ::cfg_bg             "#1a1a1a"
@@ -236,9 +237,8 @@ set ::cfg_key_select_all   "Control-a"
 set ::cfg_key_sticky_sel   "Control-k"
 set ::cfg_key_toc          "F11"
 set ::cfg_key_line_numbers "Control-l"
-set ::cfg_key_next_space   "Control-space"
-set ::cfg_key_prev_space   "Control-Shift-space"
 set ::cfg_key_redo         "Control-y"
+set ::cfg_key_typewriter   "Control-t"
 set ::cfg_key_fullscreen   "Alt-Return"
 set ::cfg_key_split        "F3"
 set ::cfg_key_split_focus  "F4"
@@ -262,6 +262,7 @@ proc ini-load {} {
                 margin_height         { set ::cfg_margin_height       $v }
                 split_shrink_margin   { set ::cfg_split_shrink_margin [string is true $v] }
                 watch_file            { set ::cfg_watch_file          [string is true $v] }
+                hemingway_mode        { set ::cfg_hemingway_mode      [string is true $v] }
                 font_size        { set ::cfg_font_size      $v }
                 font_family      { set ::cfg_font_family    $v }
                 color_bg         { set ::cfg_bg             $v }
@@ -327,9 +328,8 @@ proc ini-load {} {
                 key_sticky_sel   { set ::cfg_key_sticky_sel   $v }
                 key_toc          { set ::cfg_key_toc          $v }
                 key_line_numbers { set ::cfg_key_line_numbers $v }
-                key_next_space   { set ::cfg_key_next_space   $v }
-                key_prev_space   { set ::cfg_key_prev_space   $v }
                 key_redo         { set ::cfg_key_redo         $v }
+                key_typewriter   { set ::cfg_key_typewriter   $v }
                 key_fullscreen   { set ::cfg_key_fullscreen   $v }
                 key_split        { set ::cfg_key_split        $v }
                 key_split_focus  { set ::cfg_key_split_focus  $v }
@@ -371,6 +371,7 @@ proc ini-save {} {
     puts $fh "\[behaviour\]"
     puts $fh "browser              = $::cfg_browser"
     puts $fh "watch_file           = $::cfg_watch_file"
+    puts $fh "hemingway_mode       = $::cfg_hemingway_mode"
     puts $fh "markdown_headings    = $::cfg_markdown_headings"
     puts $fh "split_shrink_margin  = $::cfg_split_shrink_margin"
     puts $fh "console_center_alert = $::cfg_console_center_alert"
@@ -407,9 +408,8 @@ proc ini-save {} {
     puts $fh "key_sticky_sel   = $::cfg_key_sticky_sel"
     puts $fh "key_toc          = $::cfg_key_toc"
     puts $fh "key_line_numbers = $::cfg_key_line_numbers"
-    puts $fh "key_next_space   = $::cfg_key_next_space"
-    puts $fh "key_prev_space   = $::cfg_key_prev_space"
     puts $fh "key_redo         = $::cfg_key_redo"
+    puts $fh "key_typewriter   = $::cfg_key_typewriter"
     puts $fh "key_fullscreen   = $::cfg_key_fullscreen"
     puts $fh "key_split        = $::cfg_key_split"
     puts $fh "key_split_focus  = $::cfg_key_split_focus"
@@ -480,9 +480,8 @@ proc keys-init {} {
     set ::cfg_tui_sticky_sel [tk-key-to-tui $::cfg_key_sticky_sel]
     set ::cfg_tui_toc          [tk-key-to-tui $::cfg_key_toc]
     set ::cfg_tui_line_nums    [tk-key-to-tui $::cfg_key_line_numbers]
-    set ::cfg_tui_next_space   [tk-key-to-tui $::cfg_key_next_space]
-    set ::cfg_tui_prev_space   [tk-key-to-tui $::cfg_key_prev_space]
     set ::cfg_tui_redo         [tk-key-to-tui $::cfg_key_redo]
+    set ::cfg_tui_typewriter   [tk-key-to-tui $::cfg_key_typewriter]
     set ::cfg_tui_dark_toggle  [tk-key-to-tui $::cfg_key_dark_toggle]
     set ::cfg_tui_split        [tk-key-to-tui $::cfg_key_split]
     # labels for UI display
@@ -500,9 +499,8 @@ proc keys-init {} {
     set ::cfg_lbl_sticky     [key-label $::cfg_key_sticky_sel]
     set ::cfg_lbl_toc        [key-label $::cfg_key_toc]
     set ::cfg_lbl_line_nums  [key-label $::cfg_key_line_numbers]
-    set ::cfg_lbl_next_space [key-label $::cfg_key_next_space]
-    set ::cfg_lbl_prev_space [key-label $::cfg_key_prev_space]
     set ::cfg_lbl_redo       [key-label $::cfg_key_redo]
+    set ::cfg_lbl_typewriter [key-label $::cfg_key_typewriter]
     set ::cfg_lbl_split      [key-label $::cfg_key_split]
     set ::cfg_lbl_split_focus [key-label $::cfg_key_split_focus]
     # conflict detection
@@ -515,9 +513,7 @@ proc keys-init {} {
         key_cut $::cfg_tui_cut  key_paste $::cfg_tui_paste \
         key_select_all $::cfg_tui_select_all  key_sticky_sel $::cfg_tui_sticky_sel \
         key_toc $::cfg_tui_toc  key_line_numbers $::cfg_tui_line_nums \
-        key_next_space $::cfg_tui_next_space \
-        key_prev_space $::cfg_tui_prev_space \
-        key_redo $::cfg_tui_redo]
+        key_redo $::cfg_tui_redo  key_typewriter $::cfg_tui_typewriter]
     set seen [dict create]; set conflicts {}
     foreach {name val} $pairs {
         if {[dict exists $seen $val]} {
@@ -575,8 +571,8 @@ set ::i18n {
         help_k_goto        "Go to line"
         help_k_lnum        "Line numbers"
         help_k_open        "Open (browser)"
-        help_k_nsp         "Jump to next space"
-        help_k_psp         "Jump to prev space"
+        help_k_typewriter  "Typewriter / focus mode (toggle)"
+        help_k_ctrl_arrows "Ctrl+↑↓  Paragraph  ·  Ctrl+←→ / Alt+BF  Word"
         help_k_toc         "Table of contents"
         help_k_help        "This help"
         help_shift_arrows  "Shift+Arrows  Extend selection"
@@ -627,8 +623,8 @@ set ::i18n {
         help_k_goto        "Aller à la ligne"
         help_k_lnum        "Numéros de lignes"
         help_k_open        "Ouvrir (explorateur)"
-        help_k_nsp         "Aller au prochain espace"
-        help_k_psp         "Aller à l'espace précédent"
+        help_k_typewriter  "Mode machine à écrire / focus (bascule)"
+        help_k_ctrl_arrows "Ctrl+↑↓  Paragraphe  ·  Ctrl+←→ / Alt+BF  Mot"
         help_k_toc         "Table des matières"
         help_k_help        "Cette aide"
         help_shift_arrows  "Maj+Flèches   Étendre la sélection"
@@ -682,6 +678,7 @@ lassign [theme-colors] bg fg bg_bar fg_bar bg_sel
 set fg_dim  "#666666"
 # expose as globals for use in procs
 set ::bg     $bg
+set ::typewriter_mode 0
 set ::fg     $fg
 set ::bg_bar $bg_bar
 set ::fg_bar $fg_bar
@@ -1809,7 +1806,9 @@ proc apply-theme {} {
                     -insertbackground $fg -selectbackground $bg_sel \
                     -highlightbackground $bg -highlightcolor $fg }
         catch { .ed.pw.${side}.sb configure -bg $bg_bar -troughcolor $bg }
+        catch { .ed.pw.${side}.t tag configure focus_dim -foreground $c_comment }
     }
+    catch { .ed.t tag configure focus_dim -foreground $c_comment }
 }
 
 proc quit-app {} {
@@ -1855,9 +1854,14 @@ bind .ed.t <$::cfg_key_sticky_sel> { break }
 bind .ed.t <Tab>                { .ed.t insert insert "    "; break }
 bind .ed.t <$::cfg_key_goto>       { goto-dialog;    break }
 bind .ed.t <$::cfg_key_help>       { help-dialog;    break }
-bind .ed.t <$::cfg_key_next_space> { jump-next-space; break }
-bind .ed.t <$::cfg_key_prev_space> { jump-prev-space; break }
-bind .ed.t <$::cfg_key_redo>       { catch {.ed.t edit redo}; ed-status; break }
+bind .ed.t <$::cfg_key_redo>        { catch {.ed.t edit redo}; ed-status; break }
+bind .ed.t <$::cfg_key_typewriter>  { typewriter-toggle; break }
+bind .ed.t <KeyRelease>            {+ if {$::typewriter_mode} { typewriter-tick .ed.t } }
+bind .ed.t <ButtonRelease>         {+ if {$::typewriter_mode} { typewriter-tick .ed.t } }
+foreach _k {Left Right Up Down BackSpace Delete} {
+    bind .ed.t <$_k> "if {\$::typewriter_mode && \$::cfg_hemingway_mode} break"
+}
+bind .ed.t <$::cfg_key_undo> "if {\$::typewriter_mode && \$::cfg_hemingway_mode} break"
 bind .ed.t <$::cfg_key_replace> { replace-open;      break }
 bind .ed.t <$::cfg_key_find>    { search-open;       break }
 bind .ed.t <$::cfg_key_open>    { open-file-dialog;  break }
@@ -2087,8 +2091,8 @@ proc help-dialog {} {
             [key-label $::cfg_key_goto]         "Go to line" \
             [key-label $::cfg_key_undo]         "Undo" \
             [key-label $::cfg_key_redo]         "Redo" \
-            [key-label $::cfg_key_next_space]   "Jump to next space" \
-            [key-label $::cfg_key_prev_space]   "Jump to prev space" \
+            [key-label $::cfg_key_typewriter]   "Typewriter / focus mode (toggle)" \
+            "Ctrl+↑↓ / Ctrl+←→"                "Paragraph / word navigation" \
             [key-label $::cfg_key_toc]          "Table of contents  (${hm}title${hm})" \
             [key-label $::cfg_key_fullscreen]   "Fullscreen" \
             [key-label $::cfg_key_split]        "Split view (toggle)" \
@@ -2150,24 +2154,54 @@ proc active-ed {} {
     return ".ed.t"
 }
 
-proc jump-next-space {} {
-    set t [active-ed]
-    set pos [$t search " " "insert+1c" end]
-    if {$pos ne ""} {
-        $t mark set insert $pos
-        $t see insert
-        cursor-update
-    }
+proc typewriter-center {t} {
+    set bbox [$t dlineinfo insert]
+    if {$bbox eq ""} return
+    set ly    [lindex $bbox 1]
+    set lh    [lindex $bbox 3]
+    set wh    [winfo height $t]
+    set delta [expr {int($ly + $lh/2 - $wh/2)}]
+    if {abs($delta) < 2} return
+    $t yview scroll $delta pixels
 }
 
-proc jump-prev-space {} {
-    set t [active-ed]
-    set pos [$t search -backwards " " "insert" 1.0]
-    if {$pos ne ""} {
-        $t mark set insert $pos
-        $t see insert
-        cursor-update
+proc focus-para-update {t} {
+    $t tag remove focus_dim 1.0 end
+    set blank_before [$t search -backwards -regexp {^\s*$} "insert linestart - 1 char" 1.0]
+    set para_start [expr {$blank_before eq "" ? "1.0" : [$t index "$blank_before + 1 line"]}]
+    set blank_after [$t search -regexp {^\s*$} "insert lineend + 1 char" end]
+    set para_end [expr {$blank_after eq "" ? "end" : [$t index "$blank_after lineend + 1 char"]}]
+    if {[$t compare 1.0 < $para_start]} { $t tag add focus_dim 1.0 $para_start }
+    if {[$t compare $para_end < end]}   { $t tag add focus_dim $para_end end }
+}
+
+proc typewriter-tick {t} {
+    if {!$::typewriter_mode} return
+    typewriter-center $t
+    focus-para-update $t
+}
+
+proc typewriter-toggle {} {
+    set ::typewriter_mode [expr {!$::typewriter_mode}]
+    set c_comment [lindex [theme-colors] 6]
+    foreach w [list .ed.t .ed.pw.l.t .ed.pw.r.t] {
+        catch { $w tag configure focus_dim -foreground $c_comment }
+        if {!$::typewriter_mode} { catch { $w tag remove focus_dim 1.0 end } }
     }
+    if {$::cfg_hemingway_mode} {
+        set _mw [expr {$::cfg_margin_width  * ($::typewriter_mode ? 2 : 1)}]
+        set _mh [expr {$::cfg_margin_height * ($::typewriter_mode ? 2 : 1)}]
+        set _sp [expr {$::cfg_split_shrink_margin ? max(1,$::cfg_margin_width/2) : $::cfg_margin_width}]
+        set _sp [expr {$_sp * ($::typewriter_mode ? 2 : 1)}]
+        catch { .ed.t configure -padx $_mw -pady $_mh }
+        foreach side {l r} { catch { .ed.pw.${side}.t configure -padx $_sp -pady $_mh } }
+        if {$::typewriter_mode} {
+            catch { pack forget .ed.bar }
+        } else {
+            catch { pack .ed.bar -side bottom -fill x -before .ed.sb }
+        }
+    }
+    if {$::typewriter_mode} { typewriter-tick [active-ed] }
 }
 
 proc goto-dialog {} {
@@ -2228,13 +2262,17 @@ proc split-make-pane {side bg fg bg_bar bg_sel sp1 sp2} {
     bind $t <Tab>                       "[list $t insert insert {    }]; break"
     bind $t <$::cfg_key_goto>           { goto-dialog; break }
     bind $t <$::cfg_key_help>           { help-dialog; break }
-    bind $t <$::cfg_key_undo>           "[list catch [list $t edit undo]]; ed-status; break"
+    bind $t <$::cfg_key_undo>           "if {\$::typewriter_mode && \$::cfg_hemingway_mode} break; [list catch [list $t edit undo]]; ed-status; break"
     bind $t <$::cfg_key_redo>           "[list catch [list $t edit redo]]; ed-status; break"
     bind $t <$::cfg_key_find>           { search-open; break }
     bind $t <$::cfg_key_replace>        { replace-open; break }
     bind $t <$::cfg_key_open>           { open-file-dialog; break }
-    bind $t <$::cfg_key_next_space>     { jump-next-space; break }
-    bind $t <$::cfg_key_prev_space>     { jump-prev-space; break }
+    bind $t <$::cfg_key_typewriter>     { typewriter-toggle; break }
+    bind $t <KeyRelease>               +[list typewriter-tick $t]
+    bind $t <ButtonRelease>            +[list typewriter-tick $t]
+    foreach _k {Left Right Up Down BackSpace Delete} {
+        bind $t <$_k> "if {\$::typewriter_mode && \$::cfg_hemingway_mode} break"
+    }
     bind $t <$::cfg_key_toc>            { toc-show; break }
     bind $t <$::cfg_key_line_numbers>   { ln-toggle; break }
     bind $t <$::cfg_key_fullscreen>     { toggle-fullscreen; break }
@@ -2552,8 +2590,8 @@ proc tui-help-dialog {rows cols wc cc {sel_wc -1} {sel_cc -1}} {
     set lbl_repl   $::cfg_lbl_replace; set lbl_paste $::cfg_lbl_paste
     set lbl_goto   $::cfg_lbl_goto;   set lbl_lnum   $::cfg_lbl_line_nums
     set lbl_open   $::cfg_lbl_open;   set lbl_toc    $::cfg_lbl_toc
-    set lbl_help   $::cfg_lbl_help;   set lbl_nsp    $::cfg_lbl_next_space
-    set lbl_redo   $::cfg_lbl_redo
+    set lbl_help   $::cfg_lbl_help
+    set lbl_redo   $::cfg_lbl_redo;   set lbl_tw     $::cfg_lbl_typewriter
     set _ts [clock seconds]
     set _e ""
     # two-column line: key(10) + action(19) | key(10) + action
@@ -2584,8 +2622,9 @@ proc tui-help-dialog {rows cols wc cc {sel_wc -1} {sel_cc -1}} {
         [list [format $f2 $lbl_find   [t help_k_find]    $lbl_cut    [t help_k_cut]]    0] \
         [list [format $f2 $lbl_repl   [t help_k_replace] $lbl_paste  [t help_k_paste]]  0] \
         [list [format $f2 $lbl_goto   [t help_k_goto]    $lbl_lnum   [t help_k_lnum]]   0] \
-        [list [format $f2 $lbl_open   [t help_k_open]    $lbl_nsp    [t help_k_nsp]]    0] \
+        [list [format $f2 $lbl_open   [t help_k_open]    $lbl_tw  [t help_k_typewriter]] 0] \
         [list "" 0] \
+        [list [format "  %-16s %s" [t help_k_ctrl_arrows] ""] 0] \
         [list [format "  %-16s %s" $lbl_toc  [t help_k_toc]]  0] \
         [list [format "  %-16s %s" $lbl_help [t help_k_help]] 0] \
         [list "" 0] \
@@ -2675,6 +2714,20 @@ proc tui-getch {} {
             "\x1b\[b"     { return SHIFT-DOWN  }
             "\x1b\[c"     { return SHIFT-RIGHT }
             "\x1b\[d"     { return SHIFT-LEFT  }
+            "\x1b\[1;5A"  { return CTRL-UP    }
+            "\x1b\[1;5B"  { return CTRL-DOWN  }
+            "\x1b\[1;5C"  { return CTRL-RIGHT }
+            "\x1b\[1;5D"  { return CTRL-LEFT  }
+            "\x1b\[5A"    { return CTRL-UP    }
+            "\x1b\[5B"    { return CTRL-DOWN  }
+            "\x1b\[5C"    { return CTRL-RIGHT }
+            "\x1b\[5D"    { return CTRL-LEFT  }
+            "\x1b\[1;3A"  { return CTRL-UP    }
+            "\x1b\[1;3B"  { return CTRL-DOWN  }
+            "\x1b\[1;3C"  { return CTRL-RIGHT }
+            "\x1b\[1;3D"  { return CTRL-LEFT  }
+            "\x1bb"       { return CTRL-LEFT  }
+            "\x1bf"       { return CTRL-RIGHT }
         }
         return ESC
     }
@@ -3253,8 +3306,9 @@ proc tui-editor {filepath} {
         }
 
         # ── layout ────────────────────────────────────────────────────────────
-        set roff  $::cfg_margin_rows
-        set marg  $::cfg_margin_cols
+        set _hm   [expr {$::typewriter_mode && $::cfg_hemingway_mode ? 2 : 1}]
+        set roff  [expr {$::cfg_margin_rows * $_hm}]
+        set marg  [expr {$::cfg_margin_cols * $_hm}]
         set ln_w  [expr {$::cfg_line_numbers ? [string length [llength $lines]] + 2 : 0}]
         set coff  [expr {$marg + $ln_w}]
         set tw    [expr {max(1, $cols - $coff - $marg - 1)}]   ;# -1 for scroll indicator
@@ -3274,7 +3328,9 @@ proc tui-editor {filepath} {
         }
         lassign [tui-l2v $vrows $cy $cx] vi scx
 
-        if {$toc_jumped} { set scroll_y $vi; set toc_jumped 0 } else {
+        if {$toc_jumped} { set scroll_y $vi; set toc_jumped 0 } elseif {$::typewriter_mode} {
+            set scroll_y [expr {$vi - $th/2}]
+        } else {
             if {$vi < $scroll_y}        { set scroll_y $vi }
             if {$vi >= $scroll_y + $th} { set scroll_y [expr {$vi - $th + 1}] }
         }
@@ -3283,6 +3339,14 @@ proc tui-editor {filepath} {
         # ── draw ──────────────────────────────────────────────────────────────
         set sel_r [tui-sel-range $sel_anchor $cy $cx]
         if {$sel_r ne {}} { lassign $sel_r _sly _scx_s _ely _ecx_s }
+
+        # typewriter focus: paragraph boundaries (source line numbers)
+        if {$::typewriter_mode} {
+            set _para_s $cy; set _para_e $cy
+            set _nl [llength $lines]
+            while {$_para_s > 1 && [string trim [lindex $lines [expr {$_para_s-2}]]] ne ""} { incr _para_s -1 }
+            while {$_para_e < $_nl && [string trim [lindex $lines $_para_e]] ne ""} { incr _para_e }
+        }
 
         for {set i 0} {$i < $th} {incr i} {
             set vi2 [expr {$scroll_y + $i}]
@@ -3316,7 +3380,18 @@ proc tui-editor {filepath} {
                 elseif  {$li == $_ely}                        { set sf 0;                              set st [expr {min($seg_len,$_ecx_s-$scol)}] }
                 if {$sf >= 0 && $sf >= $st} { set sf -1 }
             }
-            if {$ish || $isd} {
+            set _tw_dim [expr {$::typewriter_mode && ($li < $_para_s || $li > $_para_e)}]
+            if {$_tw_dim} {
+                tui-attr dim
+                if {$sf >= 0} {
+                    puts -nonewline [string range $seg 0 [expr {$sf-1}]]
+                    tui-attr reverse; puts -nonewline [string range $seg $sf [expr {$st-1}]]; tui-attr off
+                    tui-attr dim; puts -nonewline [string range $seg $st end]
+                } else {
+                    puts -nonewline $seg
+                }
+                tui-attr off
+            } elseif {$ish || $isd} {
                 set _a [expr {$ish ? "heading" : "dim-text"}]
                 if {$sf >= 0} {
                     if {$sf > 0} { tui-attr $_a; puts -nonewline [string range $seg 0 [expr {$sf-1}]]; tui-attr off }
@@ -3411,42 +3486,52 @@ proc tui-editor {filepath} {
 
         switch -- $key {
             UP {
-                if {$vi > 0} { if {$sticky<0} {set sticky $scx}; lassign [tui-v2l $vrows [expr {$vi-1}] $sticky] cy cx }
+                if {$::typewriter_mode && $::cfg_hemingway_mode} {}  \
+                elseif {$vi > 0} { if {$sticky<0} {set sticky $scx}; lassign [tui-v2l $vrows [expr {$vi-1}] $sticky] cy cx }
                 set rst 0
                 if {$sel_sticky} { if {$sel_anchor eq ""} { set sel_anchor [list $cy $cx] }; set clear_sel 0 }
             }
             DOWN {
-                if {$vi < [llength $vrows]-1} { if {$sticky<0} {set sticky $scx}; lassign [tui-v2l $vrows [expr {$vi+1}] $sticky] cy cx }
+                if {$::typewriter_mode && $::cfg_hemingway_mode} {}  \
+                elseif {$vi < [llength $vrows]-1} { if {$sticky<0} {set sticky $scx}; lassign [tui-v2l $vrows [expr {$vi+1}] $sticky] cy cx }
                 set rst 0
                 if {$sel_sticky} { if {$sel_anchor eq ""} { set sel_anchor [list $cy $cx] }; set clear_sel 0 }
             }
             SHIFT-UP {
-                set sel_sticky 0
-                if {$sel_anchor eq ""} { set sel_anchor [list $cy $cx] }
-                if {$vi > 0} { if {$sticky<0} {set sticky $scx}; lassign [tui-v2l $vrows [expr {$vi-1}] $sticky] cy cx }
-                set rst 0; set clear_sel 0
+                if {!($::typewriter_mode && $::cfg_hemingway_mode)} {
+                    set sel_sticky 0
+                    if {$sel_anchor eq ""} { set sel_anchor [list $cy $cx] }
+                    if {$vi > 0} { if {$sticky<0} {set sticky $scx}; lassign [tui-v2l $vrows [expr {$vi-1}] $sticky] cy cx }
+                    set rst 0; set clear_sel 0
+                }
             }
             SHIFT-DOWN {
-                set sel_sticky 0
-                if {$sel_anchor eq ""} { set sel_anchor [list $cy $cx] }
-                if {$vi < [llength $vrows]-1} { if {$sticky<0} {set sticky $scx}; lassign [tui-v2l $vrows [expr {$vi+1}] $sticky] cy cx }
-                set rst 0; set clear_sel 0
+                if {!($::typewriter_mode && $::cfg_hemingway_mode)} {
+                    set sel_sticky 0
+                    if {$sel_anchor eq ""} { set sel_anchor [list $cy $cx] }
+                    if {$vi < [llength $vrows]-1} { if {$sticky<0} {set sticky $scx}; lassign [tui-v2l $vrows [expr {$vi+1}] $sticky] cy cx }
+                    set rst 0; set clear_sel 0
+                }
             }
             SHIFT-LEFT {
-                set sel_sticky 0
-                if {$sel_anchor eq ""} { set sel_anchor [list $cy $cx] }
-                if {$cx > 0} { incr cx -1 } elseif {$cy > 1} { incr cy -1; set cx [string length [lindex $lines [expr {$cy-1}]]] }
-                set clear_sel 0
+                if {!($::typewriter_mode && $::cfg_hemingway_mode)} {
+                    set sel_sticky 0
+                    if {$sel_anchor eq ""} { set sel_anchor [list $cy $cx] }
+                    if {$cx > 0} { incr cx -1 } elseif {$cy > 1} { incr cy -1; set cx [string length [lindex $lines [expr {$cy-1}]]] }
+                    set clear_sel 0
+                }
             }
             SHIFT-RIGHT {
-                set sel_sticky 0
-                if {$sel_anchor eq ""} { set sel_anchor [list $cy $cx] }
-                if {$cx < [string length [lindex $lines [expr {$cy-1}]]]} { incr cx
-                } elseif {$cy < [llength $lines]} { incr cy; set cx 0 }
-                set clear_sel 0
+                if {!($::typewriter_mode && $::cfg_hemingway_mode)} {
+                    set sel_sticky 0
+                    if {$sel_anchor eq ""} { set sel_anchor [list $cy $cx] }
+                    if {$cx < [string length [lindex $lines [expr {$cy-1}]]]} { incr cx
+                    } elseif {$cy < [llength $lines]} { incr cy; set cx 0 }
+                    set clear_sel 0
+                }
             }
             LEFT {
-                if {$sel_sticky} {
+                if {$::typewriter_mode && $::cfg_hemingway_mode} {} elseif {$sel_sticky} {
                     if {$cx > 0} { incr cx -1 } elseif {$cy > 1} { incr cy -1; set cx [string length [lindex $lines [expr {$cy-1}]]] }
                     set clear_sel 0
                 } elseif {$sel_anchor ne ""} {
@@ -3455,7 +3540,7 @@ proc tui-editor {filepath} {
                 } elseif {$cy > 1} { incr cy -1; set cx [string length [lindex $lines [expr {$cy-1}]]] }
             }
             RIGHT {
-                if {$sel_sticky} {
+                if {$::typewriter_mode && $::cfg_hemingway_mode} {} elseif {$sel_sticky} {
                     if {$cx < [string length [lindex $lines [expr {$cy-1}]]]} { incr cx
                     } elseif {$cy < [llength $lines]} { incr cy; set cx 0 }
                     set clear_sel 0
@@ -3464,6 +3549,35 @@ proc tui-editor {filepath} {
                     set cy $ely; set cx $ecx_
                 } elseif {$cx < [string length [lindex $lines [expr {$cy-1}]]]} { incr cx
                 } elseif {$cy < [llength $lines]} { incr cy; set cx 0 }
+            }
+            CTRL-UP {
+                set r [expr {$cy - 1}]
+                while {$r > 1 && [string trim [lindex $lines [expr {$r-1}]]] eq ""} { incr r -1 }
+                while {$r > 1 && [string trim [lindex $lines [expr {$r-2}]]] ne ""} { incr r -1 }
+                set cy [expr {max(1,$r)}]; set cx 0; set rst 0
+            }
+            CTRL-DOWN {
+                set r $cy; set _nl [llength $lines]
+                while {$r <= $_nl && [string trim [lindex $lines [expr {$r-1}]]] ne ""} { incr r }
+                while {$r <= $_nl && [string trim [lindex $lines [expr {$r-1}]]] eq ""} { incr r }
+                set cy [expr {min($_nl,$r)}]; set cx 0; set rst 0
+            }
+            CTRL-LEFT {
+                if {$cx == 0 && $cy > 1} {
+                    incr cy -1; set cx [string length [lindex $lines [expr {$cy-1}]]]
+                }
+                set l [lindex $lines [expr {$cy-1}]]
+                while {$cx > 0 && [string index $l [expr {$cx-1}]] eq " "} { incr cx -1 }
+                while {$cx > 0 && [string index $l [expr {$cx-1}]] ne " "} { incr cx -1 }
+                set rst 0
+            }
+            CTRL-RIGHT {
+                set l [lindex $lines [expr {$cy-1}]]; set _nl [llength $lines]
+                set len [string length $l]
+                while {$cx < $len && [string index $l $cx] ne " "} { incr cx }
+                while {$cx < $len && [string index $l $cx] eq " "}  { incr cx }
+                if {$cx >= $len && $cy < $_nl} { incr cy; set cx 0 }
+                set rst 0
             }
             HOME { set cx [lindex [lindex $vrows $vi] 1] }
             END  { set cx [lindex [lindex $vrows $vi] 2] }
@@ -3476,32 +3590,36 @@ proc tui-editor {filepath} {
                 lassign [tui-v2l $vrows [expr {min([llength $vrows]-1,$vi+$th)}] $sticky] cy cx; set rst 0
             }
             BACKSPACE {
-                tui-push-undo
-                if {$sel_anchor ne ""} {
-                    lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; tui-mark-dirty
-                } elseif {$cx > 0} {
-                    set l [lindex $lines [expr {$cy-1}]]
-                    lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-2}]][string range $l $cx end]"
-                    incr cx -1; tui-mark-line-dirty
-                } elseif {$cy > 1} {
-                    set cx [string length [lindex $lines [expr {$cy-2}]]]
-                    lset lines [expr {$cy-2}] "[lindex $lines [expr {$cy-2}]][lindex $lines [expr {$cy-1}]]"
-                    set lines [lreplace $lines [expr {$cy-1}] [expr {$cy-1}]]
-                    incr cy -1; tui-mark-dirty
+                if {!($::typewriter_mode && $::cfg_hemingway_mode)} {
+                    tui-push-undo
+                    if {$sel_anchor ne ""} {
+                        lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; tui-mark-dirty
+                    } elseif {$cx > 0} {
+                        set l [lindex $lines [expr {$cy-1}]]
+                        lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-2}]][string range $l $cx end]"
+                        incr cx -1; tui-mark-line-dirty
+                    } elseif {$cy > 1} {
+                        set cx [string length [lindex $lines [expr {$cy-2}]]]
+                        lset lines [expr {$cy-2}] "[lindex $lines [expr {$cy-2}]][lindex $lines [expr {$cy-1}]]"
+                        set lines [lreplace $lines [expr {$cy-1}] [expr {$cy-1}]]
+                        incr cy -1; tui-mark-dirty
+                    }
                 }
             }
             DC {
-                tui-push-undo
-                if {$sel_anchor ne ""} {
-                    lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; tui-mark-dirty
-                } else {
-                    set l [lindex $lines [expr {$cy-1}]]
-                    if {$cx < [string length $l]} {
-                        lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-1}]][string range $l [expr {$cx+1}] end]"
-                        tui-mark-line-dirty
-                    } elseif {$cy < [llength $lines]} {
-                        lset lines [expr {$cy-1}] "${l}[lindex $lines $cy]"
-                        set lines [lreplace $lines $cy $cy]; tui-mark-dirty
+                if {!($::typewriter_mode && $::cfg_hemingway_mode)} {
+                    tui-push-undo
+                    if {$sel_anchor ne ""} {
+                        lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; tui-mark-dirty
+                    } else {
+                        set l [lindex $lines [expr {$cy-1}]]
+                        if {$cx < [string length $l]} {
+                            lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-1}]][string range $l [expr {$cx+1}] end]"
+                            tui-mark-line-dirty
+                        } elseif {$cy < [llength $lines]} {
+                            lset lines [expr {$cy-1}] "${l}[lindex $lines $cy]"
+                            set lines [lreplace $lines $cy $cy]; tui-mark-dirty
+                        }
                     }
                 }
             }
@@ -3561,7 +3679,7 @@ proc tui-editor {filepath} {
                     if {$filepath ne ""} { tui-save-file $filepath $lines; cursor-put $filepath $cy $cx }
                     set dirty 0; return
                 } elseif {$key eq $::cfg_tui_undo} {
-                    if {[llength $undo_stack] > 0} {
+                    if {!($::typewriter_mode && $::cfg_hemingway_mode) && [llength $undo_stack] > 0} {
                         lappend redo_stack [list $lines $cy $cx]
                         lassign [lindex $undo_stack end] lines cy cx
                         set undo_stack [lrange $undo_stack 0 end-1]; tui-mark-dirty
@@ -3684,29 +3802,10 @@ proc tui-editor {filepath} {
                     set ::cfg_dark_mode [expr {!$::cfg_dark_mode}]
                     tui-reverse-video [expr {!$::cfg_dark_mode}]
                     set clear_sel 0
-                } elseif {$key eq $::cfg_tui_next_space} {
-                    set line [lindex $lines [expr {$cy-1}]]
-                    set idx [string first " " $line [expr {$cx+1}]]
-                    if {$idx >= 0} {
-                        set cx $idx
-                    } else {
-                        set nlines [llength $lines]
-                        for {set r $cy} {$r < $nlines} {incr r} {
-                            set idx [string first " " [lindex $lines $r] 0]
-                            if {$idx >= 0} { set cy [expr {$r+1}]; set cx $idx; break }
-                        }
-                    }
-                } elseif {$key eq $::cfg_tui_prev_space} {
-                    set line [lindex $lines [expr {$cy-1}]]
-                    set idx [string last " " [string range $line 0 [expr {$cx-1}]]]
-                    if {$idx >= 0} {
-                        set cx $idx
-                    } else {
-                        for {set r [expr {$cy-2}]} {$r >= 0} {incr r -1} {
-                            set idx [string last " " [lindex $lines $r]]
-                            if {$idx >= 0} { set cy [expr {$r+1}]; set cx $idx; break }
-                        }
-                    }
+                } elseif {$key eq $::cfg_tui_typewriter} {
+                    set ::typewriter_mode [expr {!$::typewriter_mode}]
+                    set wrap_dirty 1; puts -nonewline "\033\[2J"
+                    set clear_sel 0
                 } elseif {$key eq $::cfg_tui_line_nums} {
                     set ::cfg_line_numbers [expr {$::cfg_line_numbers ? 0 : 1}]
                     set clear_sel 0

@@ -5,7 +5,7 @@
 
 WrithDeck is a distraction-free text editor designed for writers using a dedicated writerdeck, whether it's a DIY prototype or a computer configured specifically for that purpose. It's fast and easy to customize. WrithDeck can run as a clean graphical application or directly in a terminal or TTY, all from a single file with no installation required.
 
-It includes customizable inline syntax highlighting, a file browser, split view, chapter navigation through a table of contents, and a fully themeable interface, all in under 3,800 lines (160 Kb) of Tcl/Tk.
+It includes customizable inline syntax highlighting, a file browser, split view, chapter navigation through a table of contents, and a fully themeable interface, all in under 3,900 lines (170 Kb) of Tcl/Tk.
 
 Whether you're writing on a Raspberry Pi Zero with an E-ink screen, on a an android tablet, over SSH, or on your desktop, WrithDeck stays lightweight and lets you focus on your text.
 
@@ -106,6 +106,7 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 | `browser` | `1` | Return to file browser after closing a file |
 | `watch_file` | `1` | Detect external file modifications and prompt to reload; `0` to disable |
 | `split_shrink_margin` | `1` | Halve `margin_width` in split view (GUI); `0` to keep the full margin |
+| `hemingway_mode` | `0` | When typewriter mode is active: block arrows, backspace and undo; hide status bar; double margins |
 | `console_center_alert` | `1` | Center confirm dialogs (TUI); `0` = bottom bar |
 | `block_cursor_gui` | `1` | Block cursor in GUI mode |
 | `block_cursor_console` | `1` | Block cursor in TUI mode |
@@ -115,7 +116,7 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 | `lang` | `en` | Interface language (`en` or `fr`) |
 | `dark_mode` | `1` | Dark theme; `0` = light (Solarized-style) |
  
-**`[keys]`** — all actions are rebindable: `key_save`, `key_close`, `key_find`, `key_replace`, `key_goto`, `key_open`, `key_undo`, `key_redo`, `key_help`, `key_toc`, `key_line_numbers`, `key_fullscreen`, `key_split`, `key_split_focus`, `key_dark_toggle`, `key_next_space`, `key_prev_space`. Use Tk key names (`Control-s`, `Alt-Return`, `F11`, etc.).
+**`[keys]`** — all actions are rebindable: `key_save`, `key_close`, `key_find`, `key_replace`, `key_goto`, `key_open`, `key_undo`, `key_redo`, `key_help`, `key_toc`, `key_line_numbers`, `key_fullscreen`, `key_split`, `key_split_focus`, `key_typewriter`, `key_dark_toggle`. Use Tk key names (`Control-s`, `Alt-Return`, `F11`, etc.).
 
 **`[colors]`** — `color_heading`, `color_comment`, `color_markup`, `color_bg`, `color_fg`, `color_bg_bar`, `color_fg_bar`, `color_bg_sel` + `_alt` variants for light mode.
 
@@ -139,6 +140,8 @@ It is the default, and requires Tk
 - Block cursor: rectangle with inverted colors (`block_cursor_gui = 1`)
 - Configurable status bar height (`bar_height`); font size adapts automatically
 - **Vertical split view** (F3): divide the editor into two independent panes on the same document; each pane scrolls and positions the cursor independently; F4 cycles focus between panes; the active pane is highlighted with a border
+- **Typewriter / focus mode** (Ctrl+T, GUI and TUI): keeps the cursor vertically centered while typing; dims all text outside the current paragraph to reduce distraction
+- **Hemingway mode** (`hemingway_mode = 1` in INI, activates with Ctrl+T): forward-only writing — arrows, backspace and undo are disabled; status bar is hidden; margins are doubled. "Write drunk, edit sober!"
 - Confirm dialogs: `Tab` to move between buttons, `Return` to confirm, `Escape` to cancel, `y` / `n` for direct answer
 
 **Shortcuts — Editor**
@@ -154,13 +157,14 @@ Those are the default keys. Most of them are fully customisable in the writhdeck
 | Ctrl+R | Find & Replace (inline bar; Enter: replace one, Ctrl+Enter: all) |
 | Ctrl+Z | Undo |
 | Ctrl+Y | Redo |
+| Ctrl+T | Typewriter / focus mode (toggle) |
 | Ctrl+O | Open any file (system dialog) |
 | Ctrl+G | Go to line — jumps in the focused pane |
 | Ctrl+H | Help dialog (date/time, file stats, selection stats if text selected) |
 | Ctrl+L | Toggle line numbers |
 | Ctrl+D | Toggle dark/light theme |
-| Ctrl+Space | Jump to next space |
-| Ctrl+Shift+Space | Jump to previous space |
+| Ctrl+↑ / Ctrl+↓ | Jump to previous / next paragraph |
+| Ctrl+← / Ctrl+→ | Jump to previous / next word |
 | F11 | Table of contents — jumps in the focused pane |
 | F3 | Split view toggle (GUI only) |
 | F4 | Split view — cycle focus between panes |
@@ -212,6 +216,8 @@ Activated through `--no-gui` / `--tui` / `--ng`, or if no windowing system is av
 - Cursor shape configurable: block or bar, blinking or steady (`block_cursor_console`, `blink_cursor`)
 - Confirm dialogs centered on screen by default (`console_center_alert = 1`)
 - Confirm dialogs: `y` / `n` to answer directly, `Escape` to cancel, `Return` to confirm the focused button
+- **Typewriter / focus mode** (Ctrl+T): cursor centered vertically; text outside current paragraph dimmed
+- **Hemingway mode** (`hemingway_mode = 1`): activates with Ctrl+T — blocks arrows, backspace and undo; doubles margins
 - After closing a file, returns to browser if `browser = 1` (default)
 
 **Shortcuts — Editor**
@@ -224,12 +230,14 @@ Activated through `--no-gui` / `--tui` / `--ng`, or if no windowing system is av
 | Ctrl+R | Find & Replace (global, with replacement counter) |
 | Ctrl+Z | Undo (100-state stack) |
 | Ctrl+Y | Redo |
+| Ctrl+T | Typewriter / focus mode (toggle) |
 | Ctrl+O | Save and return to browser |
 | Ctrl+G | Go to line |
 | Ctrl+H | Help (date/time, file stats, selection stats if text selected) |
 | Ctrl+L | Toggle line numbers |
 | Ctrl+D | Toggle dark/light theme (reverse video) |
-| Ctrl+Space | Jump to next space |
+| Ctrl+↑ / Ctrl+↓ | Jump to previous / next paragraph (terminal emulator only; intercepted by TTY console) |
+| Ctrl+← / Ctrl+→ or Alt+B / Alt+F | Jump to previous / next word |
 | F11 | Table of contents (Esc / Ctrl+Q to close, Enter to jump) |
 | Ctrl+A | Select all |
 | Ctrl+K | Toggle sticky selection (first press: set anchor; second press: cancel) |
