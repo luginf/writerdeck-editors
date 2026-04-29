@@ -3312,7 +3312,8 @@ proc tui-editor {filepath} {
         set ln_w  [expr {$::cfg_line_numbers ? [string length [llength $lines]] + 2 : 0}]
         set coff  [expr {$marg + $ln_w}]
         set tw    [expr {max(1, $cols - $coff - $marg - 1)}]   ;# -1 for scroll indicator
-        set th    [expr {max(1, $rows - 2 - 2*$roff)}]
+        set _hm_bar [expr {$::typewriter_mode && $::cfg_hemingway_mode}]
+        set th    [expr {max(1, $rows - ($::typewriter_mode && $::cfg_hemingway_mode ? 0 : 2) - 2*$roff)}]
 
         set cy [expr {max(1, min($cy, [llength $lines]))}]
         set cx [expr {max(0, min($cx, [string length [lindex $lines [expr {$cy-1}]]]))}]
@@ -3430,28 +3431,33 @@ proc tui-editor {filepath} {
         }
 
         # ── bars ──────────────────────────────────────────────────────────────
-        set sel_info [expr {$sel_r ne {} ? " \[sel\]" : ""}]
-        set sel_hint [expr {$sel_anchor ne "" ? "$::cfg_lbl_sticky cancel-sel" : "$::cfg_lbl_sticky sel"}]
-        set _hzone [status-zone-of help_bar]
-        if {$::cfg_help_bar ne "" && $_hzone ne ""} { tui-help [expr {$rows-2}] $::cfg_help_bar $cols $_hzone }
-        if {$wc_dirty && ([status-zone-of words] ne "" || [status-zone-of chars] ne "")} {
-            tui-compute-wc
+        if {$_hm_bar} {
+            tui-move [expr {$rows-2}] 0; puts -nonewline "\033\[K"
+            tui-move [expr {$rows-1}] 0; puts -nonewline "\033\[K"
+        } else {
+            set sel_info [expr {$sel_r ne {} ? " \[sel\]" : ""}]
+            set sel_hint [expr {$sel_anchor ne "" ? "$::cfg_lbl_sticky cancel-sel" : "$::cfg_lbl_sticky sel"}]
+            set _hzone [status-zone-of help_bar]
+            if {$::cfg_help_bar ne "" && $_hzone ne ""} { tui-help [expr {$rows-2}] $::cfg_help_bar $cols $_hzone }
+            if {$wc_dirty && ([status-zone-of words] ne "" || [status-zone-of chars] ne "")} {
+                tui-compute-wc
+            }
+            set tui_state [dict create \
+                fn    [expr {$filepath eq "" ? "** scratchpad **" : [file tail $filepath]}] \
+                dirty $dirty \
+                sel   [expr {$sel_anchor ne ""}] \
+                ln    $cy  total [llength $lines] \
+                col   [expr {$cx+1}] \
+                words $wc_cached \
+                chars $cc_cached \
+                clock [clock format [clock seconds] -format "%H:%M"]]
+            set bar_left   " [status-build $::cfg_status_left   $tui_state]"
+            set bar_center [status-build $::cfg_status_center $tui_state]
+            set bar_right  "[status-build $::cfg_status_right  $tui_state] "
+            if {$::cfg_key_error ne "" && $message eq ""} { set message "key conflict: $::cfg_key_error"; set msg_time [clock seconds] }
+            if {$message ne "" && [clock seconds] - $msg_time < 4} { set bar_left " $message" }
+            tui-bar [expr {$rows-1}] $bar_left $bar_right $cols $bar_center
         }
-        set tui_state [dict create \
-            fn    [expr {$filepath eq "" ? "** scratchpad **" : [file tail $filepath]}] \
-            dirty $dirty \
-            sel   [expr {$sel_anchor ne ""}] \
-            ln    $cy  total [llength $lines] \
-            col   [expr {$cx+1}] \
-            words $wc_cached \
-            chars $cc_cached \
-            clock [clock format [clock seconds] -format "%H:%M"]]
-        set bar_left   " [status-build $::cfg_status_left   $tui_state]"
-        set bar_center [status-build $::cfg_status_center $tui_state]
-        set bar_right  "[status-build $::cfg_status_right  $tui_state] "
-        if {$::cfg_key_error ne "" && $message eq ""} { set message "key conflict: $::cfg_key_error"; set msg_time [clock seconds] }
-        if {$message ne "" && [clock seconds] - $msg_time < 4} { set bar_left " $message" }
-        tui-bar [expr {$rows-1}] $bar_left $bar_right $cols $bar_center
 
         tui-move [expr {$vi - $scroll_y + $roff}] [expr {$scx + $coff}]
         puts -nonewline "\033\[?25h"; flush stdout
