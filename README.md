@@ -15,13 +15,19 @@ It has GUI and TUI dual mode with similar behaviors, and is fully configurable.
 
 ## Usage
 
-You will need to have Tcl/Tk on your system. On Debian-based OS, just 
+You will need to have Tcl/Tk on your system. 
+
+On Debian-based OS, just:
 
 ``apt install tk``
 
+On other Linux / BSD, refer to your documentation if necessary, it should be trivial to install.
+
 On Windows you can get binaries for the Tcl runtime there: https://www.tcl-lang.org/software/tcltk/bindist.html
 
-On Haiku OS, Tcl/Tk is available via HaikuPorts (`pkgman install tcl tk`). GUI and TUI modes both work.
+On Mac OS, you can use ``brew install tcl-tk`` if you have [homebrew](https://brew.sh/). 
+
+On Haiku OS, Tcl/Tk is available via HaikuPorts (``pkgman install tcl tk``). GUI and TUI modes both work.
 
 Then:
 
