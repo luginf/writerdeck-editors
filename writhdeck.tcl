@@ -168,6 +168,8 @@ proc cursor-put {filepath cy cx} {
 }
 
 # ─── ini ──────────────────────────────────────────────────────────────────────
+set ::cfg_scheme  "default"
+set ::cfg_schemes {}
 set ::cfg_margin_width        60
 set ::cfg_margin_height       40
 set ::cfg_split_shrink_margin 1
@@ -249,16 +251,62 @@ set ::split_mode 0
 
 proc marker-val {v} { expr {$v eq "0" ? "" : $v} }
 
+proc scheme-apply {name} {
+    if {![dict exists $::cfg_schemes $name]} return
+    set d [dict get $::cfg_schemes $name]
+    foreach {key var} {
+        color_bg          ::cfg_bg
+        color_fg          ::cfg_fg
+        color_bg_bar      ::cfg_bg_bar
+        color_fg_bar      ::cfg_fg_bar
+        color_bg_sel      ::cfg_bg_sel
+        color_heading     ::cfg_color_heading
+        color_comment     ::cfg_color_comment
+        color_markup      ::cfg_color_markup
+        color_bg_alt      ::cfg_bg_alt
+        color_fg_alt      ::cfg_fg_alt
+        color_bg_bar_alt  ::cfg_bg_bar_alt
+        color_fg_bar_alt  ::cfg_fg_bar_alt
+        color_bg_sel_alt  ::cfg_bg_sel_alt
+        color_heading_alt ::cfg_color_heading_alt
+        color_comment_alt ::cfg_color_comment_alt
+        color_markup_alt  ::cfg_color_markup_alt
+    } {
+        if {[dict exists $d $key]} { set $var [dict get $d $key] }
+    }
+}
+
 proc ini-load {} {
     if {![file exists $::INI_FILE]} { ini-save; return }
     set fh [open $::INI_FILE r]
     fconfigure $fh -encoding utf-8
+    set section    ""
+    set cur_scheme ""
     while {[gets $fh line] >= 0} {
         set line [string trim $line]
-        if {$line eq "" || [string match "#*" $line] || [string match {\[*} $line]} continue
+        if {$line eq "" || [string match "#*" $line]} continue
+        # section header
+        if {[regexp {^\[(\w+)\]$} $line -> hdr]} {
+            if {$hdr eq "schemes"} {
+                set section "schemes"
+                set cur_scheme ""
+            } elseif {$section eq "schemes"} {
+                set cur_scheme $hdr
+            } else {
+                set section $hdr
+                set cur_scheme ""
+            }
+            continue
+        }
         if {[regexp {^(\w+)\s*=(.*)$} $line -> key val]} {
             set v [string trim $val]
+            # inside a named scheme block — store in dict
+            if {$cur_scheme ne ""} {
+                dict set ::cfg_schemes $cur_scheme $key $v
+                continue
+            }
             switch [string trim $key] {
+                scheme           { set ::cfg_scheme          $v }
                 margin_width          { set ::cfg_margin_width        $v }
                 margin_height         { set ::cfg_margin_height       $v }
                 split_shrink_margin   { set ::cfg_split_shrink_margin [string is true $v] }
@@ -342,6 +390,7 @@ proc ini-load {} {
         }
     }
     close $fh
+    scheme-apply $::cfg_scheme
 }
 
 proc ini-save {} {
@@ -351,6 +400,7 @@ proc ini-save {} {
     puts $fh "# https://github.com/luginf/writhdeck"
     puts $fh ""
     puts $fh "\[editor\]"
+    puts $fh "scheme         = $::cfg_scheme"
     puts $fh "# docs_dir = ~/Documents/writerdeck"
     puts $fh "# (main default document and conf folder: ~/Documents/writhdeck)"
     puts $fh "margin_width         = $::cfg_margin_width"
@@ -418,8 +468,13 @@ proc ini-save {} {
     puts $fh "key_split_focus  = $::cfg_key_split_focus"
     puts $fh "key_dark_toggle  = $::cfg_key_dark_toggle"
     puts $fh ""
-    puts $fh "\[colors\]"
+    puts $fh "\[schemes\]"
+    puts $fh {# Each [name] block defines a color scheme.}
+    puts $fh {# Select the active scheme with:  scheme = <name>  in [editor]}
     puts $fh "# colors in #rrggbb format"
+    puts $fh ""
+    puts $fh "\[default\]"
+    puts $fh "# dark mode"
     puts $fh "color_bg       = $::cfg_bg"
     puts $fh "color_fg       = $::cfg_fg"
     puts $fh "color_bg_bar   = $::cfg_bg_bar"
@@ -428,17 +483,30 @@ proc ini-save {} {
     puts $fh "color_heading  = $::cfg_color_heading"
     puts $fh "color_comment  = $::cfg_color_comment"
     puts $fh "color_markup   = $::cfg_color_markup"
-    puts $fh ""
-    puts $fh "# ── alternate (light) theme ───────────────────────────────────"
-    puts $fh "# Used when dark_mode = 0  (active by default)"
-    puts $fh "color_bg_alt       = $::cfg_bg_alt"
-    puts $fh "color_fg_alt       = $::cfg_fg_alt"
-    puts $fh "color_bg_bar_alt   = $::cfg_bg_bar_alt"
-    puts $fh "color_fg_bar_alt   = $::cfg_fg_bar_alt"
-    puts $fh "color_bg_sel_alt   = $::cfg_bg_sel_alt"
-    puts $fh "color_heading_alt  = $::cfg_color_heading_alt"
-    puts $fh "color_comment_alt  = $::cfg_color_comment_alt"
-    puts $fh "color_markup_alt   = $::cfg_color_markup_alt"
+    puts $fh "# light mode"
+    puts $fh "color_bg_alt      = $::cfg_bg_alt"
+    puts $fh "color_fg_alt      = $::cfg_fg_alt"
+    puts $fh "color_bg_bar_alt  = $::cfg_bg_bar_alt"
+    puts $fh "color_fg_bar_alt  = $::cfg_fg_bar_alt"
+    puts $fh "color_bg_sel_alt  = $::cfg_bg_sel_alt"
+    puts $fh "color_heading_alt = $::cfg_color_heading_alt"
+    puts $fh "color_comment_alt = $::cfg_color_comment_alt"
+    puts $fh "color_markup_alt  = $::cfg_color_markup_alt"
+    # write any extra schemes stored in memory (user-defined)
+    foreach sname [dict keys $::cfg_schemes] {
+        if {$sname eq "default"} continue
+        puts $fh ""
+        puts $fh "\[$sname\]"
+        set d [dict get $::cfg_schemes $sname]
+        foreach key {color_bg color_fg color_bg_bar color_fg_bar color_bg_sel
+                     color_heading color_comment color_markup
+                     color_bg_alt color_fg_alt color_bg_bar_alt color_fg_bar_alt
+                     color_bg_sel_alt color_heading_alt color_comment_alt color_markup_alt} {
+            if {[dict exists $d $key]} {
+                puts $fh "$key = [dict get $d $key]"
+            }
+        }
+    }
     close $fh
 }
 
@@ -684,7 +752,7 @@ set font_sm  [expr {$::cfg_bar_height > 0 \
     ? [list $::cfg_bar_font_family [expr {-max(6, $::cfg_bar_height - 2*$bar_pady)}]] \
     : [list $::cfg_bar_font_family 10]}]
 lassign [theme-colors] bg fg bg_bar fg_bar bg_sel
-set fg_dim  "#666666"
+set fg_dim  "#676767"
 # expose as globals for use in procs
 set ::bg     $bg
 set ::typewriter_mode 0

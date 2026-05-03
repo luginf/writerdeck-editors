@@ -5,7 +5,7 @@
 
 WrithDeck is a distraction-free text editor designed for writers using a dedicated writerdeck, whether it's a DIY prototype or a computer configured specifically for that purpose. It's fast and easy to customize. WrithDeck can run as a clean graphical application or directly in a terminal or TTY, all from a single file with no installation required.
 
-It includes customizable inline syntax highlighting, a file browser, split view, chapter navigation through a table of contents, and a fully themeable interface, all in under 3,900 lines (170 Kb) of Tcl/Tk.
+It includes customizable inline syntax highlighting, a file browser, split view, chapter navigation through a table of contents, and a fully themeable interface, all in under 4,000 lines (170 Kb) of Tcl/Tk.
 
 Whether you're writing on a Raspberry Pi Zero with an E-ink screen, on a an android tablet, over SSH, or on your desktop, WrithDeck stays lightweight and lets you focus on your text.
 
@@ -83,7 +83,7 @@ When both `--gui` and `--no-gui` are given, `--no-gui` takes precedence.
 
 ## Configuration
 
-`~/Documents/writhdeck/writhdeck.ini` — sections: `[editor]`, `[behaviour]`, `[keys]`, `[colors]`
+`~/Documents/writhdeck/writhdeck.ini` — sections: `[editor]`, `[behaviour]`, `[keys]`, `[schemes]`
 
 All keyboard shortcuts are configurable via the `[keys]` section.
 
@@ -103,7 +103,9 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 | `margin_cols` | `6` | Horizontal margin (cols, TUI) |
 | `font_size` | `13` | Font size (GUI) |
 | `font_family` | `Mono` | Font family (GUI); Tk resolves `Mono` to the best available monospace per OS — override with e.g. `JetBrains Mono`, `Consolas`, `Fira Code`, `Noto Serif` |
+| `bar_font_family` | `Mono` | Font family for the status bar (GUI); independent from `font_family` |
 | `line_spacing` | `100` | Line spacing in % (GUI) |
+| `scheme` | `default` | Active color scheme — must match a `[name]` block in `[schemes]` |
 
 **`[behaviour]`**
 
@@ -124,20 +126,90 @@ All keyboard shortcuts are configurable via the `[keys]` section.
  
 **`[keys]`** — all actions are rebindable: `key_save`, `key_close`, `key_find`, `key_replace`, `key_goto`, `key_open`, `key_undo`, `key_redo`, `key_help`, `key_toc`, `key_line_numbers`, `key_fullscreen`, `key_split`, `key_split_focus`, `key_typewriter`, `key_dark_toggle`. Use Tk key names (`Control-s`, `Alt-Return`, `F11`, etc.).
 
-**`[colors]`** — `color_heading`, `color_comment`, `color_markup`, `color_bg`, `color_fg`, `color_bg_bar`, `color_fg_bar`, `color_bg_sel` + `_alt` variants for light mode.
+**`[schemes]`** — color scheme definitions. Each `[name]` block inside `[schemes]` defines a scheme with dark and light mode colors. Select the active scheme with `scheme = name` in `[editor]`. The `[default]` scheme is always written by WrithDeck and holds the current colors.
 
+Color keys per scheme:
 
-You can try those light colors:
+| Key | Description |
+|---|---|
+| `color_bg` / `color_bg_alt` | Editor background (dark / light) |
+| `color_fg` / `color_fg_alt` | Editor text (dark / light) |
+| `color_bg_bar` / `color_bg_bar_alt` | Status bar background (dark / light) |
+| `color_fg_bar` / `color_fg_bar_alt` | Status bar text (dark / light) |
+| `color_bg_sel` / `color_bg_sel_alt` | Selection background (dark / light) |
+| `color_heading` / `color_heading_alt` | Heading highlight (dark / light) |
+| `color_comment` / `color_comment_alt` | Comment/dim line color (dark / light) |
+| `color_markup` / `color_markup_alt` | Inline markup color (dark / light) |
 
-```
-color_bg_alt       = #fffde9
-color_fg_alt       = #363c42
-color_bg_bar_alt   = #eee8d5
-color_fg_bar_alt   = #93a1a1
-color_bg_sel_alt   = #f0e7c1
-color_heading_alt  = #c8064a
-color_comment_alt  = #aaaaaa
-color_markup_alt   = #7e1c3e
+Toggle between dark and light with `Ctrl+D` (configurable via `key_dark_toggle`).
+
+Example — to use Solarized, add `scheme = solarized` in `[editor]`, then add this block:
+
+```ini
+[schemes]
+
+[default]
+# … (written automatically by WrithDeck)
+
+[solarized]
+# dark mode
+color_bg       = #002b36
+color_fg       = #839496
+color_bg_bar   = #073642
+color_fg_bar   = #657b83
+color_bg_sel   = #586e75
+color_heading  = #b58900
+color_comment  = #586e75
+color_markup   = #268bd2
+# light mode
+color_bg_alt      = #fdf6e3
+color_fg_alt      = #657b83
+color_bg_bar_alt  = #eee8d5
+color_fg_bar_alt  = #93a1a1
+color_bg_sel_alt  = #d3cbb7
+color_heading_alt = #b58900
+color_comment_alt = #93a1a1
+color_markup_alt  = #268bd2
+
+[gruvbox]
+# dark mode
+color_bg       = #282828
+color_fg       = #ebdbb2
+color_bg_bar   = #1d2021
+color_fg_bar   = #a89984
+color_bg_sel   = #504945
+color_heading  = #fabd2f
+color_comment  = #928374
+color_markup   = #83a598
+# light mode
+color_bg_alt      = #fbf1c7
+color_fg_alt      = #3c3836
+color_bg_bar_alt  = #ebdbb2
+color_fg_bar_alt  = #7c6f64
+color_bg_sel_alt  = #d5c4a1
+color_heading_alt = #b57614
+color_comment_alt = #a89984
+color_markup_alt  = #076678
+
+[alt01]
+# dark mode
+color_bg       = #282828
+color_fg       = #ebdbb2
+color_bg_bar   = #1d2021
+color_fg_bar   = #a89984
+color_bg_sel   = #504945
+color_heading  = #fabd2f
+color_comment  = #928374
+color_markup   = #83a598
+# light mode
+color_bg_alt      = #fffde9
+color_fg_alt      = #363c42
+color_bg_bar_alt  = #eee8d5
+color_fg_bar_alt  = #93a1a1
+color_bg_sel_alt  = #f0e7c1
+color_heading_alt = #c8064a
+color_comment_alt = #aaaaaa
+color_markup_alt  = #7e1c3e
 ```
 
 
