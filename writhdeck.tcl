@@ -113,6 +113,7 @@ set ::filename        ""
 set ::dirty           0
 set ::msg             ""
 set ::ed_msg          ""
+set ::msg_after_id    ""
 set ::scratchpad      0
 set ::file_mtime_known 0
 set ::watch_after_id  ""
@@ -848,6 +849,10 @@ set ::cached_bold_re          ""
 set ::cached_italic_re        ""
 set ::cached_underline_re     ""
 set ::cached_strikethrough_re ""
+set ::cached_bold_mlen          0
+set ::cached_italic_mlen        0
+set ::cached_underline_mlen     0
+set ::cached_strikethrough_mlen 0
 set ::hl_line_cache {}
 set ::hl_last_count 0
 
@@ -925,6 +930,10 @@ proc markers-update {} {
     set ::cached_italic_re        [inline-re $::cfg_italic_marker]
     set ::cached_underline_re     [inline-re $::cfg_underline_marker]
     set ::cached_strikethrough_re [inline-re $::cfg_strikethrough_marker]
+    set ::cached_bold_mlen          [string length $::cfg_bold_marker]
+    set ::cached_italic_mlen        [string length $::cfg_italic_marker]
+    set ::cached_underline_mlen     [string length $::cfg_underline_marker]
+    set ::cached_strikethrough_mlen [string length $::cfg_strikethrough_marker]
     set ::hl_line_cache {}
     set ::hl_last_count 0
 }
@@ -1496,6 +1505,8 @@ pack .ed.sf.r.all -side left
 set ::wc_after_id ""
 set ::gui_wc 0
 set ::gui_cc 0
+set ::gui_wc_line_cache  {}
+set ::gui_wc_last_nlines 0
 set ::ed_bar_left   ""
 set ::ed_bar_center ""
 set ::ed_bar_right  ""
@@ -1526,9 +1537,30 @@ proc gui-status-update {} {
 proc wc-flush {} {
     if {$::wc_after_id ne ""} { after cancel $::wc_after_id }
     set ::wc_after_id ""
-    set text [.ed.t get 1.0 end-1c]
-    set ::gui_wc [llength [regexp -all -inline {\S+} $text]]
-    set ::gui_cc [string length $text]
+    set t [active-ed]
+    set nlines [expr {[lindex [split [$t index end] .] 0] - 1}]
+    set ::gui_cc [expr {[$t count -chars 1.0 end] - 1}]
+    if {$nlines != $::gui_wc_last_nlines || $::gui_wc_line_cache eq {}} {
+        set text [$t get 1.0 end-1c]
+        set ::gui_wc 0
+        set ::gui_wc_line_cache {}
+        set lnum 1
+        foreach ln_text [split $text \n] {
+            set wc [llength [regexp -all -inline {\S+} $ln_text]]
+            dict set ::gui_wc_line_cache $lnum $wc
+            incr ::gui_wc $wc
+            incr lnum
+        }
+        set ::gui_wc_last_nlines $nlines
+    } else {
+        lassign [split [$t index insert] .] cy _
+        set ln_text [$t get $cy.0 "$cy.0 lineend"]
+        set new_wc [llength [regexp -all -inline {\S+} $ln_text]]
+        set old_wc [expr {[dict exists $::gui_wc_line_cache $cy] \
+                          ? [dict get $::gui_wc_line_cache $cy] : 0}]
+        incr ::gui_wc [expr {$new_wc - $old_wc}]
+        dict set ::gui_wc_line_cache $cy $new_wc
+    }
     gui-status-update
 }
 
@@ -1548,9 +1580,15 @@ proc ed-status {} {
 }
 
 proc set-msg {text} {
+    if {$::msg_after_id ne ""} { after cancel $::msg_after_id }
     set ::msg $text
     set ::ed_msg $text
-    after 2000 { set ::msg ""; set ::ed_msg ""; ed-status }
+    set ::msg_after_id [after 2000 {
+        set ::msg_after_id ""
+        set ::msg ""
+        set ::ed_msg ""
+        ed-status
+    }]
 }
 
 proc clock-tick {} {
@@ -1667,6 +1705,8 @@ proc ln-toggle {} {
         destroy .ed.ln
         set ::cfg_line_numbers 0
         set ::ln_last_count 0
+    set ::gui_wc_line_cache {}
+    set ::gui_wc_last_nlines 0
     } else {
         set bg_bar [.ed.bar cget -bg]
         set fg_dim [lindex [.ed.bar.left cget -fg] 0]
@@ -1710,6 +1750,8 @@ proc load-file {path} {
 
     set ::dirty 0
     set ::ln_last_count 0
+    set ::gui_wc_line_cache {}
+    set ::gui_wc_last_nlines 0
     set ::file_mtime_known [expr {[file exists $path] ? [file mtime $path] : 0}]
     if {$::watch_after_id ne ""} { after cancel $::watch_after_id }
     set ::watch_after_id [after 2000 watch-file]
@@ -2057,23 +2099,31 @@ proc highlight-headings {} {
         } elseif {[parse-comment $line]} {
             .ed.t tag add comment $ln.0 "$ln.0 lineend"
         } else {
-            if {$::cached_bold_re ne ""}          { apply-inline $ln $line bold          $::cached_bold_re          [string length $::cfg_bold_marker] }
-            if {$::cached_italic_re ne ""}        { apply-inline $ln $line italic        $::cached_italic_re        [string length $::cfg_italic_marker] }
-            if {$::cached_underline_re ne ""}     { apply-inline $ln $line underline     $::cached_underline_re     [string length $::cfg_underline_marker]     1 }
-            if {$::cached_strikethrough_re ne ""} { apply-inline $ln $line strikethrough $::cached_strikethrough_re [string length $::cfg_strikethrough_marker] 1 }
+            if {$::cached_bold_re ne "" && [string first $::cfg_bold_marker $line] >= 0} {
+                apply-inline $ln $line bold $::cached_bold_re $::cached_bold_mlen }
+            if {$::cached_italic_re ne "" && [string first $::cfg_italic_marker $line] >= 0} {
+                apply-inline $ln $line italic $::cached_italic_re $::cached_italic_mlen }
+            if {$::cached_underline_re ne "" && [string first $::cfg_underline_marker $line] >= 0} {
+                apply-inline $ln $line underline $::cached_underline_re $::cached_underline_mlen 1 }
+            if {$::cached_strikethrough_re ne "" && [string first $::cfg_strikethrough_marker $line] >= 0} {
+                apply-inline $ln $line strikethrough $::cached_strikethrough_re $::cached_strikethrough_mlen 1 }
         }
     }
 }
 
 proc toc-collect {} {
-    set last [lindex [split [.ed.t index end] .] 0]
     set result {}
-    for {set ln 1} {$ln < $last} {incr ln} {
-        set line [.ed.t get $ln.0 "$ln.0 lineend"]
-        set hl [heading-level $line]
-        if {$hl ne ""} {
-            lassign $hl title level
-            lappend result [list $ln $title $level]
+    if {$::hl_line_cache ne {}} {
+        dict for {ln line} $::hl_line_cache {
+            set hl [heading-level $line]
+            if {$hl ne ""} { lassign $hl title level; lappend result [list $ln $title $level] }
+        }
+    } else {
+        set last [lindex [split [.ed.t index end] .] 0]
+        for {set ln 1} {$ln < $last} {incr ln} {
+            set line [.ed.t get $ln.0 "$ln.0 lineend"]
+            set hl [heading-level $line]
+            if {$hl ne ""} { lassign $hl title level; lappend result [list $ln $title $level] }
         }
     }
     return $result
@@ -2507,8 +2557,17 @@ proc ini-reload {} {
             [lsearch -exact [font families] $::cfg_font_family] < 0} {
         set ::cfg_font_family "Mono"
     }
+    if {$::cfg_bar_font_family ne "Mono" && \
+            [lsearch -exact [font families] $::cfg_bar_font_family] < 0} {
+        set ::cfg_bar_font_family "Mono"
+    }
     set f [list $::cfg_font_family $::cfg_font_size]
     set ::font $f
+    set _bpad [expr {$::cfg_bar_height > 0 \
+        ? min(2, max(0, ($::cfg_bar_height - 6) / 2)) : 0}]
+    set ::font_sm [expr {$::cfg_bar_height > 0 \
+        ? [list $::cfg_bar_font_family [expr {-max(6, $::cfg_bar_height - 2*$_bpad)}]] \
+        : [list $::cfg_bar_font_family 10]}]
     catch { .ed.t configure -font $f \
         -padx $::cfg_margin_width -pady $::cfg_margin_height \
         -blockcursor 0 \
@@ -2517,6 +2576,11 @@ proc ini-reload {} {
     catch { .ed.t tag configure heading -font [list $::cfg_font_family $::cfg_font_size bold] }
     foreach side {l r} {
         catch { .ed.pw.${side}.t configure -font $f }
+    }
+    foreach _w {.ed.bar.left .ed.bar.right .ed.bar.msg .ed.bar.center .ed.bar.help
+                .ed.sf.lbl .ed.sf.cnt .ed.sf.r.lbl .ed.sf.r.one .ed.sf.r.all
+                .br.bar.left .br.bar.right} {
+        catch { $_w configure -font $::font_sm }
     }
     catch { apply-theme }
     catch { apply-line-spacing }
@@ -2535,6 +2599,8 @@ proc open-scratchpad {} {
     set ::scratchpad 1
     set ::dirty     0
     set ::ln_last_count 0
+    set ::gui_wc_line_cache {}
+    set ::gui_wc_last_nlines 0
     wm title . "Writhdeck — ** scratchpad **"
     highlight-headings
     ed-status
@@ -2612,12 +2678,12 @@ proc tui-attr {a} {
 proc tui-parse-inline-spans {line} {
     set spans {}
     set llen [string length $line]
-    foreach {tag re mlen} [list \
-            bold          $::cached_bold_re          [string length $::cfg_bold_marker] \
-            italic        $::cached_italic_re        [string length $::cfg_italic_marker] \
-            underline     $::cached_underline_re     [string length $::cfg_underline_marker] \
-            strikethrough $::cached_strikethrough_re [string length $::cfg_strikethrough_marker]] {
-        if {$re eq ""} continue
+    foreach {tag re mlen marker} [list \
+            bold          $::cached_bold_re          $::cached_bold_mlen          $::cfg_bold_marker \
+            italic        $::cached_italic_re        $::cached_italic_mlen        $::cfg_italic_marker \
+            underline     $::cached_underline_re     $::cached_underline_mlen     $::cfg_underline_marker \
+            strikethrough $::cached_strikethrough_re $::cached_strikethrough_mlen $::cfg_strikethrough_marker] {
+        if {$re eq "" || [string first $marker $line] < 0} continue
         set s 0
         while {[regexp -start $s -indices -- $re $line m]} {
             lassign $m a b
