@@ -199,7 +199,7 @@ set ::cfg_bg_alt             "#fdf6e3"
 set ::cfg_fg_alt             "#657b83"
 set ::cfg_bg_bar_alt         "#eee8d5"
 set ::cfg_fg_bar_alt         "#93a1a1"
-set ::cfg_bg_sel_alt         "#268bd2"
+set ::cfg_bg_sel_alt         "#e6ddb9"
 set ::cfg_color_heading_alt  "#b58900"
 set ::cfg_color_comment_alt  "#aaaaaa"
 set ::cfg_color_markup_alt   "#2a7090"
@@ -671,12 +671,18 @@ if {!$::no_gui && $::cfg_font_family ne "Mono"} {
         set ::cfg_font_family "Mono"
     }
 }
+if {!$::no_gui && $::cfg_bar_font_family ne "Mono"} {
+    if {[lsearch -exact [font families] $::cfg_bar_font_family] < 0} {
+        puts stderr "writhdeck: bar font family '$::cfg_bar_font_family' not found, using Mono"
+        set ::cfg_bar_font_family "Mono"
+    }
+}
 set font    [list $::cfg_font_family $::cfg_font_size]
 set bar_pady [expr {$::cfg_bar_height > 0 \
     ? min(2, max(0, ($::cfg_bar_height - 6) / 2)) : 0}]
 set font_sm  [expr {$::cfg_bar_height > 0 \
-    ? [list $::cfg_font_family [expr {-max(6, $::cfg_bar_height - 2*$bar_pady)}]] \
-    : [list $::cfg_font_family 10]}]
+    ? [list $::cfg_bar_font_family [expr {-max(6, $::cfg_bar_height - 2*$bar_pady)}]] \
+    : [list $::cfg_bar_font_family 10]}]
 lassign [theme-colors] bg fg bg_bar fg_bar bg_sel
 set fg_dim  "#666666"
 # expose as globals for use in procs
