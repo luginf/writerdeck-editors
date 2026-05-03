@@ -175,6 +175,7 @@ set ::cfg_watch_file          1
 set ::cfg_hemingway_mode      0
 set ::cfg_font_size      13
 set ::cfg_font_family    "Mono"
+set ::cfg_bar_font_family "Mono"
 set ::cfg_bg             "#1a1a1a"
 set ::cfg_fg             "#e8e8e8"
 set ::cfg_bg_bar         "#2a2a2a"
@@ -265,6 +266,7 @@ proc ini-load {} {
                 hemingway_mode        { set ::cfg_hemingway_mode      [string is true $v] }
                 font_size        { set ::cfg_font_size      $v }
                 font_family      { set ::cfg_font_family    $v }
+                bar_font_family  { set ::cfg_bar_font_family $v }
                 color_bg         { set ::cfg_bg             $v }
                 color_fg         { set ::cfg_fg             $v }
                 color_bg_bar     { set ::cfg_bg_bar         $v }
@@ -359,6 +361,7 @@ proc ini-save {} {
     puts $fh ""
     puts $fh "font_size      = $::cfg_font_size"
     puts $fh "font_family    = $::cfg_font_family"
+    puts $fh "bar_font_family = $::cfg_bar_font_family"
     puts $fh "line_spacing   = $::cfg_line_spacing"
     puts $fh "bar_height     = $::cfg_bar_height"
     puts $fh "heading_marker = $::cfg_heading_marker"
@@ -1517,7 +1520,7 @@ proc ln-update {} {
     set last [lindex [split [.ed.t index end] .] 0]
     if {$last != $::ln_last_count} {
         set ::ln_last_count $last
-        set digits [expr {$last >= 1000 ? [string length [expr {$last - 1}]] : 3}]
+        set digits [string length [expr {$last - 1}]]
         .ed.ln configure -state normal -width [expr {$digits + 1}]
         .ed.ln delete 1.0 end
         set fmt "%${digits}d\n"
@@ -1978,10 +1981,11 @@ proc toc-show {} {
             incr idx
         }
     }
+    set lnw [string length [expr {[lindex [split [.ed.t index end] .] 0] - 1}]]
     foreach item $headings {
         lassign $item ln title level
         set indent [string repeat "- " [expr {$level - 1}]]
-        $w.lst insert end [format "  %4d   %s%s" $ln $indent $title]
+        $w.lst insert end [format "  %${lnw}d   %s%s" $ln $indent $title]
     }
     $w.lst selection set $presel
     $w.lst activate $presel

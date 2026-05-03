@@ -102,7 +102,7 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 | `margin_width` | `60` | Horizontal padding (px, GUI) |
 | `margin_cols` | `6` | Horizontal margin (cols, TUI) |
 | `font_size` | `13` | Font size (GUI) |
-| `font_family` | `Mono` | Font family (GUI); Tk resolves `Mono` to the best available monospace per OS — override with e.g. `JetBrains Mono`, `Consolas`, `Fira Code` |
+| `font_family` | `Mono` | Font family (GUI); Tk resolves `Mono` to the best available monospace per OS — override with e.g. `JetBrains Mono`, `Consolas`, `Fira Code`, `Noto Serif` |
 | `line_spacing` | `100` | Line spacing in % (GUI) |
 
 **`[behaviour]`**
@@ -125,6 +125,20 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 **`[keys]`** — all actions are rebindable: `key_save`, `key_close`, `key_find`, `key_replace`, `key_goto`, `key_open`, `key_undo`, `key_redo`, `key_help`, `key_toc`, `key_line_numbers`, `key_fullscreen`, `key_split`, `key_split_focus`, `key_typewriter`, `key_dark_toggle`. Use Tk key names (`Control-s`, `Alt-Return`, `F11`, etc.).
 
 **`[colors]`** — `color_heading`, `color_comment`, `color_markup`, `color_bg`, `color_fg`, `color_bg_bar`, `color_fg_bar`, `color_bg_sel` + `_alt` variants for light mode.
+
+
+You can try those light colors:
+
+```
+color_bg_alt       = #fffde9
+color_fg_alt       = #363c42
+color_bg_bar_alt   = #eee8d5
+color_fg_bar_alt   = #93a1a1
+color_bg_sel_alt   = #f0e7c1
+color_heading_alt  = #c8064a
+color_comment_alt  = #aaaaaa
+color_markup_alt   = #7e1c3e
+```
 
 
 ---
