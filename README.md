@@ -193,14 +193,14 @@ color_markup_alt  = #076678
 
 [alt01]
 # dark mode
-color_bg       = #282828
-color_fg       = #ebdbb2
-color_bg_bar   = #1d2021
-color_fg_bar   = #a89984
-color_bg_sel   = #504945
-color_heading  = #fabd2f
-color_comment  = #928374
-color_markup   = #83a598
+color_bg       = #1a1214
+color_fg       = #e8dcc8
+color_bg_bar   = #241820
+color_fg_bar   = #9e8878
+color_bg_sel   = #521828
+color_heading  = #e63060
+color_comment  = #6e5858
+color_markup   = #c24868
 # light mode
 color_bg_alt      = #fffde9
 color_fg_alt      = #363c42

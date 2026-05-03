@@ -290,7 +290,7 @@ proc ini-load {} {
             if {$hdr eq "schemes"} {
                 set section "schemes"
                 set cur_scheme ""
-            } elseif {$section eq "schemes"} {
+            } elseif {$section eq "schemes" && $hdr ni {editor behaviour keys}} {
                 set cur_scheme $hdr
             } else {
                 set section $hdr
