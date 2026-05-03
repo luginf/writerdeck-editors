@@ -168,8 +168,10 @@ proc cursor-put {filepath cy cx} {
 }
 
 # ─── ini ──────────────────────────────────────────────────────────────────────
-set ::cfg_scheme  "default"
-set ::cfg_schemes {}
+set ::cfg_scheme   "default"
+set ::cfg_schemes  {}
+set ::cfg_profile  "default"
+set ::cfg_profiles {}
 set ::cfg_margin_width        60
 set ::cfg_margin_height       40
 set ::cfg_split_shrink_margin 1
@@ -184,8 +186,8 @@ set ::cfg_bg_bar         "#2a2a2a"
 set ::cfg_fg_bar         "#aaaaaa"
 set ::cfg_bg_sel         "#3a5a8a"
 set ::cfg_docs_dir       ""
-set ::cfg_margin_cols    6
-set ::cfg_margin_rows    4
+set ::cfg_console_margin_cols    6
+set ::cfg_console_margin_rows    4
 set ::cfg_heading_marker    "="
 set ::cfg_markdown_headings 1
 set ::cfg_color_heading  "#c8a060"
@@ -251,6 +253,22 @@ set ::split_mode 0
 
 proc marker-val {v} { expr {$v eq "0" ? "" : $v} }
 
+proc profile-apply {name} {
+    if {![dict exists $::cfg_profiles $name]} return
+    set d [dict get $::cfg_profiles $name]
+    foreach {key var} {
+        margin_width    ::cfg_margin_width
+        margin_height   ::cfg_margin_height
+        font_size       ::cfg_font_size
+        font_family     ::cfg_font_family
+        bar_font_family ::cfg_bar_font_family
+        line_spacing    ::cfg_line_spacing
+        bar_height      ::cfg_bar_height
+    } {
+        if {[dict exists $d $key]} { set $var [dict get $d $key] }
+    }
+}
+
 proc scheme-apply {name} {
     if {![dict exists $::cfg_schemes $name]} return
     set d [dict get $::cfg_schemes $name]
@@ -280,8 +298,10 @@ proc ini-load {} {
     if {![file exists $::INI_FILE]} { ini-save; return }
     set fh [open $::INI_FILE r]
     fconfigure $fh -encoding utf-8
-    set section    ""
-    set cur_scheme ""
+    set section     ""
+    set cur_scheme  ""
+    set cur_profile ""
+    set toplevel    {editor behaviour keys}
     while {[gets $fh line] >= 0} {
         set line [string trim $line]
         if {$line eq "" || [string match "#*" $line]} continue
@@ -290,11 +310,19 @@ proc ini-load {} {
             if {$hdr eq "schemes"} {
                 set section "schemes"
                 set cur_scheme ""
-            } elseif {$section eq "schemes" && $hdr ni {editor behaviour keys}} {
+                set cur_profile ""
+            } elseif {$hdr eq "profiles"} {
+                set section "profiles"
+                set cur_profile ""
+                set cur_scheme ""
+            } elseif {$section eq "schemes" && $hdr ni $toplevel} {
                 set cur_scheme $hdr
+            } elseif {$section eq "profiles" && $hdr ni $toplevel} {
+                set cur_profile $hdr
             } else {
                 set section $hdr
                 set cur_scheme ""
+                set cur_profile ""
             }
             continue
         }
@@ -305,8 +333,14 @@ proc ini-load {} {
                 dict set ::cfg_schemes $cur_scheme $key $v
                 continue
             }
+            # inside a named profile block — store in dict
+            if {$cur_profile ne ""} {
+                dict set ::cfg_profiles $cur_profile $key $v
+                continue
+            }
             switch [string trim $key] {
                 scheme           { set ::cfg_scheme          $v }
+                profile          { set ::cfg_profile         $v }
                 margin_width          { set ::cfg_margin_width        $v }
                 margin_height         { set ::cfg_margin_height       $v }
                 split_shrink_margin   { set ::cfg_split_shrink_margin [string is true $v] }
@@ -320,8 +354,10 @@ proc ini-load {} {
                 color_bg_bar     { set ::cfg_bg_bar         $v }
                 color_fg_bar     { set ::cfg_fg_bar         $v }
                 docs_dir         { set ::cfg_docs_dir       $v }
-                margin_cols      { set ::cfg_margin_cols    $v }
-                margin_rows      { set ::cfg_margin_rows    $v }
+                console_margin_cols  { set ::cfg_console_margin_cols $v }
+                console_margin_rows  { set ::cfg_console_margin_rows $v }
+                margin_cols          { set ::cfg_console_margin_cols $v }
+                margin_rows          { set ::cfg_console_margin_rows $v }
                 color_bg_sel     { set ::cfg_bg_sel         $v }
                 heading_marker      { set ::cfg_heading_marker    $v }
                 markdown_headings  { set ::cfg_markdown_headings [string is true $v] }
@@ -390,6 +426,7 @@ proc ini-load {} {
         }
     }
     close $fh
+    profile-apply $::cfg_profile
     scheme-apply $::cfg_scheme
 }
 
@@ -400,20 +437,13 @@ proc ini-save {} {
     puts $fh "# https://github.com/luginf/writhdeck"
     puts $fh ""
     puts $fh "\[editor\]"
+    puts $fh "profile        = $::cfg_profile"
     puts $fh "scheme         = $::cfg_scheme"
     puts $fh "# docs_dir = ~/Documents/writerdeck"
     puts $fh "# (main default document and conf folder: ~/Documents/writhdeck)"
-    puts $fh "margin_width         = $::cfg_margin_width"
-    puts $fh "margin_height        = $::cfg_margin_height"
-    puts $fh "# terminal version — values in columns/lines"
-    puts $fh "margin_cols    = $::cfg_margin_cols"
-    puts $fh "margin_rows    = $::cfg_margin_rows"
+    puts $fh "console_margin_cols = $::cfg_console_margin_cols"
+    puts $fh "console_margin_rows = $::cfg_console_margin_rows"
     puts $fh ""
-    puts $fh "font_size      = $::cfg_font_size"
-    puts $fh "font_family    = $::cfg_font_family"
-    puts $fh "bar_font_family = $::cfg_bar_font_family"
-    puts $fh "line_spacing   = $::cfg_line_spacing"
-    puts $fh "bar_height     = $::cfg_bar_height"
     puts $fh "heading_marker = $::cfg_heading_marker"
     puts $fh "comment_marker       = $::cfg_comment_marker"
     puts $fh "bold_marker          = $::cfg_bold_marker"
@@ -467,6 +497,32 @@ proc ini-save {} {
     puts $fh "key_split        = $::cfg_key_split"
     puts $fh "key_split_focus  = $::cfg_key_split_focus"
     puts $fh "key_dark_toggle  = $::cfg_key_dark_toggle"
+    puts $fh ""
+    puts $fh "\[profiles\]"
+    puts $fh {# Each [name] block defines a profile (GUI margins, fonts, line spacing).}
+    puts $fh {# Select the active profile with:  profile = <name>  in [editor]}
+    puts $fh ""
+    puts $fh "\[default\]"
+    puts $fh "margin_width    = $::cfg_margin_width"
+    puts $fh "margin_height   = $::cfg_margin_height"
+    puts $fh "font_size       = $::cfg_font_size"
+    puts $fh "font_family     = $::cfg_font_family"
+    puts $fh "bar_font_family = $::cfg_bar_font_family"
+    puts $fh "line_spacing    = $::cfg_line_spacing"
+    puts $fh "bar_height      = $::cfg_bar_height"
+    # write any extra profiles stored in memory (user-defined)
+    foreach pname [dict keys $::cfg_profiles] {
+        if {$pname eq "default"} continue
+        puts $fh ""
+        puts $fh "\[$pname\]"
+        set d [dict get $::cfg_profiles $pname]
+        foreach key {margin_width margin_height
+                     font_size font_family bar_font_family line_spacing bar_height} {
+            if {[dict exists $d $key]} {
+                puts $fh "$key = [dict get $d $key]"
+            }
+        }
+    }
     puts $fh ""
     puts $fh "\[schemes\]"
     puts $fh {# Each [name] block defines a color scheme.}
@@ -3385,8 +3441,8 @@ proc tui-editor {filepath} {
 
         # ── layout ────────────────────────────────────────────────────────────
         set _hm   [expr {$::typewriter_mode && $::cfg_hemingway_mode ? 2 : 1}]
-        set roff  [expr {$::cfg_margin_rows * $_hm}]
-        set marg  [expr {$::cfg_margin_cols * $_hm}]
+        set roff  [expr {$::cfg_console_margin_rows * $_hm}]
+        set marg  [expr {$::cfg_console_margin_cols * $_hm}]
         set ln_w  [expr {$::cfg_line_numbers ? [string length [llength $lines]] + 2 : 0}]
         set coff  [expr {$marg + $ln_w}]
         set tw    [expr {max(1, $cols - $coff - $marg - 1)}]   ;# -1 for scroll indicator

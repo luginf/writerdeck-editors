@@ -5,7 +5,7 @@
 
 WrithDeck is a distraction-free text editor designed for writers using a dedicated writerdeck, whether it's a DIY prototype or a computer configured specifically for that purpose. It's fast and easy to customize. WrithDeck can run as a clean graphical application or directly in a terminal or TTY, all from a single file with no installation required.
 
-It includes customizable inline syntax highlighting, a file browser, split view, chapter navigation through a table of contents, and a fully themeable interface, all in under 4,000 lines (170 Kb) of Tcl/Tk.
+It includes customizable inline syntax highlighting, a file browser, split view, chapter navigation through a table of contents, and a fully themeable interface, all around 4,000 lines (172 Kb) of Tcl/Tk.
 
 Whether you're writing on a Raspberry Pi Zero with an E-ink screen, on a an android tablet, over SSH, or on your desktop, WrithDeck stays lightweight and lets you focus on your text.
 
@@ -83,7 +83,7 @@ When both `--gui` and `--no-gui` are given, `--no-gui` takes precedence.
 
 ## Configuration
 
-`~/Documents/writhdeck/writhdeck.ini` — sections: `[editor]`, `[behaviour]`, `[keys]`, `[schemes]`
+`~/Documents/writhdeck/writhdeck.ini` — sections: `[editor]`, `[behaviour]`, `[keys]`, `[profiles]`, `[schemes]`
 
 All keyboard shortcuts are configurable via the `[keys]` section.
 
@@ -93,19 +93,16 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 
 | Key | Default | Description |
 |---|---|---|
+| `profile` | `default` | Active profile — must match a `[name]` block in `[profiles]` |
+| `scheme` | `default` | Active color scheme — must match a `[name]` block in `[schemes]` |
+| `console_margin_cols` | `6` | Horizontal margin in columns (TUI only) |
+| `console_margin_rows` | `4` | Vertical margin in lines (TUI only) |
 | `heading_marker` | `=` | Heading delimiter (`= title =`) |
 | `comment_marker` | `%` | Line comment prefix; set to `0` or leave empty to disable |
 | `bold_marker` | `**` | Bold inline marker; set to `0` or leave empty to disable |
 | `italic_marker` | `//` | Italic inline marker; set to `0` or leave empty to disable |
 | `underline_marker` | `__` | Underline inline marker; set to `0` or leave empty to disable |
 | `strikethrough_marker` | `--` | Strikethrough inline marker; set to `0` or leave empty to disable |
-| `margin_width` | `60` | Horizontal padding (px, GUI) |
-| `margin_cols` | `6` | Horizontal margin (cols, TUI) |
-| `font_size` | `13` | Font size (GUI) |
-| `font_family` | `Mono` | Font family (GUI); Tk resolves `Mono` to the best available monospace per OS — override with e.g. `JetBrains Mono`, `Consolas`, `Fira Code`, `Noto Serif` |
-| `bar_font_family` | `Mono` | Font family for the status bar (GUI); independent from `font_family` |
-| `line_spacing` | `100` | Line spacing in % (GUI) |
-| `scheme` | `default` | Active color scheme — must match a `[name]` block in `[schemes]` |
 
 **`[behaviour]`**
 
@@ -125,6 +122,35 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 | `dark_mode` | `1` | Dark theme; `0` = light (Solarized-style) |
  
 **`[keys]`** — all actions are rebindable: `key_save`, `key_close`, `key_find`, `key_replace`, `key_goto`, `key_open`, `key_undo`, `key_redo`, `key_help`, `key_toc`, `key_line_numbers`, `key_fullscreen`, `key_split`, `key_split_focus`, `key_typewriter`, `key_dark_toggle`. Use Tk key names (`Control-s`, `Alt-Return`, `F11`, etc.).
+
+**`[profiles]`** — named presets for GUI display settings. Each `[name]` block defines margins, fonts, and line spacing. Select the active profile with `profile = name` in `[editor]`. The `[default]` profile is always written by WrithDeck.
+
+| Key | Default | Description |
+|---|---|---|
+| `margin_width` | `60` | Horizontal padding in pixels (GUI) |
+| `margin_height` | `40` | Vertical padding in pixels (GUI) |
+| `font_size` | `13` | Font size (GUI) |
+| `font_family` | `Mono` | Font family (GUI); Tk resolves `Mono` to the best available monospace per OS |
+| `bar_font_family` | `Mono` | Font family for the status bar (GUI) |
+| `line_spacing` | `100` | Line spacing in % (GUI) |
+| `bar_height` | `18` | Status bar height in pixels (GUI) |
+
+Example:
+
+```ini
+[editor]
+profile = novel
+
+[profiles]
+
+[novel]
+margin_width    = 180
+margin_height   = 80
+font_size       = 18
+font_family     = Noto Serif
+line_spacing    = 110
+bar_height      = 20
+```
 
 **`[schemes]`** — color scheme definitions. Each `[name]` block inside `[schemes]` defines a scheme with dark and light mode colors. Select the active scheme with `scheme = name` in `[editor]`. The `[default]` scheme is always written by WrithDeck and holds the current colors.
 
