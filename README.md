@@ -219,6 +219,48 @@ color_heading_alt = #b57614
 color_comment_alt = #a89984
 color_markup_alt  = #076678
 
+[everforest]
+# dark mode
+color_bg       = #2b3339
+color_fg       = #d3c6aa
+color_bg_bar   = #1e2326
+color_fg_bar   = #a7c080
+color_bg_sel   = #3a464c
+color_heading  = #a7c080
+color_comment  = #7a8478
+color_markup   = #7fbbb3
+
+# light mode
+color_bg_alt      = #fdf6e3
+color_fg_alt      = #5c6a72
+color_bg_bar_alt  = #efead4
+color_fg_bar_alt  = #8da101
+color_bg_sel_alt  = #e6e2cc
+color_heading_alt = #8da101
+color_comment_alt = #a6b0a0
+color_markup_alt  = #3a94c5
+
+[nord]
+# dark mode
+color_bg       = #2e3440
+color_fg       = #d8dee9
+color_bg_bar   = #3b4252
+color_fg_bar   = #81a1c1
+color_bg_sel   = #434c5e
+color_heading  = #88c0d0
+color_comment  = #616e88
+color_markup   = #8fbcbb
+
+# light mode
+color_bg_alt      = #eceff4
+color_fg_alt      = #2e3440
+color_bg_bar_alt  = #e5e9f0
+color_fg_bar_alt  = #5e81ac
+color_bg_sel_alt  = #d8dee9
+color_heading_alt = #5e81ac
+color_comment_alt = #4c566a
+color_markup_alt  = #5e81ac
+
 [alt01]
 # dark mode
 color_bg       = #1a1214
