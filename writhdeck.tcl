@@ -120,40 +120,70 @@ set ::watch_after_id  ""
 set ::session_headings {}
 
 file mkdir $::DOCS_DIR_DEFAULT
-set ::CURSOR_FILE [file join $::DOCS_DIR_DEFAULT ".cursors.json"]
+set ::STATE_FILE   [file join $::DOCS_DIR_DEFAULT ".writhdeck.json"]
 set ::cursor_cache {}
-set ::cursor_cache_valid 0
+set ::recent_list  {}
+set ::state_cache_valid 0
 
-# ─── cursor persistence (JSON, compatible with writhdeck.lua) ──────────────────
-proc cursors-load {} {
-    if {![file exists $::CURSOR_FILE]} { return {} }
-    set fh [open $::CURSOR_FILE r]; fconfigure $fh -encoding utf-8
+# ─── state persistence (.writhdeck.json) ──────────────────────────────────────
+# Format: {"cursors":{"path":[cy,cx],...},"recent":["path",...]}
+proc state-load {} {
+    set ::cursor_cache {}
+    set ::recent_list  {}
+    if {![file exists $::STATE_FILE]} { set ::state_cache_valid 1; return }
+    set fh [open $::STATE_FILE r]; fconfigure $fh -encoding utf-8
     set raw [read $fh]; close $fh
-    set d {}
-    set re {"([^"\\]*)"\s*:\s*\[(\d+)\s*,\s*(\d+)\]}
-    set start 0
-    while {[regexp -start $start $re $raw -> key cy cx]} {
-        dict set d $key [list [expr {int($cy)}] [expr {int($cx)}]]
-        set idx [string first "\"$key\"" $raw $start]
-        set start [expr {$idx + [string length $key] + 2}]
+    set ci [string first "\"cursors\"" $raw]
+    if {$ci >= 0} {
+        set ob [string first "\{" $raw $ci]
+        set cb [string first "\}" $raw [expr {$ob + 1}]]
+        if {$ob >= 0 && $cb >= 0} {
+            set sub [string range $raw [expr {$ob + 1}] [expr {$cb - 1}]]
+            set re {"([^"\\]*)"\s*:\s*\[(\d+)\s*,\s*(\d+)\]}
+            set start 0
+            while {[regexp -start $start $re $sub -> key cy cx]} {
+                dict set ::cursor_cache $key [list [expr {int($cy)}] [expr {int($cx)}]]
+                set idx [string first "\"$key\"" $sub $start]
+                set start [expr {$idx + [string length $key] + 2}]
+            }
+        }
     }
-    return $d
+    set ri [string first "\"recent\"" $raw]
+    if {$ri >= 0} {
+        set ai [string first "\[" $raw $ri]
+        set ae [string first "\]" $raw [expr {$ai + 1}]]
+        if {$ai >= 0 && $ae >= 0} {
+            set sub [string range $raw [expr {$ai + 1}] [expr {$ae - 1}]]
+            set re {"([^"\\]*)"}
+            set start 0
+            while {[regexp -start $start $re $sub -> item]} {
+                lappend ::recent_list $item
+                set idx [string first "\"$item\"" $sub $start]
+                set start [expr {$idx + [string length $item] + 2}]
+            }
+        }
+    }
+    set ::state_cache_valid 1
 }
 
-proc cursors-save {d} {
-    set parts {}
-    dict for {k v} $d {
+proc state-save {} {
+    set cp {}
+    dict for {k v} $::cursor_cache {
         set ke [string map {\\ \\\\ \" \\\"} $k]
-        lappend parts "\"$ke\":\[[lindex $v 0],[lindex $v 1]\]"
+        lappend cp "\"$ke\":\[[lindex $v 0],[lindex $v 1]\]"
     }
-    set fh [open $::CURSOR_FILE w]; fconfigure $fh -encoding utf-8
-    puts $fh "\{[join $parts ,]\}"
+    set rp {}
+    foreach p $::recent_list {
+        lappend rp "\"[string map {\\ \\\\ \" \\\"} $p]\""
+    }
+    set fh [open $::STATE_FILE w]; fconfigure $fh -encoding utf-8
+    puts $fh "\{\"cursors\":\{[join $cp ,]\},\"recent\":\[[join $rp ,]\]\}"
     close $fh
 }
 
 proc cursor-get {filepath} {
     if {!$::cfg_cursor_restore} { return {1 0} }
-    if {!$::cursor_cache_valid} { set ::cursor_cache [cursors-load]; set ::cursor_cache_valid 1 }
+    if {!$::state_cache_valid} { state-load }
     if {[dict exists $::cursor_cache $filepath]} {
         lassign [dict get $::cursor_cache $filepath] cy cx
         return [list [expr {$cy + 1}] $cx]
@@ -163,9 +193,29 @@ proc cursor-get {filepath} {
 
 proc cursor-put {filepath cy cx} {
     if {!$::cfg_cursor_restore} return
-    if {!$::cursor_cache_valid} { set ::cursor_cache [cursors-load]; set ::cursor_cache_valid 1 }
+    if {!$::state_cache_valid} { state-load }
     dict set ::cursor_cache $filepath [list [expr {$cy - 1}] $cx]
-    cursors-save $::cursor_cache
+    state-save
+}
+
+proc recent-push {path} {
+    if {!$::state_cache_valid} { state-load }
+    set ::recent_list [lsearch -all -inline -not -exact $::recent_list $path]
+    set ::recent_list [linsert $::recent_list 0 $path]
+    if {[llength $::recent_list] > 5} { set ::recent_list [lrange $::recent_list 0 4] }
+    state-save
+}
+
+proc recent-remove {path} {
+    if {!$::state_cache_valid} { state-load }
+    set ::recent_list [lsearch -all -inline -not -exact $::recent_list $path]
+    state-save
+}
+
+proc recent-rename {old new} {
+    if {!$::state_cache_valid} { state-load }
+    set idx [lsearch -exact $::recent_list $old]
+    if {$idx >= 0} { set ::recent_list [lreplace $::recent_list $idx $idx $new]; state-save }
 }
 
 # ─── ini ──────────────────────────────────────────────────────────────────────
@@ -666,13 +716,14 @@ set ::i18n {
         toc_jump_bar       "↵ jump  esc/ctrl+q cancel"
         toc_headings       "%d heading%s"
         br_no_docs         "No documents yet. Press n to create one."
-        br_help_gui        " ↵ open  n new  t scratchpad  d delete  r rename  z reload  q quit  h help"
-        br_help_tui        "↵ open  n new  t scratchpad  d delete  r rename  q quit   %s help"
+        br_help_gui        " ↵ open  n new  t scratchpad  d delete  r rename  i info  z reload  q quit  h help"
+        br_help_tui        "↵ open  n new  t scratchpad  d delete  r rename  i info  q quit   %s help"
         br_exists          "'%s' already exists"
         br_deleted         "deleted '%s'"
         br_renamed         "renamed → '%s'"
         br_delete          "Delete \"%s\"?"
         br_files           "%d file%s"
+        br_recent          "Recent"
         ed_saved           "saved"
         ed_watch_reload       "\"%s\" was modified externally. Reload?"
         ed_watch_reload_dirty "\"%s\" was modified externally and you have unsaved changes. Reload?"
@@ -718,13 +769,14 @@ set ::i18n {
         toc_jump_bar       "↵ aller  esc/ctrl+q annuler"
         toc_headings       "%d titre%s"
         br_no_docs         "Aucun document. Appuyez sur n pour en créer un."
-        br_help_gui        " ↵ ouvrir  n nouveau  t bloc-notes  d supprimer  r renommer  z recharger  q quitter  h aide"
-        br_help_tui        "↵ ouvrir  n nouveau  t bloc-notes  d supprimer  r renommer  q quitter   %s aide"
+        br_help_gui        " ↵ ouvrir  n nouveau  t bloc-notes  d supprimer  r renommer  i infos  z recharger  q quitter  h aide"
+        br_help_tui        "↵ ouvrir  n nouveau  t bloc-notes  d supprimer  r renommer  i infos  q quitter   %s aide"
         br_exists          "'%s' existe déjà"
         br_deleted         "'%s' supprimé"
         br_renamed         "renommé → '%s'"
         br_delete          "Supprimer \"%s\" ?"
         br_files           "%d fichier%s"
+        br_recent          "Récents"
         ed_saved           "enregistré"
         ed_watch_reload       "\"%s\" a été modifié externement. Recharger ?"
         ed_watch_reload_dirty "\"%s\" a été modifié externement et vous avez des modifications non sauvegardées. Recharger ?"
@@ -840,8 +892,6 @@ proc br-dirs {} {
     }
     return [list $::DOCS_DIR_DEFAULT]
 }
-
-proc br-multi {} { return [expr {[llength [br-dirs]] > 1}] }
 
 set ::cached_heading_re       ""
 set ::cached_comment_re       ""
@@ -1136,21 +1186,30 @@ if {$::cfg_bar_height > 0} {
 set ::br_entries {}
 
 proc br-refresh {} {
-    # remember selection by identity
     set prev ""
     set sel [.br.mid.lst curselection]
     if {[llength $sel]} {
         lassign [lindex $::br_entries [lindex $sel 0]] type dir name
-        if {$type eq "file"} { set prev "$dir|$name" }
+        if {$type in {file recent}} { set prev "$dir|$name" }
     }
 
     set ::br_entries {}
     set total 0
     foreach dir [br-dirs] {
-        if {[br-multi]} { lappend ::br_entries [list header $dir ""] }
+        lappend ::br_entries [list header $dir ""]
         foreach f [list-docs $dir] {
             lappend ::br_entries [list file $dir $f]
             incr total
+        }
+    }
+
+    if {!$::state_cache_valid} { state-load }
+    set valid_recent {}
+    foreach p $::recent_list { if {[file isfile $p]} { lappend valid_recent $p } }
+    if {[llength $valid_recent]} {
+        lappend ::br_entries [list header "" [t br_recent]]
+        foreach p $valid_recent {
+            lappend ::br_entries [list recent [file dirname $p] [file tail $p]]
         }
     }
 
@@ -1160,7 +1219,7 @@ proc br-refresh {} {
     for {set i 0} {$i < [llength $::br_entries]} {incr i} {
         lassign [lindex $::br_entries $i] type dir name
         if {$type eq "header"} {
-            set label [string map [list $::HOME_DIR ~] $dir]
+            set label [expr {$name ne "" ? $name : [string map [list $::HOME_DIR ~] $dir]}]
             .br.mid.lst insert end " $label"
             .br.mid.lst itemconfigure $i -foreground $::fg_bar \
                 -selectforeground $::fg_bar -selectbackground $::bg_bar
@@ -1175,8 +1234,8 @@ proc br-refresh {} {
     set s [expr {$total != 1 ? "s" : ""}]
     set ::br_status " [t br_files $total $s] "
 
-    if {$total > 0} {
-        if {$new_sel < 0} { set new_sel $first_file }
+    if {$new_sel < 0} { set new_sel $first_file }
+    if {$new_sel >= 0} {
         .br.mid.lst selection set $new_sel
         .br.mid.lst see $new_sel
     }
@@ -1187,7 +1246,7 @@ proc br-selected {} {
     set sel [.br.mid.lst curselection]
     if {![llength $sel]} { return {} }
     set e [lindex $::br_entries [lindex $sel 0]]
-    if {[lindex $e 0] ne "file"} { return {} }
+    if {[lindex $e 0] ni {file recent}} { return {} }
     return $e
 }
 
@@ -1197,7 +1256,7 @@ proc br-active-dir {} {
     set i [expr {[llength $sel] ? [lindex $sel 0] : 0}]
     while {$i >= 0} {
         lassign [lindex $::br_entries $i] type dir
-        if {$type eq "header"} { return $dir }
+        if {$type eq "header"} { return [expr {$dir ne "" ? $dir : $::DOCS_DIR_DEFAULT}] }
         incr i -1
     }
     return $::DOCS_DIR_DEFAULT
@@ -1333,7 +1392,9 @@ proc br-delete {} {
     if {![llength $e]} return
     lassign $e _ dir name
     if {[confirm-dialog [t br_delete $name]] eq "yes"} {
-        file delete [file join $dir $name]
+        set full [file join $dir $name]
+        file delete $full
+        recent-remove $full
         br-refresh
     }
 }
@@ -1351,7 +1412,9 @@ proc br-rename {} {
         info-dialog [t br_exists $new]
         return
     }
-    file rename [file join $dir $name] $new_path
+    set old_path [file join $dir $name]
+    file rename $old_path $new_path
+    recent-rename $old_path $new_path
     br-refresh
 }
 
@@ -1366,6 +1429,7 @@ bind .br.mid.lst <n>           { br-new }
 bind .br.mid.lst <t>           { open-scratchpad }
 bind .br.mid.lst <d>           { br-delete }
 bind .br.mid.lst <r>           { br-rename }
+bind .br.mid.lst <i>           { set e [br-selected]; if {[llength $e]} { info-dialog [file join [lindex $e 1] [lindex $e 2]] } }
 bind .br.mid.lst <q>           { exit }
 bind .br.mid.lst <z>           { br-reload }
 
@@ -1993,8 +2057,9 @@ proc apply-theme {} {
 }
 
 proc quit-app {} {
-    if {$::dirty && $::filename ne ""} {
-        set r [yesnocancel-dialog [t ed_save_before [file tail $::filename]]]
+    if {$::dirty} {
+        set _label [expr {$::scratchpad ? "scratchpad" : [file tail $::filename]}]
+        set r [yesnocancel-dialog [t ed_save_before $_label]]
         if {$r eq "cancel"} return
         if {$r eq "yes"} save-file
     }
@@ -2619,6 +2684,7 @@ proc show-editor {path} {
     pack .ed -fill both -expand 1
     ini-reload
     load-file $path
+    recent-push $path
     focus .ed.t
 }
 
@@ -3136,7 +3202,7 @@ proc tui-active-dir {entries cfi} {
     set i [expr {$cfi >= 0 ? $cfi : 0}]
     while {$i >= 0} {
         lassign [lindex $entries $i] type dir
-        if {$type eq "header"} { return $dir }
+        if {$type eq "header"} { return [expr {$dir ne "" ? $dir : $::DOCS_DIR_DEFAULT}] }
         incr i -1
     }
     return $::DOCS_DIR_DEFAULT
@@ -3263,12 +3329,19 @@ proc tui-browser {} {
         # build entries
         set entries {}; set fcount 0
         foreach dir [br-dirs] {
-            if {[br-multi]} { lappend entries [list header $dir ""] }
+            lappend entries [list header $dir ""]
             foreach f [list-docs $dir] { lappend entries [list file $dir $f]; incr fcount }
+        }
+        if {!$::state_cache_valid} { state-load }
+        set valid_recent {}
+        foreach p $::recent_list { if {[file isfile $p]} { lappend valid_recent $p } }
+        if {[llength $valid_recent]} {
+            lappend entries [list header "" [t br_recent]]
+            foreach p $valid_recent { lappend entries [list recent [file dirname $p] [file tail $p]] }
         }
         set fidx {}
         for {set i 0} {$i < [llength $entries]} {incr i} {
-            if {[lindex [lindex $entries $i] 0] eq "file"} { lappend fidx $i }
+            if {[lindex [lindex $entries $i] 0] in {file recent}} { lappend fidx $i }
         }
         set nf [llength $fidx]
         if {$nf > 0} { set sel [expr {max(0, min($sel, $nf-1))}] }
@@ -3291,7 +3364,7 @@ proc tui-browser {} {
                 if {$row >= $rows-2} break
                 lassign $entry type dir name
                 if {$type eq "header"} {
-                    set lbl [string map [list $::HOME_DIR ~] $dir]
+                    set lbl [expr {$name ne "" ? $name : [string map [list $::HOME_DIR ~] $dir]}]
                     tui-attr dim; tui-fill $row " $lbl" $cols; tui-attr off
                 } else {
                     set fi [lsearch $fidx $ei]; set issel [expr {$fi == $sel}]
@@ -3345,11 +3418,19 @@ proc tui-browser {} {
             h {
                 tui-help-dialog $rows $cols 0 0
             }
+            i {
+                if {$cfi >= 0} {
+                    lassign [lindex $entries $cfi] _ dir name
+                    set msg [file join $dir $name]
+                }
+            }
             d {
                 if {$cfi >= 0} {
                     lassign [lindex $entries $cfi] _ dir name
                     if {[tui-confirm [t br_delete $name] $rows $cols]} {
-                        file delete [file join $dir $name]
+                        set full [file join $dir $name]
+                        file delete $full
+                        recent-remove $full
                         set msg [t br_deleted $name]; if {$sel > 0} { incr sel -1 }
                     }
                 }
@@ -3362,7 +3443,12 @@ proc tui-browser {} {
                         if {[file extension $new] eq ""} { append new $::FILE_EXT }
                         set np [file join $dir $new]
                         if {[file exists $np]} { set msg [t br_exists $new]
-                        } else { file rename [file join $dir $name] $np; set msg [t br_renamed $new] }
+                        } else {
+                            set old_path [file join $dir $name]
+                            file rename $old_path $np
+                            recent-rename $old_path $np
+                            set msg [t br_renamed $new]
+                        }
                     }
                 }
             }
@@ -3466,6 +3552,7 @@ proc tui-editor {filepath} {
         }
     }
     if {[llength $lines] == 0} { set lines [list ""] }
+    if {$filepath ne ""} { recent-push $filepath }
 
     # ── cursor restore ────────────────────────────────────────────────────────
     if {$filepath eq ""} { set cy 1; set cx 0 } else { lassign [cursor-get $filepath] cy cx }
