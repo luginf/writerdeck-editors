@@ -1191,8 +1191,26 @@ if {$::cfg_bar_height > 0} {
     pack propagate .br.bar 0
 }
 
-# browser state — each entry: {type dir name}  (type = header | file)
+# browser state — each entry: {type dir name}  (type = header | file | favorite | recent)
 set ::br_entries {}
+
+proc build-extra-entries {shown} {
+    if {!$::state_cache_valid} { state-load }
+    set result {}
+    set vfav {}
+    foreach p $::favorites_list { if {[file isfile $p]} { lappend vfav $p } }
+    if {[llength $vfav]} {
+        lappend result [list header "" [t br_favorites]]
+        foreach p $vfav { lappend result [list favorite [file dirname $p] [file tail $p]] }
+    }
+    set vrec {}
+    foreach p $::recent_list { if {[file isfile $p] && $p ni $shown} { lappend vrec $p } }
+    if {[llength $vrec]} {
+        lappend result [list header "" [t br_recent]]
+        foreach p $vrec { lappend result [list recent [file dirname $p] [file tail $p]] }
+    }
+    return $result
+}
 
 proc br-refresh {} {
     set prev ""
@@ -1214,23 +1232,7 @@ proc br-refresh {} {
         }
     }
 
-    if {!$::state_cache_valid} { state-load }
-    set valid_favorites {}
-    foreach p $::favorites_list { if {[file isfile $p]} { lappend valid_favorites $p } }
-    if {[llength $valid_favorites]} {
-        lappend ::br_entries [list header "" [t br_favorites]]
-        foreach p $valid_favorites {
-            lappend ::br_entries [list favorite [file dirname $p] [file tail $p]]
-        }
-    }
-    set valid_recent {}
-    foreach p $::recent_list { if {[file isfile $p] && $p ni $shown} { lappend valid_recent $p } }
-    if {[llength $valid_recent]} {
-        lappend ::br_entries [list header "" [t br_recent]]
-        foreach p $valid_recent {
-            lappend ::br_entries [list recent [file dirname $p] [file tail $p]]
-        }
-    }
+    foreach e [build-extra-entries $shown] { lappend ::br_entries $e }
 
     .br.mid.lst delete 0 end
     set new_sel -1
@@ -1442,22 +1444,16 @@ proc br-reload {} {
     exit
 }
 
-proc br-backup {} {
-    set e [br-selected]
-    if {![llength $e]} return
-    lassign $e _ dir name
+proc do-backup {dir name} {
     set bdir [file join $::DOCS_DIR backups]
     file mkdir $bdir
-    set ts   [clock format [clock seconds] -format "%Y-%m-%dT%Hh%M"]
-    set dst  [file join $bdir "[file rootname $name]_${ts}[file extension $name]"]
+    set ts  [clock format [clock seconds] -format "%Y-%m-%dT%Hh%M"]
+    set dst [file join $bdir "[file rootname $name]_${ts}[file extension $name]"]
     file copy -force [file join $dir $name] $dst
-    info-dialog [t br_backed_up [file tail $dst]]
+    return [file tail $dst]
 }
 
-proc br-toggle-favorite {} {
-    set e [br-selected]
-    if {![llength $e]} return
-    set path [file join [lindex $e 1] [lindex $e 2]]
+proc toggle-favorite {path} {
     if {!$::state_cache_valid} { state-load }
     set idx [lsearch -exact $::favorites_list $path]
     if {$idx >= 0} {
@@ -1466,6 +1462,19 @@ proc br-toggle-favorite {} {
         lappend ::favorites_list $path
     }
     state-save
+}
+
+proc br-backup {} {
+    set e [br-selected]
+    if {![llength $e]} return
+    lassign $e _ dir name
+    info-dialog [t br_backed_up [do-backup $dir $name]]
+}
+
+proc br-toggle-favorite {} {
+    set e [br-selected]
+    if {![llength $e]} return
+    toggle-favorite [file join [lindex $e 1] [lindex $e 2]]
     br-refresh
 }
 
@@ -3394,19 +3403,7 @@ proc tui-browser {} {
                 incr fcount
             }
         }
-        if {!$::state_cache_valid} { state-load }
-        set valid_favorites {}
-        foreach p $::favorites_list { if {[file isfile $p]} { lappend valid_favorites $p } }
-        if {[llength $valid_favorites]} {
-            lappend entries [list header "" [t br_favorites]]
-            foreach p $valid_favorites { lappend entries [list favorite [file dirname $p] [file tail $p]] }
-        }
-        set valid_recent {}
-        foreach p $::recent_list { if {[file isfile $p] && $p ni $shown} { lappend valid_recent $p } }
-        if {[llength $valid_recent]} {
-            lappend entries [list header "" [t br_recent]]
-            foreach p $valid_recent { lappend entries [list recent [file dirname $p] [file tail $p]] }
-        }
+        foreach e [build-extra-entries $shown] { lappend entries $e }
         set fidx {}
         for {set i 0} {$i < [llength $entries]} {incr i} {
             if {[lindex [lindex $entries $i] 0] in {file recent favorite}} { lappend fidx $i }
@@ -3495,25 +3492,13 @@ proc tui-browser {} {
             f {
                 if {$cfi >= 0} {
                     lassign [lindex $entries $cfi] _ dir name
-                    set _path [file join $dir $name]
-                    set _idx [lsearch -exact $::favorites_list $_path]
-                    if {$_idx >= 0} {
-                        set ::favorites_list [lreplace $::favorites_list $_idx $_idx]
-                    } else {
-                        lappend ::favorites_list $_path
-                    }
-                    state-save
+                    toggle-favorite [file join $dir $name]
                 }
             }
             b {
                 if {$cfi >= 0} {
                     lassign [lindex $entries $cfi] _ dir name
-                    set bdir [file join $::DOCS_DIR backups]
-                    file mkdir $bdir
-                    set ts  [clock format [clock seconds] -format "%Y-%m-%dT%Hh%M"]
-                    set dst [file join $bdir "[file rootname $name]_${ts}[file extension $name]"]
-                    file copy -force [file join $dir $name] $dst
-                    set msg [t br_backed_up [file tail $dst]]
+                    set msg [t br_backed_up [do-backup $dir $name]]
                 }
             }
             d {
