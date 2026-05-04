@@ -120,16 +120,18 @@ set ::watch_after_id  ""
 set ::session_headings {}
 
 file mkdir $::DOCS_DIR_DEFAULT
-set ::STATE_FILE   [file join $::DOCS_DIR_DEFAULT ".writhdeck.json"]
-set ::cursor_cache {}
-set ::recent_list  {}
+set ::STATE_FILE      [file join $::DOCS_DIR_DEFAULT ".writhdeck.json"]
+set ::cursor_cache    {}
+set ::favorites_list  {}
+set ::recent_list     {}
 set ::state_cache_valid 0
 
 # ─── state persistence (.writhdeck.json) ──────────────────────────────────────
 # Format: {"cursors":{"path":[cy,cx],...},"recent":["path",...]}
 proc state-load {} {
-    set ::cursor_cache {}
-    set ::recent_list  {}
+    set ::cursor_cache   {}
+    set ::favorites_list {}
+    set ::recent_list    {}
     if {![file exists $::STATE_FILE]} { set ::state_cache_valid 1; return }
     set fh [open $::STATE_FILE r]; fconfigure $fh -encoding utf-8
     set raw [read $fh]; close $fh
@@ -148,18 +150,20 @@ proc state-load {} {
             }
         }
     }
-    set ri [string first "\"recent\"" $raw]
-    if {$ri >= 0} {
-        set ai [string first "\[" $raw $ri]
-        set ae [string first "\]" $raw [expr {$ai + 1}]]
-        if {$ai >= 0 && $ae >= 0} {
-            set sub [string range $raw [expr {$ai + 1}] [expr {$ae - 1}]]
-            set re {"([^"\\]*)"}
-            set start 0
-            while {[regexp -start $start $re $sub -> item]} {
-                lappend ::recent_list $item
-                set idx [string first "\"$item\"" $sub $start]
-                set start [expr {$idx + [string length $item] + 2}]
+    foreach {var key} [list ::favorites_list "favorites" ::recent_list "recent"] {
+        set ri [string first "\"$key\"" $raw]
+        if {$ri >= 0} {
+            set ai [string first "\[" $raw $ri]
+            set ae [string first "\]" $raw [expr {$ai + 1}]]
+            if {$ai >= 0 && $ae >= 0} {
+                set sub [string range $raw [expr {$ai + 1}] [expr {$ae - 1}]]
+                set re {"([^"\\]*)"}
+                set start 0
+                while {[regexp -start $start $re $sub -> item]} {
+                    lappend $var $item
+                    set idx [string first "\"$item\"" $sub $start]
+                    set start [expr {$idx + [string length $item] + 2}]
+                }
             }
         }
     }
@@ -172,12 +176,12 @@ proc state-save {} {
         set ke [string map {\\ \\\\ \" \\\"} $k]
         lappend cp "\"$ke\":\[[lindex $v 0],[lindex $v 1]\]"
     }
+    set fp {}
+    foreach p $::favorites_list { lappend fp "\"[string map {\\ \\\\ \" \\\"} $p]\"" }
     set rp {}
-    foreach p $::recent_list {
-        lappend rp "\"[string map {\\ \\\\ \" \\\"} $p]\""
-    }
+    foreach p $::recent_list    { lappend rp "\"[string map {\\ \\\\ \" \\\"} $p]\"" }
     set fh [open $::STATE_FILE w]; fconfigure $fh -encoding utf-8
-    puts $fh "\{\"cursors\":\{[join $cp ,]\},\"recent\":\[[join $rp ,]\]\}"
+    puts $fh "\{\"cursors\":\{[join $cp ,]\},\"favorites\":\[[join $fp ,]\],\"recent\":\[[join $rp ,]\]\}"
     close $fh
 }
 
@@ -716,8 +720,10 @@ set ::i18n {
         toc_jump_bar       "↵ jump  esc/ctrl+q cancel"
         toc_headings       "%d heading%s"
         br_no_docs         "No documents yet. Press n to create one."
-        br_help_gui        " ↵ open  n new  t scratchpad  d delete  r rename  i info  z reload  q quit  h help"
-        br_help_tui        "↵ open  n new  t scratchpad  d delete  r rename  i info  q quit   %s help"
+        br_help_gui        " ↵ open  n new  t scratchpad  f fav  b backup  d delete  r rename  i info  z reload  q quit  h help"
+        br_help_tui        "↵ open  n new  t scratchpad  f fav  b backup  d delete  r rename  i info  q quit   %s help"
+        br_backed_up       "backup: %s"
+        br_favorites       "Favorites"
         br_exists          "'%s' already exists"
         br_deleted         "deleted '%s'"
         br_renamed         "renamed → '%s'"
@@ -769,8 +775,10 @@ set ::i18n {
         toc_jump_bar       "↵ aller  esc/ctrl+q annuler"
         toc_headings       "%d titre%s"
         br_no_docs         "Aucun document. Appuyez sur n pour en créer un."
-        br_help_gui        " ↵ ouvrir  n nouveau  t bloc-notes  d supprimer  r renommer  i infos  z recharger  q quitter  h aide"
-        br_help_tui        "↵ ouvrir  n nouveau  t bloc-notes  d supprimer  r renommer  i infos  q quitter   %s aide"
+        br_help_gui        " ↵ ouvrir  n nouveau  t bloc-notes  f fav  b backup  d supprimer  r renommer  i infos  z recharger  q quitter  h aide"
+        br_help_tui        "↵ ouvrir  n nouveau  t bloc-notes  f fav  b backup  d supprimer  r renommer  i infos  q quitter   %s aide"
+        br_backed_up       "sauvegarde : %s"
+        br_favorites       "Favoris"
         br_exists          "'%s' existe déjà"
         br_deleted         "'%s' supprimé"
         br_renamed         "renommé → '%s'"
@@ -860,6 +868,7 @@ set bar_pady [expr {$::cfg_bar_height > 0 \
 set font_sm  [expr {$::cfg_bar_height > 0 \
     ? [list $::cfg_bar_font_family [expr {-max(6, $::cfg_bar_height - 2*$bar_pady)}]] \
     : [list $::cfg_bar_font_family 10]}]
+set ::font_sm $font_sm
 lassign [theme-colors] bg fg bg_bar fg_bar bg_sel
 set fg_dim  "#676767"
 # expose as globals for use in procs
@@ -1190,22 +1199,32 @@ proc br-refresh {} {
     set sel [.br.mid.lst curselection]
     if {[llength $sel]} {
         lassign [lindex $::br_entries [lindex $sel 0]] type dir name
-        if {$type in {file recent}} { set prev "$dir|$name" }
+        if {$type in {file recent favorite}} { set prev "$dir|$name" }
     }
 
     set ::br_entries {}
     set total 0
+    set shown {}
     foreach dir [br-dirs] {
         lappend ::br_entries [list header $dir ""]
         foreach f [list-docs $dir] {
             lappend ::br_entries [list file $dir $f]
+            lappend shown [file join $dir $f]
             incr total
         }
     }
 
     if {!$::state_cache_valid} { state-load }
+    set valid_favorites {}
+    foreach p $::favorites_list { if {[file isfile $p]} { lappend valid_favorites $p } }
+    if {[llength $valid_favorites]} {
+        lappend ::br_entries [list header "" [t br_favorites]]
+        foreach p $valid_favorites {
+            lappend ::br_entries [list favorite [file dirname $p] [file tail $p]]
+        }
+    }
     set valid_recent {}
-    foreach p $::recent_list { if {[file isfile $p]} { lappend valid_recent $p } }
+    foreach p $::recent_list { if {[file isfile $p] && $p ni $shown} { lappend valid_recent $p } }
     if {[llength $valid_recent]} {
         lappend ::br_entries [list header "" [t br_recent]]
         foreach p $valid_recent {
@@ -1246,7 +1265,7 @@ proc br-selected {} {
     set sel [.br.mid.lst curselection]
     if {![llength $sel]} { return {} }
     set e [lindex $::br_entries [lindex $sel 0]]
-    if {[lindex $e 0] ni {file recent}} { return {} }
+    if {[lindex $e 0] ni {file recent favorite}} { return {} }
     return $e
 }
 
@@ -1423,10 +1442,39 @@ proc br-reload {} {
     exit
 }
 
+proc br-backup {} {
+    set e [br-selected]
+    if {![llength $e]} return
+    lassign $e _ dir name
+    set bdir [file join $::DOCS_DIR backups]
+    file mkdir $bdir
+    set ts   [clock format [clock seconds] -format "%Y-%m-%dT%Hh%M"]
+    set dst  [file join $bdir "[file rootname $name]_${ts}[file extension $name]"]
+    file copy -force [file join $dir $name] $dst
+    info-dialog [t br_backed_up [file tail $dst]]
+}
+
+proc br-toggle-favorite {} {
+    set e [br-selected]
+    if {![llength $e]} return
+    set path [file join [lindex $e 1] [lindex $e 2]]
+    if {!$::state_cache_valid} { state-load }
+    set idx [lsearch -exact $::favorites_list $path]
+    if {$idx >= 0} {
+        set ::favorites_list [lreplace $::favorites_list $idx $idx]
+    } else {
+        lappend ::favorites_list $path
+    }
+    state-save
+    br-refresh
+}
+
 bind .br.mid.lst <Return>      { br-open }
 bind .br.mid.lst <Double-1>    { br-open }
 bind .br.mid.lst <n>           { br-new }
 bind .br.mid.lst <t>           { open-scratchpad }
+bind .br.mid.lst <f>           { br-toggle-favorite }
+bind .br.mid.lst <b>           { br-backup }
 bind .br.mid.lst <d>           { br-delete }
 bind .br.mid.lst <r>           { br-rename }
 bind .br.mid.lst <i>           { set e [br-selected]; if {[llength $e]} { info-dialog [file join [lindex $e 1] [lindex $e 2]] } }
@@ -2057,7 +2105,7 @@ proc apply-theme {} {
 }
 
 proc quit-app {} {
-    if {$::dirty} {
+    if {$::dirty && ($::filename ne "" || $::scratchpad)} {
         set _label [expr {$::scratchpad ? "scratchpad" : [file tail $::filename]}]
         set r [yesnocancel-dialog [t ed_save_before $_label]]
         if {$r eq "cancel"} return
@@ -2126,14 +2174,20 @@ bind .ed.sf.r.e <Tab>           { focus .ed.sf.e; break }
 bind .br.mid.lst <h>                  { help-dialog }
 bind .br.mid.lst <$::cfg_key_help>   { help-dialog }
 
-proc open-file-dialog {} {
+proc open-file-dialog {{initialdir ""}} {
+    if {$initialdir eq ""} {
+        set initialdir [expr {$::filename ne "" ? [file dirname $::filename] : $::DOCS_DIR_DEFAULT}]
+    }
     set path [tk_getOpenFile \
-        -initialdir $::DOCS_DIR_DEFAULT \
+        -initialdir $initialdir \
         -filetypes {{"Text files" {.txt}} {"All files" *}}]
     if {$path ne ""} { show-editor $path }
 }
 
-bind .br.mid.lst <Control-o> { open-file-dialog }
+bind .br.mid.lst <Control-o> {
+    set _e [br-selected]
+    open-file-dialog [expr {[llength $_e] ? [lindex $_e 1] : $::DOCS_DIR_DEFAULT}]
+}
 
 proc toggle-fullscreen {} {
     set ::fullscreen [expr {!$::fullscreen}]
@@ -2358,6 +2412,9 @@ proc help-dialog {} {
             "↵ / double-click"                  "Open" \
             "n"                                 "New file" \
             "t"                                 "Scratchpad (temp, no disk file)" \
+            "f"                                 "Toggle favorite" \
+            "b"                                 "Backup (copies to backups/ with timestamp)" \
+            "i"                                 "Show full path" \
             "d"                                 "Delete" \
             "r"                                 "Rename" \
             [key-label $::cfg_key_fullscreen]   "Fullscreen" \
@@ -2367,14 +2424,14 @@ proc help-dialog {} {
         ]
 
     text $w.t \
-        -font [list $::cfg_font_family 11] -state normal \
-        -bg "#1a1a1a" -fg "#e8e8e8" \
+        -font $::font_sm -state normal \
+        -bg $::bg -fg $::fg \
         -borderwidth 0 -padx 16 -pady 12 \
         -width 60 -height $height \
         -cursor arrow
-    $w.t tag configure heading -foreground "#aaaaaa" -font [list $::cfg_font_family 11 bold]
-    $w.t tag configure key     -foreground "#7ab0d4"
-    $w.t tag configure desc    -foreground "#e8e8e8"
+    $w.t tag configure heading -foreground $::fg_bar -font [concat $::font_sm bold]
+    $w.t tag configure key     -foreground $::fg -font [concat $::font_sm bold]
+    $w.t tag configure desc    -foreground $::fg
 
     foreach {section entries} $sections {
         $w.t insert end "\n $section\n" heading
@@ -2389,7 +2446,7 @@ proc help-dialog {} {
     pack $w.t  -fill both -expand 1
     catch {
         label $w.logo -image [image create photo -data $::_icon_b64] \
-            -bg "#1a1a1a" -pady 6
+            -bg $::bg -pady 6
         pack $w.logo
     }
     pack $w.ok -pady 8
@@ -3328,20 +3385,31 @@ proc tui-browser {} {
         }
         # build entries
         set entries {}; set fcount 0
+        set shown {}
         foreach dir [br-dirs] {
             lappend entries [list header $dir ""]
-            foreach f [list-docs $dir] { lappend entries [list file $dir $f]; incr fcount }
+            foreach f [list-docs $dir] {
+                lappend entries [list file $dir $f]
+                lappend shown [file join $dir $f]
+                incr fcount
+            }
         }
         if {!$::state_cache_valid} { state-load }
+        set valid_favorites {}
+        foreach p $::favorites_list { if {[file isfile $p]} { lappend valid_favorites $p } }
+        if {[llength $valid_favorites]} {
+            lappend entries [list header "" [t br_favorites]]
+            foreach p $valid_favorites { lappend entries [list favorite [file dirname $p] [file tail $p]] }
+        }
         set valid_recent {}
-        foreach p $::recent_list { if {[file isfile $p]} { lappend valid_recent $p } }
+        foreach p $::recent_list { if {[file isfile $p] && $p ni $shown} { lappend valid_recent $p } }
         if {[llength $valid_recent]} {
             lappend entries [list header "" [t br_recent]]
             foreach p $valid_recent { lappend entries [list recent [file dirname $p] [file tail $p]] }
         }
         set fidx {}
         for {set i 0} {$i < [llength $entries]} {incr i} {
-            if {[lindex [lindex $entries $i] 0] in {file recent}} { lappend fidx $i }
+            if {[lindex [lindex $entries $i] 0] in {file recent favorite}} { lappend fidx $i }
         }
         set nf [llength $fidx]
         if {$nf > 0} { set sel [expr {max(0, min($sel, $nf-1))}] }
@@ -3424,6 +3492,30 @@ proc tui-browser {} {
                     set msg [file join $dir $name]
                 }
             }
+            f {
+                if {$cfi >= 0} {
+                    lassign [lindex $entries $cfi] _ dir name
+                    set _path [file join $dir $name]
+                    set _idx [lsearch -exact $::favorites_list $_path]
+                    if {$_idx >= 0} {
+                        set ::favorites_list [lreplace $::favorites_list $_idx $_idx]
+                    } else {
+                        lappend ::favorites_list $_path
+                    }
+                    state-save
+                }
+            }
+            b {
+                if {$cfi >= 0} {
+                    lassign [lindex $entries $cfi] _ dir name
+                    set bdir [file join $::DOCS_DIR backups]
+                    file mkdir $bdir
+                    set ts  [clock format [clock seconds] -format "%Y-%m-%dT%Hh%M"]
+                    set dst [file join $bdir "[file rootname $name]_${ts}[file extension $name]"]
+                    file copy -force [file join $dir $name] $dst
+                    set msg [t br_backed_up [file tail $dst]]
+                }
+            }
             d {
                 if {$cfi >= 0} {
                     lassign [lindex $entries $cfi] _ dir name
@@ -3455,6 +3547,15 @@ proc tui-browser {} {
         }
         if {$key eq $::cfg_tui_help && $key ne "h"} {
             tui-help-dialog $rows $cols 0 0
+        }
+        if {$key eq $::cfg_tui_open} {
+            set _dir [expr {$cfi >= 0 ? [lindex [lindex $entries $cfi] 1] : $::DOCS_DIR_DEFAULT}]
+            set _lbl [string map [list $::HOME_DIR ~] $_dir]
+            set _in  [string trim [tui-prompt "open \[${_lbl}/\]: " $rows $cols]]
+            if {$_in ne "" && !$::tui_escaped} {
+                set _fp [expr {[file pathtype $_in] eq "absolute" ? $_in : [file join $_dir $_in]}]
+                if {[file isfile $_fp]} { return $_fp } else { set msg "not found: $_in" }
+            }
         }
     }
 }

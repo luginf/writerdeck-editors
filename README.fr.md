@@ -7,7 +7,7 @@
 
 WrithDeck est un éditeur de texte sans distraction conçu pour les auteurs utilisant un writerdeck dédié, qu'il s'agisse d'un prototype fait maison ou d'un ordinateur configuré spécifiquement à cet effet. Il est rapide et facile à personnaliser. WrithDeck peut fonctionner comme une application graphique épurée ou directement dans un terminal ou un TTY, le tout depuis un seul fichier sans installation.
 
-Il inclut une coloration syntaxique inline configurable, un navigateur de fichiers, une vue fractionnée, la navigation par chapitres via une table des matières, et une interface entièrement thémable, le tout en environ 4 000 lignes (174 Ko) de Tcl/Tk.
+Il inclut une coloration syntaxique inline configurable, un navigateur de fichiers, une vue fractionnée, la navigation par chapitres via une table des matières, et une interface entièrement thémable, le tout en environ 4 300 lignes (185 Ko) de Tcl/Tk.
 
 Que vous écriviez sur un Raspberry Pi Zero avec un écran E-ink, sur une tablette Android, en SSH, ou sur votre bureau, WrithDeck reste léger et vous laisse vous concentrer sur votre texte.
 
@@ -341,8 +341,11 @@ Ce sont les touches par défaut. La plupart sont entièrement configurables dans
 | Entrée / double-clic | Ouvrir le fichier |
 | n | Nouveau fichier |
 | t | Bloc-notes (tampon en mémoire, pas de fichier disque ; Ctrl+S demande un nom pour enregistrer) |
+| f | Basculer favori — ajoute/retire le fichier de la section Favoris |
+| b | Sauvegarder — copie dans le sous-dossier `backups/` avec un horodatage `nom_YYYY-MM-DDTHHhMM` |
 | d | Supprimer le fichier |
 | r | Renommer le fichier |
+| i | Afficher le chemin complet |
 | z | Recharger — relancer WrithDeck avec la configuration `.ini` courante |
 | h / Ctrl+H | Aide |
 | Ctrl+O | Ouvrir un fichier quelconque (dialogue système) |
@@ -417,8 +420,11 @@ Activé via `--no-gui` / `--tui` / `--ng`, ou si aucun système de fenêtrage n'
 | Entrée | Ouvrir le fichier |
 | n | Nouveau fichier |
 | t | Bloc-notes (tampon en mémoire, pas de fichier disque ; Ctrl+S demande un nom pour enregistrer) |
+| f | Basculer favori — ajoute/retire le fichier de la section Favoris |
+| b | Sauvegarder — copie dans le sous-dossier `backups/` avec un horodatage `nom_YYYY-MM-DDTHHhMM` |
 | d | Supprimer le fichier |
 | r | Renommer le fichier |
+| i | Afficher le chemin complet |
 | h / Ctrl+H | Aide |
 | q / Ctrl+Q | Quitter |
 
