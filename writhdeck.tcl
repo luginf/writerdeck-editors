@@ -445,7 +445,7 @@ proc ini-save {} {
     puts $fh "console_margin_cols = $::cfg_console_margin_cols"
     puts $fh "console_margin_rows = $::cfg_console_margin_rows"
     puts $fh ""
-    puts $fh "heading_marker = $::cfg_heading_marker"
+    puts $fh "heading_marker       = $::cfg_heading_marker"
     puts $fh "comment_marker       = $::cfg_comment_marker"
     puts $fh "bold_marker          = $::cfg_bold_marker"
     puts $fh "italic_marker        = $::cfg_italic_marker"
@@ -666,7 +666,7 @@ set ::i18n {
         toc_jump_bar       "↵ jump  esc/ctrl+q cancel"
         toc_headings       "%d heading%s"
         br_no_docs         "No documents yet. Press n to create one."
-        br_help_gui        " ↵ open  n new  t scratchpad  d delete  r rename  q quit  h help"
+        br_help_gui        " ↵ open  n new  t scratchpad  d delete  r rename  z reload  q quit  h help"
         br_help_tui        "↵ open  n new  t scratchpad  d delete  r rename  q quit   %s help"
         br_exists          "'%s' already exists"
         br_deleted         "deleted '%s'"
@@ -718,7 +718,7 @@ set ::i18n {
         toc_jump_bar       "↵ aller  esc/ctrl+q annuler"
         toc_headings       "%d titre%s"
         br_no_docs         "Aucun document. Appuyez sur n pour en créer un."
-        br_help_gui        " ↵ ouvrir  n nouveau  t bloc-notes  d supprimer  r renommer  q quitter  h aide"
+        br_help_gui        " ↵ ouvrir  n nouveau  t bloc-notes  d supprimer  r renommer  z recharger  q quitter  h aide"
         br_help_tui        "↵ ouvrir  n nouveau  t bloc-notes  d supprimer  r renommer  q quitter   %s aide"
         br_exists          "'%s' existe déjà"
         br_deleted         "'%s' supprimé"
@@ -1355,6 +1355,11 @@ proc br-rename {} {
     br-refresh
 }
 
+proc br-reload {} {
+    exec [info nameofexecutable] $::argv0 {*}$::argv &
+    exit
+}
+
 bind .br.mid.lst <Return>      { br-open }
 bind .br.mid.lst <Double-1>    { br-open }
 bind .br.mid.lst <n>           { br-new }
@@ -1362,6 +1367,7 @@ bind .br.mid.lst <t>           { open-scratchpad }
 bind .br.mid.lst <d>           { br-delete }
 bind .br.mid.lst <r>           { br-rename }
 bind .br.mid.lst <q>           { exit }
+bind .br.mid.lst <z>           { br-reload }
 
 bind .br.mid.lst <Up> {
     set i [lindex [concat [.br.mid.lst curselection] 1] 0]

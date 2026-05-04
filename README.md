@@ -3,6 +3,8 @@
 
 ![WrithDeck Logo](media/writhdeck_logo.png)
 
+[🇫🇷](README.fr.md) 
+
 WrithDeck is a distraction-free text editor designed for writers using a dedicated writerdeck, whether it's a DIY prototype or a computer configured specifically for that purpose. It's fast and easy to customize. WrithDeck can run as a clean graphical application or directly in a terminal or TTY, all from a single file with no installation required.
 
 It includes customizable inline syntax highlighting, a file browser, split view, chapter navigation through a table of contents, and a fully themeable interface, all around 4,000 lines (174 Kb) of Tcl/Tk.
@@ -299,6 +301,7 @@ Those are the default keys. Most of them are fully customisable in the writhdeck
 | t | Scratchpad (in-memory buffer, no disk file; Ctrl+S prompts for a name to save) |
 | d | Delete file |
 | r | Rename file |
+| z | Reload — relaunch WrithDeck with the current `.ini` configuration |
 | h / Ctrl+H | Help |
 | Ctrl+O | Open any file (system dialog) |
 | Ctrl+D | Toggle dark/light theme |
