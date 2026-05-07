@@ -122,18 +122,41 @@ set ::watch_after_id  ""
 set ::session_headings {}
 
 file mkdir $::DOCS_DIR_DEFAULT
-set ::STATE_FILE      [file join $::DOCS_DIR_DEFAULT ".writhdeck.json"]
-set ::cursor_cache    {}
-set ::favorites_list  {}
-set ::recent_list     {}
-set ::state_cache_valid 0
+set ::STATE_FILE        [file join $::DOCS_DIR_DEFAULT ".writhdeck.json"]
+set ::cursor_cache      {}
+set ::favorites_list    {}
+set ::recent_list       {}
+set ::daily_data        {}
+set ::session_file        ""
+set ::session_baseline    -1
+set ::session_max_today   0
+set ::state_cache_valid   0
 
 # ─── state persistence (.writhdeck.json) ──────────────────────────────────────
-# Format: {"cursors":{"path":[cy,cx],...},"recent":["path",...]}
+# Format: {"cursors":{"path":[cy,cx],...},"favorites":[...],"recent":[...],"daily":["path\tdate\tN",...]}
+proc state-parse-array {raw key} {
+    set ri [string first "\"$key\"" $raw]
+    if {$ri < 0} { return {} }
+    set ai [string first "\[" $raw $ri]
+    set ae [string first "\]" $raw [expr {$ai + 1}]]
+    if {$ai < 0 || $ae < 0} { return {} }
+    set sub [string range $raw [expr {$ai + 1}] [expr {$ae - 1}]]
+    set result {}
+    set re {"([^"\\]*)"}
+    set start 0
+    while {[regexp -start $start $re $sub -> item]} {
+        lappend result $item
+        set idx [string first "\"$item\"" $sub $start]
+        set start [expr {$idx + [string length $item] + 2}]
+    }
+    return $result
+}
+
 proc state-load {} {
     set ::cursor_cache   {}
     set ::favorites_list {}
     set ::recent_list    {}
+    set ::daily_data     {}
     if {![file exists $::STATE_FILE]} { set ::state_cache_valid 1; return }
     set fh [open $::STATE_FILE r]; fconfigure $fh -encoding utf-8
     set raw [read $fh]; close $fh
@@ -152,24 +175,18 @@ proc state-load {} {
             }
         }
     }
-    foreach {var key} [list ::favorites_list "favorites" ::recent_list "recent"] {
-        set ri [string first "\"$key\"" $raw]
-        if {$ri >= 0} {
-            set ai [string first "\[" $raw $ri]
-            set ae [string first "\]" $raw [expr {$ai + 1}]]
-            if {$ai >= 0 && $ae >= 0} {
-                set sub [string range $raw [expr {$ai + 1}] [expr {$ae - 1}]]
-                set re {"([^"\\]*)"}
-                set start 0
-                while {[regexp -start $start $re $sub -> item]} {
-                    lappend $var $item
-                    set idx [string first "\"$item\"" $sub $start]
-                    set start [expr {$idx + [string length $item] + 2}]
-                }
-            }
+    set ::favorites_list [state-parse-array $raw "favorites"]
+    set ::recent_list    [state-parse-array $raw "recent"]
+    foreach item [state-parse-array $raw "daily"] {
+        set parts [split $item "\t"]
+        if {[llength $parts] == 3} {
+            lassign $parts fp date cnt
+            if {![dict exists $::daily_data $fp]} { dict set ::daily_data $fp {} }
+            dict set ::daily_data $fp $date [expr {int($cnt)}]
         }
     }
     set ::state_cache_valid 1
+    daily-cleanup
 }
 
 proc state-save {} {
@@ -182,8 +199,13 @@ proc state-save {} {
     foreach p $::favorites_list { lappend fp "\"[string map {\\ \\\\ \" \\\"} $p]\"" }
     set rp {}
     foreach p $::recent_list    { lappend rp "\"[string map {\\ \\\\ \" \\\"} $p]\"" }
+    set dp {}
+    dict for {fpath fdata} $::daily_data {
+        set fpe [string map {\\ \\\\ \" \\\"} $fpath]
+        dict for {date cnt} $fdata { lappend dp "\"${fpe}\t${date}\t${cnt}\"" }
+    }
     set fh [open $::STATE_FILE w]; fconfigure $fh -encoding utf-8
-    puts $fh "\{\"cursors\":\{[join $cp ,]\},\"favorites\":\[[join $fp ,]\],\"recent\":\[[join $rp ,]\]\}"
+    puts $fh "\{\"cursors\":\{[join $cp ,]\},\"favorites\":\[[join $fp ,]\],\"recent\":\[[join $rp ,]\],\"daily\":\[[join $dp ,]\]\}"
     close $fh
 }
 
@@ -222,6 +244,58 @@ proc recent-rename {old new} {
     if {!$::state_cache_valid} { state-load }
     set idx [lsearch -exact $::recent_list $old]
     if {$idx >= 0} { set ::recent_list [lreplace $::recent_list $idx $idx $new]; state-save }
+}
+
+# ─── daily writing stats ──────────────────────────────────────────────────────
+proc daily-open {filepath wc} {
+    set ::session_file $filepath
+    set today [clock format [clock seconds] -format "%Y-%m-%d"]
+    if {!$::state_cache_valid} { state-load }
+    set prior 0
+    if {[dict exists $::daily_data $filepath] &&
+        [dict exists [dict get $::daily_data $filepath] $today]} {
+        set prior [dict get [dict get $::daily_data $filepath] $today]
+    }
+    set ::session_baseline  [expr {$wc - $prior}]
+    set ::session_max_today $prior
+}
+
+proc daily-today {wc} {
+    if {$::session_baseline < 0} { return 0 }
+    set current [expr {max(0, $wc - $::session_baseline)}]
+    if {$current > $::session_max_today} { set ::session_max_today $current }
+    return $::session_max_today
+}
+
+proc daily-update {wc} {
+    if {$::session_file eq "" || $::session_baseline < 0} return
+    set today [clock format [clock seconds] -format "%Y-%m-%d"]
+    set added [daily-today $wc]
+    if {![dict exists $::daily_data $::session_file]} { dict set ::daily_data $::session_file {} }
+    dict set ::daily_data $::session_file $today $added
+    state-save
+}
+
+proc daily-cleanup {} {
+    set today [clock format [clock seconds] -format "%Y-%m-%d"]
+    set new_data {}
+    dict for {fp fdata} $::daily_data {
+        if {$fp in $::favorites_list} {
+            dict set new_data $fp $fdata
+        } else {
+            if {[dict exists $fdata $today]} {
+                dict set new_data $fp [dict create $today [dict get $fdata $today]]
+            }
+        }
+    }
+    set ::daily_data $new_data
+}
+
+proc daily-clear {filepath} {
+    if {[dict exists $::daily_data $filepath]} {
+        dict unset ::daily_data $filepath
+    }
+    state-save
 }
 
 # ─── ini ──────────────────────────────────────────────────────────────────────
@@ -278,7 +352,8 @@ set ::cfg_line_spacing   100
 set ::cfg_bar_height     18
 set ::cfg_lang           "en"
 set ::cfg_help_bar       "^S save   ^Q close   ^H help"
-# status bar zones — tokens: filename dirty sel ln col words chars clock help_bar space
+set ::cfg_word_goal      500
+# status bar zones — tokens: filename dirty sel ln col words chars goal clock help_bar space
 set ::cfg_status_left   "filename dirty sel ln col words chars"
 set ::cfg_status_center ""
 set ::cfg_status_right  "help_bar clock"
@@ -314,15 +389,29 @@ proc profile-apply {name} {
     if {![dict exists $::cfg_profiles $name]} return
     set d [dict get $::cfg_profiles $name]
     foreach {key var} {
-        margin_width    ::cfg_margin_width
-        margin_height   ::cfg_margin_height
-        font_size       ::cfg_font_size
-        font_family     ::cfg_font_family
-        bar_font_family ::cfg_bar_font_family
-        line_spacing    ::cfg_line_spacing
-        bar_height      ::cfg_bar_height
+        margin_width     ::cfg_margin_width
+        margin_height    ::cfg_margin_height
+        font_size        ::cfg_font_size
+        font_family      ::cfg_font_family
+        bar_font_family  ::cfg_bar_font_family
+        line_spacing     ::cfg_line_spacing
+        bar_height       ::cfg_bar_height
+        word_goal        ::cfg_word_goal
+        lang             ::cfg_lang
+        line_numbers     ::cfg_line_numbers
+        status_left      ::cfg_status_left
+        status_center    ::cfg_status_center
+        status_right     ::cfg_status_right
+        help_bar         ::cfg_help_bar
     } {
         if {[dict exists $d $key]} { set $var [dict get $d $key] }
+    }
+    foreach {key var} {
+        dark_mode        ::cfg_dark_mode
+        block_cursor_gui ::cfg_block_cursor_gui
+        blink_cursor     ::cfg_blink_cursor
+    } {
+        if {[dict exists $d $key]} { set $var [string is true [dict get $d $key]] }
     }
 }
 
@@ -437,6 +526,7 @@ proc ini-load {} {
                 color_dim_alt        { set ::cfg_color_comment_alt  $v }
                 color_comment_alt    { set ::cfg_color_comment_alt  $v }
                 color_markup_alt     { set ::cfg_color_markup_alt   $v }
+                word_goal            { set ::cfg_word_goal            $v }
                 dark_mode            { set ::cfg_dark_mode [string is true $v] }
                 key_dark_toggle      { set ::cfg_key_dark_toggle   $v }
                 browser              { set ::cfg_browser              [string is true $v] }
@@ -524,7 +614,9 @@ proc ini-save {} {
     puts $fh "lang           = $::cfg_lang"
     puts $fh "# help_bar: text shown in the shortcuts bar, empty to hide"
     puts $fh "help_bar       = $::cfg_help_bar"
-    puts $fh "# status bar zones — tokens: filename dirty sel ln col words chars clock help_bar space"
+    puts $fh "# word_goal: target word count shown in status bar with 'goal' token (0 = disabled)"
+    puts $fh "word_goal      = $::cfg_word_goal"
+    puts $fh "# status bar zones — tokens: filename dirty sel ln col words chars goal clock help_bar space"
     puts $fh "status_left    = $::cfg_status_left"
     puts $fh "status_center  = $::cfg_status_center"
     puts $fh "status_right   = $::cfg_status_right"
@@ -556,7 +648,7 @@ proc ini-save {} {
     puts $fh "key_dark_toggle  = $::cfg_key_dark_toggle"
     puts $fh ""
     puts $fh "\[profiles\]"
-    puts $fh {# Each [name] block defines a profile (GUI margins, fonts, line spacing).}
+    puts $fh {# Each [name] block defines a profile (display, behaviour and status bar settings).}
     puts $fh {# Select the active profile with:  profile = <name>  in [editor]}
     puts $fh ""
     puts $fh "\[default\]"
@@ -567,6 +659,7 @@ proc ini-save {} {
     puts $fh "bar_font_family = $::cfg_bar_font_family"
     puts $fh "line_spacing    = $::cfg_line_spacing"
     puts $fh "bar_height      = $::cfg_bar_height"
+    puts $fh "word_goal       = $::cfg_word_goal"
     # write any extra profiles stored in memory (user-defined)
     foreach pname [dict keys $::cfg_profiles] {
         if {$pname eq "default"} continue
@@ -574,7 +667,9 @@ proc ini-save {} {
         puts $fh "\[$pname\]"
         set d [dict get $::cfg_profiles $pname]
         foreach key {margin_width margin_height
-                     font_size font_family bar_font_family line_spacing bar_height} {
+                     font_size font_family bar_font_family line_spacing bar_height
+                     word_goal dark_mode lang block_cursor_gui blink_cursor line_numbers
+                     status_left status_center status_right help_bar} {
             if {[dict exists $d $key]} {
                 puts $fh "$key = [dict get $d $key]"
             }
@@ -722,10 +817,17 @@ set ::i18n {
         toc_jump_bar       "↵ jump  esc/ctrl+q cancel"
         toc_headings       "%d heading%s"
         br_no_docs         "No documents yet. Press n to create one."
-        br_help_gui        " ↵ open  n new  t scratchpad  f fav  b backup  d delete  r rename  i info  z reload  q quit  h help"
-        br_help_tui        "↵ open  n new  t scratchpad  f fav  b backup  d delete  r rename  i info  q quit   %s help"
+        br_help_gui        " ↵ open  n new  t scratchpad  f fav  s stats  b backup  d delete  r rename  i info  z reload  q quit  h help"
+        br_help_tui        "↵ open  n new  t scratchpad  f fav  s stats  b backup  d delete  r rename  i info  q quit   %s help"
         br_backed_up       "backup: %s"
         br_favorites       "Favorites"
+        br_stats_title     "Writing stats"
+        br_stats_no_data   "No writing stats yet for this file."
+        br_stats_today     "Today"
+        br_stats_clear     "Clear stats"
+        br_stats_clear_confirm "Clear all writing stats for \"%s\"?"
+        br_fav_added       "★ added to favorites: %s"
+        br_fav_removed     "☆ removed from favorites: %s"
         br_exists          "'%s' already exists"
         br_deleted         "deleted '%s'"
         br_renamed         "renamed → '%s'"
@@ -777,10 +879,17 @@ set ::i18n {
         toc_jump_bar       "↵ aller  esc/ctrl+q annuler"
         toc_headings       "%d titre%s"
         br_no_docs         "Aucun document. Appuyez sur n pour en créer un."
-        br_help_gui        " ↵ ouvrir  n nouveau  t bloc-notes  f fav  b backup  d supprimer  r renommer  i infos  z recharger  q quitter  h aide"
-        br_help_tui        "↵ ouvrir  n nouveau  t bloc-notes  f fav  b backup  d supprimer  r renommer  i infos  q quitter   %s aide"
+        br_help_gui        " ↵ ouvrir  n nouveau  t bloc-notes  f fav  s stats  b backup  d supprimer  r renommer  i infos  z recharger  q quitter  h aide"
+        br_help_tui        "↵ ouvrir  n nouveau  t bloc-notes  f fav  s stats  b backup  d supprimer  r renommer  i infos  q quitter   %s aide"
         br_backed_up       "sauvegarde : %s"
         br_favorites       "Favoris"
+        br_stats_title     "Statistiques d'écriture"
+        br_stats_no_data   "Aucune statistique d'écriture pour ce fichier."
+        br_stats_today     "Aujourd'hui"
+        br_stats_clear     "Effacer les stats"
+        br_stats_clear_confirm "Effacer toutes les statistiques de \"%s\" ?"
+        br_fav_added       "★ ajouté aux favoris : %s"
+        br_fav_removed     "☆ retiré des favoris : %s"
         br_exists          "'%s' existe déjà"
         br_deleted         "'%s' supprimé"
         br_renamed         "renommé → '%s'"
@@ -1033,6 +1142,7 @@ proc status-build {tokens state} {
             col      { append result [format "  Col %-3d" $col] }
             words    { append result "  ${words}w" }
             chars    { append result "  ${chars}c" }
+            goal     { if {$::cfg_word_goal > 0} { append result [format "  %d/%d" [daily-today $words] $::cfg_word_goal] } }
             clock    { append result "  $clk" }
             space    { append result " " }
             help_bar {}
@@ -1059,6 +1169,26 @@ proc build-extra-entries {shown} {
         foreach p $vrec { lappend result [list recent [file dirname $p] [file tail $p]] }
     }
     return $result
+}
+
+proc do-backup {dir name} {
+    set bdir [file join $::DOCS_DIR backups]
+    file mkdir $bdir
+    set ts  [clock format [clock seconds] -format "%Y-%m-%dT%Hh%M"]
+    set dst [file join $bdir "[file rootname $name]_${ts}[file extension $name]"]
+    file copy -force [file join $dir $name] $dst
+    return [file tail $dst]
+}
+
+proc toggle-favorite {path} {
+    if {!$::state_cache_valid} { state-load }
+    set idx [lsearch -exact $::favorites_list $path]
+    if {$idx >= 0} {
+        set ::favorites_list [lreplace $::favorites_list $idx $idx]
+    } else {
+        lappend ::favorites_list $path
+    }
+    state-save
 }
 
 if {!$::no_gui} {
@@ -1446,26 +1576,6 @@ proc br-reload {} {
     exit
 }
 
-proc do-backup {dir name} {
-    set bdir [file join $::DOCS_DIR backups]
-    file mkdir $bdir
-    set ts  [clock format [clock seconds] -format "%Y-%m-%dT%Hh%M"]
-    set dst [file join $bdir "[file rootname $name]_${ts}[file extension $name]"]
-    file copy -force [file join $dir $name] $dst
-    return [file tail $dst]
-}
-
-proc toggle-favorite {path} {
-    if {!$::state_cache_valid} { state-load }
-    set idx [lsearch -exact $::favorites_list $path]
-    if {$idx >= 0} {
-        set ::favorites_list [lreplace $::favorites_list $idx $idx]
-    } else {
-        lappend ::favorites_list $path
-    }
-    state-save
-}
-
 proc br-backup {} {
     set e [br-selected]
     if {![llength $e]} return
@@ -1480,11 +1590,63 @@ proc br-toggle-favorite {} {
     br-refresh
 }
 
+proc br-stats {} {
+    set e [br-selected]
+    if {![llength $e]} return
+    set path [file join [lindex $e 1] [lindex $e 2]]
+    if {!$::state_cache_valid} { state-load }
+    if {![dict exists $::daily_data $path] || [dict size [dict get $::daily_data $path]] == 0} {
+        info-dialog [t br_stats_no_data]
+        return
+    }
+    set fdata [dict get $::daily_data $path]
+    set nrows [dict size $fdata]
+    set w .stats
+    catch {destroy $w}
+    toplevel $w
+    wm title $w "[t br_stats_title] — [file tail $path]"
+    wm resizable $w 0 0
+    wm transient $w .
+    grab $w
+    text $w.t -font $::font_sm -state normal -bg $::bg -fg $::fg \
+        -borderwidth 0 -padx 16 -pady 12 -width 36 \
+        -height [expr {$nrows + 5}] -cursor arrow
+    $w.t tag configure heading -foreground $::fg_bar -font [concat $::font_sm bold]
+    $w.t insert end "\n  [file tail $path]\n" heading
+    $w.t insert end [format "\n  %-14s %s\n" "Date" "Words"] heading
+    set today [clock format [clock seconds] -format "%Y-%m-%d"]
+    foreach date [lsort -decreasing [dict keys $fdata]] {
+        set n [dict get $fdata $date]
+        set lbl [expr {$date eq $today ? "$date  ← [t br_stats_today]" : $date}]
+        $w.t insert end [format "  %-26s %d\n" $lbl $n]
+    }
+    $w.t configure -state disabled
+    frame $w.btns
+    button $w.btns.ok    -text "Close"           -font $::font_sm \
+        -command [list after idle [list destroy $w]]
+    button $w.btns.clear -text [t br_stats_clear] -font $::font_sm \
+        -command [list apply {{w path} {
+            if {[confirm-dialog [t br_stats_clear_confirm [file tail $path]]] eq "yes"} {
+                daily-clear $path
+                after idle [list destroy $w]
+            }
+        }} $w $path]
+    pack $w.btns.clear -side left  -padx 8 -pady 8
+    pack $w.btns.ok    -side right -padx 8 -pady 8
+    pack $w.t    -fill both -expand 1
+    pack $w.btns -fill x
+    bind $w.t <KeyPress-q> "[list after idle [list destroy $w]]; break"
+    bind $w.t <Control-h>  "[list after idle [list destroy $w]]; break"
+    bind $w   <Control-h>  [list after idle [list destroy $w]]
+    focus $w.t
+}
+
 bind .br.mid.lst <Return>      { br-open }
 bind .br.mid.lst <Double-1>    { br-open }
 bind .br.mid.lst <n>           { br-new }
 bind .br.mid.lst <t>           { open-scratchpad }
 bind .br.mid.lst <f>           { br-toggle-favorite }
+bind .br.mid.lst <s>           { br-stats }
 bind .br.mid.lst <b>           { br-backup }
 bind .br.mid.lst <d>           { br-delete }
 bind .br.mid.lst <r>           { br-rename }
@@ -1694,7 +1856,7 @@ proc wc-flush {} {
 }
 
 proc ed-status {} {
-    if {[status-zone-of words] ne "" || [status-zone-of chars] ne ""} {
+    if {[status-zone-of words] ne "" || [status-zone-of chars] ne "" || [status-zone-of goal] ne ""} {
         if {$::wc_after_id ne ""} { after cancel $::wc_after_id }
         set ::wc_after_id [after 400 wc-flush]
     }
@@ -1897,7 +2059,7 @@ proc load-file {path} {
     .ed.t see insert
     catch { .ed.pw.l.t mark set insert ${cy}.${cx}; .ed.pw.l.t see insert }
     ed-status
-    if {[status-zone-of words] ne "" || [status-zone-of chars] ne ""} { wc-flush }
+    if {[status-zone-of words] ne "" || [status-zone-of chars] ne "" || [status-zone-of goal] ne ""} { wc-flush }
     ln-update
 }
 
@@ -1912,6 +2074,7 @@ proc save-file {} {
     set ::file_mtime_known [file mtime $::filename]
     lassign [split [[primary-ed] index insert] .] cy cx
     cursor-put $::filename $cy $cx
+    daily-update [llength [regexp -all -inline {\S+} [[primary-ed] get 1.0 end-1c]]]
     set-msg [t ed_saved]
 }
 
@@ -2040,9 +2203,11 @@ proc close-editor {} {
         if {$r eq "yes"}    save-file
     }
     if {$::filename ne ""} {
+        daily-update [llength [regexp -all -inline {\S+} [[primary-ed] get 1.0 end-1c]]]
         lassign [split [[primary-ed] index insert] .] cy cx
         cursor-put $::filename $cy $cx
     }
+    set ::session_file ""
     if {$::watch_after_id ne ""} { after cancel $::watch_after_id; set ::watch_after_id "" }
     split-close
     set ::filename   ""
@@ -2123,6 +2288,7 @@ proc quit-app {} {
         if {$r eq "yes"} save-file
     }
     if {$::filename ne ""} {
+        daily-update [llength [regexp -all -inline {\S+} [[primary-ed] get 1.0 end-1c]]]
         lassign [split [[primary-ed] index insert] .] cy cx
         cursor-put $::filename $cy $cx
     }
@@ -2397,11 +2563,15 @@ proc help-dialog {} {
         set txt [.ed.t get 1.0 end-1c]
         set wc    [llength [regexp -all -inline {\S+} $txt]]
         set chars [string length $txt]
-        lappend sections [t help_file_info] [list \
-            "Words"  $wc \
-            "Chars"  $chars \
-        ]
-        incr height 4
+        set today_wc [daily-today $wc]
+        set file_entries [list "Words" $wc "Chars" $chars]
+        if {$::cfg_word_goal > 0} {
+            lappend file_entries "Today" "+$today_wc / $::cfg_word_goal"
+        } else {
+            lappend file_entries "Today" "+$today_wc"
+        }
+        lappend sections [t help_file_info] $file_entries
+        incr height 5
     }
     lappend sections \
         "EDITOR" [list \
@@ -2760,6 +2930,8 @@ proc show-editor {path} {
     ini-reload
     load-file $path
     recent-push $path
+    set _wc [llength [regexp -all -inline {\S+} [[primary-ed] get 1.0 end-1c]]]
+    daily-open $path $_wc
     focus .ed.t
 }
 
@@ -2962,9 +3134,12 @@ proc tui-help-dialog {rows cols wc cc {sel_wc -1} {sel_cc -1}} {
     set hm $::cfg_heading_marker
     set fb "  %-14s %s"
     if {$wc > 0} {
+        set _today_wc [daily-today $wc]
+        set _goal_str [expr {$::cfg_word_goal > 0 ? " / $::cfg_word_goal" : ""}]
         lappend lines \
             [list "  [t help_file_info]" 1] \
             [list [format "  [t help_words_chars]" $wc $cc] 0] \
+            [list "  [t br_stats_today]: +${_today_wc}${_goal_str}" 0] \
             [list "" 0]
     }
     lappend lines \
@@ -3538,7 +3713,55 @@ proc tui-browser {} {
             f {
                 if {$cfi >= 0} {
                     lassign [lindex $entries $cfi] _ dir name
-                    toggle-favorite [file join $dir $name]
+                    set _path [file join $dir $name]
+                    set _was_fav [expr {$_path in $::favorites_list}]
+                    toggle-favorite $_path
+                    set msg [t [expr {$_was_fav ? "br_fav_removed" : "br_fav_added"}] $name]
+                }
+            }
+            s {
+                if {$cfi >= 0} {
+                    lassign [lindex $entries $cfi] _ dir name
+                    set _path [file join $dir $name]
+                    if {!$::state_cache_valid} { state-load }
+                    if {![dict exists $::daily_data $_path] || [dict size [dict get $::daily_data $_path]] == 0} {
+                        set msg [t br_stats_no_data]
+                    } else {
+                        set _fdata [dict get $::daily_data $_path]
+                        set _today [clock format [clock seconds] -format "%Y-%m-%d"]
+                        set _lines [list [list "  [t br_stats_title] — $name" 1] [list "" 0] \
+                            [list [format "  %-14s %s" "Date" "Words"] 1]]
+                        foreach _date [lsort -decreasing [dict keys $_fdata]] {
+                            set _n [dict get $_fdata $_date]
+                            set _lbl [expr {$_date eq $_today ? "$_date  ← [t br_stats_today]" : $_date}]
+                            lappend _lines [list [format "  %-28s %d" $_lbl $_n] 0]
+                        }
+                        lappend _lines [list "" 0]
+                        set _h [llength $_lines]; set _w 46
+                        set _left [expr {max(0,($cols-$_w)/2)}]
+                        set _top  [expr {max(0,($rows-$_h)/2)}]
+                        puts -nonewline "\033\[2J"
+                        for {set _i 0} {$_i < $_h} {incr _i} {
+                            tui-move [expr {$_top+$_i}] $_left
+                            lassign [lindex $_lines $_i] _txt _inv
+                            if {$_inv} { tui-attr reverse }
+                            puts -nonewline "[string range $_txt 0 [expr {$_w-1}]]\033\[K"
+                            if {$_inv} { tui-attr off }
+                        }
+                        tui-bar [expr {$rows-1}] "  c [t br_stats_clear]   q / Ctrl+H  close" "" $cols
+                        flush stdout
+                        while 1 {
+                            set _k [tui-getch]
+                            if {$_k eq "q" || $_k eq $::cfg_tui_help} break
+                            if {$_k eq "c"} {
+                                if {[tui-confirm [t br_stats_clear_confirm $name] $rows $cols]} {
+                                    daily-clear $_path
+                                }
+                                break
+                            }
+                        }
+                        puts -nonewline "\033\[2J"
+                    }
                 }
             }
             b {
@@ -3684,7 +3907,11 @@ proc tui-editor {filepath} {
         }
     }
     if {[llength $lines] == 0} { set lines [list ""] }
-    if {$filepath ne ""} { recent-push $filepath }
+    if {$filepath ne ""} {
+        recent-push $filepath
+        set _wc [llength [regexp -all -inline {\S+} [join $lines "\n"]]]
+        daily-open $filepath $_wc
+    }
 
     # ── cursor restore ────────────────────────────────────────────────────────
     if {$filepath eq ""} { set cy 1; set cx 0 } else { lassign [cursor-get $filepath] cy cx }
@@ -3864,7 +4091,7 @@ proc tui-editor {filepath} {
             set sel_hint [expr {$sel_anchor ne "" ? "$::cfg_lbl_sticky cancel-sel" : "$::cfg_lbl_sticky sel"}]
             set _hzone [status-zone-of help_bar]
             if {$::cfg_help_bar ne "" && $_hzone ne ""} { tui-help [expr {$rows-2}] $::cfg_help_bar $cols $_hzone }
-            if {$wc_dirty && ([status-zone-of words] ne "" || [status-zone-of chars] ne "")} {
+            if {$wc_dirty && ([status-zone-of words] ne "" || [status-zone-of chars] ne "" || [status-zone-of goal] ne "")} {
                 tui-compute-wc
             }
             set tui_state [dict create \
@@ -4099,16 +4326,16 @@ proc tui-editor {filepath} {
                                     tui-save-file $filepath $lines
                                 }
                             }
-                            if {$filepath ne ""} { cursor-put $filepath $cy $cx }
-                            return
+                            if {$filepath ne ""} { daily-update $wc_cached; cursor-put $filepath $cy $cx }
+                            set ::session_file ""; return
                         }
                     } else {
-                        if {$filepath ne ""} { cursor-put $filepath $cy $cx }
-                        return
+                        if {$filepath ne ""} { daily-update $wc_cached; cursor-put $filepath $cy $cx }
+                        set ::session_file ""; return
                     }
                 } elseif {$key eq $::cfg_tui_open} {
-                    if {$filepath ne ""} { tui-save-file $filepath $lines; cursor-put $filepath $cy $cx }
-                    set dirty 0; return
+                    if {$filepath ne ""} { tui-save-file $filepath $lines; daily-update $wc_cached; cursor-put $filepath $cy $cx }
+                    set ::session_file ""; set dirty 0; return
                 } elseif {$key eq $::cfg_tui_undo} {
                     if {!($::typewriter_mode && $::cfg_hemingway_mode) && [llength $undo_stack] > 0} {
                         lappend redo_stack [list $lines $cy $cx]

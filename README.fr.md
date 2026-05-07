@@ -7,7 +7,7 @@
 
 WrithDeck est un éditeur de texte sans distraction conçu pour les auteurs utilisant un writerdeck dédié, qu'il s'agisse d'un prototype fait maison ou d'un ordinateur configuré spécifiquement à cet effet. Il est rapide et facile à personnaliser. WrithDeck peut fonctionner comme une application graphique épurée ou directement dans un terminal ou un TTY, le tout depuis un seul fichier sans installation.
 
-Il inclut une coloration syntaxique inline configurable, un navigateur de fichiers, une vue fractionnée, la navigation par chapitres via une table des matières, et une interface entièrement thémable, le tout en environ 4 300 lignes (185 Ko) de Tcl/Tk.
+Il inclut une coloration syntaxique inline configurable, un navigateur de fichiers, une vue fractionnée, la navigation par chapitres via une table des matières, et une interface entièrement thémable, le tout en environ 4 500 lignes (200 Ko) de Tcl/Tk.
 
 Que vous écriviez sur un Raspberry Pi Zero avec un écran E-ink, sur une tablette Android, en SSH, ou sur votre bureau, WrithDeck reste léger et vous laisse vous concentrer sur votre texte.
 

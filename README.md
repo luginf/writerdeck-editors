@@ -7,7 +7,7 @@
 
 WrithDeck is a distraction-free text editor designed for writers using a dedicated writerdeck, whether it's a DIY prototype or a computer configured specifically for that purpose. It's fast and easy to customize. WrithDeck can run as a clean graphical application or directly in a terminal or TTY, all from a single file with no installation required.
 
-It includes customizable inline syntax highlighting, a file browser, split view, chapter navigation through a table of contents, and a fully themeable interface, all around 4,300 lines (185 Kb) of Tcl/Tk.
+It includes customizable inline syntax highlighting, a file browser, split view, chapter navigation through a table of contents, and a fully themeable interface, all around 4,500 lines (200 Kb) of Tcl/Tk.
 
 Whether you're writing on a Raspberry Pi Zero with an E-ink screen, on an Android tablet, over SSH, or on your desktop, WrithDeck stays lightweight and lets you focus on your text.
 
@@ -67,7 +67,9 @@ When both `--gui` and `--no-gui` are given, `--no-gui` takes precedence.
   - Bold `**text**`, italic `//text//`, underline `__text__`, strikethrough `--text--` — all markers configurable
   - Marker characters greyed out; styled text in a configurable `color_markup`
 - Table of contents overlay: jump to any heading (last selection remembered per session)
-- Status bar: fully configurable zones (left / center / right) with tokens: `filename dirty sel ln col words chars clock help_bar space`
+- Status bar: fully configurable zones (left / center / right) with tokens: `filename dirty sel ln col words chars goal clock help_bar space`
+- **Daily writing stats**: tracks words written per file per day (high-water mark — deletions don't reduce the count); favorites keep full history, other files keep only today's data
+- **Word goal** (`goal` status token): shows daily progress vs target, e.g. `47/500`; configurable via `word_goal` in INI or per profile
 - Go to line
 - UTF-8 input support
 - Cursor position restored across sessions (`.writhdeck.json`)
@@ -122,10 +124,11 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 | `cursor_restore` | `1` | Restore cursor position on reopen |
 | `lang` | `en` | Interface language (`en` or `fr`) |
 | `dark_mode` | `1` | Dark theme; `0` = light (Solarized-style) |
+| `word_goal` | `500` | Daily word goal shown by the `goal` status token; `0` to disable |
 
 **`[keys]`** — all actions are rebindable: `key_save`, `key_close`, `key_find`, `key_replace`, `key_goto`, `key_open`, `key_undo`, `key_redo`, `key_help`, `key_toc`, `key_line_numbers`, `key_fullscreen`, `key_split`, `key_split_focus`, `key_typewriter`, `key_dark_toggle`. Use Tk key names (`Control-s`, `Alt-Return`, `F11`, etc.).
 
-**`[profiles]`** — named presets for GUI display settings. Each `[name]` block defines margins, fonts, and line spacing. Select the active profile with `profile = name` in `[editor]`. The `[default]` profile is always written by WrithDeck.
+**`[profiles]`** — named presets for display and behaviour settings. Each `[name]` block can override margins, fonts, and most behaviour options. Select the active profile with `profile = name` in `[editor]`. The `[default]` profile is always written by WrithDeck.
 
 | Key | Default | Description |
 |---|---|---|
@@ -136,6 +139,14 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 | `bar_font_family` | `Mono` | Font family for the status bar (GUI) |
 | `line_spacing` | `100` | Line spacing in % (GUI) |
 | `bar_height` | `18` | Status bar height in pixels (GUI) |
+| `word_goal` | `500` | Daily word goal for this profile |
+| `dark_mode` | — | Override dark/light theme per profile |
+| `lang` | — | Override interface language per profile |
+| `status_left/center/right` | — | Override status bar layout per profile |
+| `help_bar` | — | Override help bar text per profile |
+| `block_cursor_gui` | — | Override block cursor per profile |
+| `blink_cursor` | — | Override cursor blinking per profile |
+| `line_numbers` | — | Override line numbers per profile |
 
 Example:
 
@@ -342,6 +353,7 @@ These are the default keys. Most are fully configurable in writhdeck.ini!
 | n | New file |
 | t | Scratchpad (in-memory buffer, no disk file; Ctrl+S prompts for a name to save) |
 | f | Toggle favorite — adds/removes the file from the Favorites section |
+| s | Writing stats — daily word counts for this file (full history for favorites) |
 | b | Backup file — copies to `backups/` subfolder with a `name_YYYY-MM-DDTHHhMM` timestamp |
 | d | Delete file |
 | r | Rename file |
@@ -420,6 +432,7 @@ Activated via `--no-gui` / `--tui` / `--ng`, or when no windowing system is avai
 | n | New file |
 | t | Scratchpad (in-memory buffer, no disk file; Ctrl+S prompts for a name to save) |
 | f | Toggle favorite — adds/removes the file from the Favorites section |
+| s | Writing stats — daily word counts for this file (full history for favorites) |
 | b | Backup file — copies to `backups/` subfolder with a `name_YYYY-MM-DDTHHhMM` timestamp |
 | d | Delete file |
 | r | Rename file |
