@@ -2945,11 +2945,13 @@ proc tui-help-dialog {rows cols wc cc {sel_wc -1} {sel_cc -1}} {
     set f2 "  %-10s %-19s%-10s %s"
     # Each entry: {text inv} — inv=1 renders in reverse video
     set lines [list \
+        [list "  WrithDeck" 1] \
+        [list "  $::version" 0] \
+        [list "" 0] \
         [list "  [t help_date_time]" 1] \
         [list [format "  [t help_cur_time]" \
             [clock format $_ts -format "%H:%M:%S"] \
             [clock format $_ts -format "%Y-%m-%d"]] 0] \
-        [list "  WrithDeck $::version" 0] \
         [list "" 0] \
     ]
     if {$sel_wc >= 0} {
