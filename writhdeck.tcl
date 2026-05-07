@@ -2959,11 +2959,16 @@ proc tui-help-dialog {rows cols wc cc {sel_wc -1} {sel_cc -1}} {
         lappend lines [list [format "  [t help_words_chars]" $sel_wc $sel_cc] 0]
         lappend lines [list "" 0]
     }
+    set hm $::cfg_heading_marker
+    set fb "  %-14s %s"
+    if {$wc > 0} {
+        lappend lines \
+            [list "  [t help_file_info]" 1] \
+            [list [format "  [t help_words_chars]" $wc $cc] 0] \
+            [list "" 0]
+    }
     lappend lines \
-        [list "  [t help_file_info]" 1] \
-        [list [format "  [t help_words_chars]" $wc $cc] 0] \
-        [list "" 0] \
-        [list "  [t help_shortcuts]" 1] \
+        [list "  EDITOR" 1] \
         [list "" 0] \
         [list [format $f2 $lbl_save   [t help_k_save]    $lbl_undo   [t help_k_undo]]    0] \
         [list [format $f2 $_e         $_e                $lbl_redo   [t help_k_redo]]    0] \
@@ -2972,12 +2977,25 @@ proc tui-help-dialog {rows cols wc cc {sel_wc -1} {sel_cc -1}} {
         [list [format $f2 $lbl_find   [t help_k_find]    $lbl_cut    [t help_k_cut]]    0] \
         [list [format $f2 $lbl_repl   [t help_k_replace] $lbl_paste  [t help_k_paste]]  0] \
         [list [format $f2 $lbl_goto   [t help_k_goto]    $lbl_lnum   [t help_k_lnum]]   0] \
-        [list [format $f2 $lbl_open   [t help_k_open]    $lbl_tw  [t help_k_typewriter]] 0] \
+        [list [format $f2 $lbl_open   [t help_k_open]    $lbl_tw     [t help_k_typewriter]] 0] \
         [list "" 0] \
         [list [format "  %-16s %s" [t help_k_ctrl_arrows] ""] 0] \
         [list [format "  %-16s %s" $lbl_toc  [t help_k_toc]]  0] \
         [list [format "  %-16s %s" $lbl_help [t help_k_help]] 0] \
         [list "" 0] \
+        [list "  BROWSER" 1] \
+        [list "" 0] \
+        [list [format $fb "↵"              "Open file"]                0] \
+        [list [format $fb "n"              "New file"]                 0] \
+        [list [format $fb "t"              "Scratchpad"]               0] \
+        [list [format $fb "f"              "Toggle favorite"]          0] \
+        [list [format $fb "b"              "Backup (backups/ folder)"] 0] \
+        [list [format $fb "i"              "Show full path"]           0] \
+        [list [format $fb "d"              "Delete"]                   0] \
+        [list [format $fb "r"              "Rename"]                   0] \
+        [list [format $fb $lbl_open        "Open any file"]            0] \
+        [list [format $fb "h / $lbl_help"  "Help"]                     0] \
+        [list [format $fb "q / Ctrl+Q"     "Quit"]                     0] \
         [list "" 0]
     set h [llength $lines]
     set w 60
