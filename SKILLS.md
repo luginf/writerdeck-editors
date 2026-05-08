@@ -2,11 +2,13 @@
 
 ## Version
 
-Format : `vYYYYMMDD` (ex. `v20260507`). Définie ligne ~32 :
+Format : `vYYYYMMDD` (ex. `v20260508`). Définie ligne ~32 :
 ```tcl
-set ::version "v20260507"
+set ::version "v20260508"
 ```
 Affichée dans l'aide GUI (section DATE & TIME) et l'aide TUI (en-tête en inversé + ligne dessous).
+
+> **Règle** : mettre à jour la version (`set ::version "vYYYYMMDD"`) à chaque modification fonctionnelle.
 
 ## Structure du code (`writhdeck.tcl`, ~4 300 lignes)
 

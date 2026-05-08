@@ -29,7 +29,7 @@ _w=$(stty -g 2>/dev/null); trap '[ -n "$_w" ] && stty "$_w" 2>/dev/null' EXIT IN
 #
 # # # # # # # # # # # #
 
-set ::version          "v20260507"
+set ::version          "v20260508"
 
 # bail out immediately when invoked by bash tab-completion
 if {[info exists ::env(COMP_LINE)] || [info exists ::env(COMP_POINT)]} { exit 0 }
@@ -1014,7 +1014,7 @@ proc list-docs {dir} {
 
 proc br-dirs {} {
     if {$::DOCS_DIR ne $::DOCS_DIR_DEFAULT} {
-        return [list $::DOCS_DIR_DEFAULT $::DOCS_DIR]
+        return [list $::DOCS_DIR $::DOCS_DIR_DEFAULT]
     }
     return [list $::DOCS_DIR_DEFAULT]
 }
@@ -1364,15 +1364,16 @@ proc br-refresh {} {
     set total 0
     set shown {}
     foreach dir [br-dirs] {
+        foreach f [list-docs $dir] { lappend shown [file join $dir $f] }
+    }
+    foreach e [build-extra-entries $shown] { lappend ::br_entries $e }
+    foreach dir [br-dirs] {
         lappend ::br_entries [list header $dir ""]
         foreach f [list-docs $dir] {
             lappend ::br_entries [list file $dir $f]
-            lappend shown [file join $dir $f]
             incr total
         }
     }
-
-    foreach e [build-extra-entries $shown] { lappend ::br_entries $e }
 
     .br.mid.lst delete 0 end
     set new_sel -1
@@ -3685,14 +3686,16 @@ proc tui-browser {} {
         set entries {}; set fcount 0
         set shown {}
         foreach dir [br-dirs] {
+            foreach f [list-docs $dir] { lappend shown [file join $dir $f] }
+        }
+        foreach e [build-extra-entries $shown] { lappend entries $e }
+        foreach dir [br-dirs] {
             lappend entries [list header $dir ""]
             foreach f [list-docs $dir] {
                 lappend entries [list file $dir $f]
-                lappend shown [file join $dir $f]
                 incr fcount
             }
         }
-        foreach e [build-extra-entries $shown] { lappend entries $e }
         set fidx {}
         for {set i 0} {$i < [llength $entries]} {incr i} {
             if {[lindex [lindex $entries $i] 0] in {file recent favorite}} { lappend fidx $i }
