@@ -1,5 +1,5 @@
 #!/bin/sh
-# sh/Tcl polyglot — backslash continues Tcl comment to next line, hiding shell bootstrap \
+# sh/Tcl polyglot - backslash continues Tcl comment to next line, hiding shell bootstrap \
 _w=$(stty -g 2>/dev/null); trap '[ -n "$_w" ] && stty "$_w" 2>/dev/null' EXIT INT TERM; tclsh "$0" "$@"; exit $?
 
 # # # # # # # # # # # #
@@ -39,11 +39,11 @@ if {[lsearch $::argv "--help"] >= 0 || [lsearch $::argv "-h"] >= 0} {
 
 Options:
   --help, -h      Show this help and exit
-  --gui           Force GUI (Tk) mode — skip display detection
+  --gui           Force GUI (Tk) mode - skip display detection
   --no-gui        Force TUI (terminal) mode
   --tui, --ng     Aliases for --no-gui
 
-Keyboard shortcuts (defaults — configurable in writhdeck.ini):
+Keyboard shortcuts (defaults - configurable in writhdeck.ini):
   ^S  Save              ^Z  Undo           ^Y  Redo
   ^Q  Close / Esc       ^F  Find           ^R  Find & Replace
   ^H  Help              ^G  Go to line     ^O  Open file
@@ -76,7 +76,7 @@ if {!$::no_gui} {
         } else {
             # On Unix/POSIX, guard against hanging on a stale DISPLAY/WAYLAND_DISPLAY.
             # Returns:  1 = socket confirmed (try Tk)
-            #           0 = no display env var (native display like Haiku — try Tk, won't hang)
+            #           0 = no display env var (native display like Haiku - try Tk, won't hang)
             #          -1 = env var(s) set but no socket found (stale, skip Tk to avoid hang)
             proc _display-socket-check {} {
                 set has_var 0
@@ -355,7 +355,7 @@ set ::cfg_italic_marker        "//"
 set ::cfg_underline_marker     "__"
 set ::cfg_strikethrough_marker "--"
 set ::cfg_color_markup         "#6aa9d4"
-# alternate (light) theme — used when dark_mode = 0
+# alternate (light) theme - used when dark_mode = 0
 set ::cfg_bg_alt             "#fdf6e3"
 set ::cfg_fg_alt             "#657b83"
 set ::cfg_bg_bar_alt         "#eee8d5"
@@ -379,7 +379,7 @@ set ::cfg_bar_height     18
 set ::cfg_lang           "en"
 set ::cfg_help_bar       "^S save   ^Q close   ^H help"
 set ::cfg_word_goal      500
-# status bar zones — tokens: filename dirty sel ln col words chars goal clock help_bar space
+# status bar zones - tokens: filename dirty sel ln col words chars goal clock help_bar space
 set ::cfg_status_left   "filename dirty sel ln col words chars"
 set ::cfg_status_center ""
 set ::cfg_status_right  "help_bar clock"
@@ -500,12 +500,12 @@ proc ini-load {} {
         }
         if {[regexp {^(\w+)\s*=(.*)$} $line -> key val]} {
             set v [string trim $val]
-            # inside a named scheme block — store in dict
+            # inside a named scheme block - store in dict
             if {$cur_scheme ne ""} {
                 dict set ::cfg_schemes $cur_scheme $key $v
                 continue
             }
-            # inside a named profile block — store in dict
+            # inside a named profile block - store in dict
             if {$cur_profile ne ""} {
                 dict set ::cfg_profiles $cur_profile $key $v
                 continue
@@ -636,13 +636,13 @@ proc ini-save {} {
     puts $fh "block_cursor_gui     = $::cfg_block_cursor_gui"
     puts $fh "block_cursor_console = $::cfg_block_cursor_console"
     puts $fh "blink_cursor         = $::cfg_blink_cursor"
-    puts $fh "# lang: interface language — en or fr"
+    puts $fh "# lang: interface language - en or fr"
     puts $fh "lang           = $::cfg_lang"
     puts $fh "# help_bar: text shown in the shortcuts bar, empty to hide"
     puts $fh "help_bar       = $::cfg_help_bar"
     puts $fh "# word_goal: target word count shown in status bar with 'goal' token (0 = disabled)"
     puts $fh "word_goal      = $::cfg_word_goal"
-    puts $fh "# status bar zones — tokens: filename dirty sel ln col words chars goal clock help_bar space"
+    puts $fh "# status bar zones - tokens: filename dirty sel ln col words chars goal clock help_bar space"
     puts $fh "status_left    = $::cfg_status_left"
     puts $fh "status_center  = $::cfg_status_center"
     puts $fh "status_right   = $::cfg_status_right"
@@ -746,7 +746,7 @@ proc ini-save {} {
 
 ini-load
 
-# Map Tk key name → string returned by tui-getch
+# Map Tk key name -> string returned by tui-getch
 proc tk-key-to-tui {key} {
     set k [string tolower $key]
     if {[regexp {^control-([a-z])$} $k -> letter]} {
@@ -840,12 +840,12 @@ set ::i18n {
     en {
         toc_title          "Table of contents"
         toc_no_headings    "no headings found"
-        toc_jump_bar       "↵ jump  esc/ctrl+q cancel"
+        toc_jump_bar       "Enter jump  esc/ctrl+q cancel"
         toc_headings       "%d heading%s"
         br_no_docs         "No documents yet. Press n to create one."
         br_help_gui        "(h)elp (n)ew scra(t)chpad (f)av (s)tats (b)ackup  (d)elete (r)ename (i)nfo z:reload %s sections (q)uit"
         br_help_tui        "%s help (n)ew scra(t)chpad (f)av (s)tats (b)ackup  (d)elete (r)ename (i)nfo %s sections (q)uit"
-        br_backed_up       "backup %s → %s"
+        br_backed_up       "backup %s -> %s"
         br_favorites       "Favorites"
         br_stats_title     "Writing stats"
         br_stats_no_data   "No writing stats yet for this file."
@@ -853,11 +853,11 @@ set ::i18n {
         br_stats_total     "Total"
         br_stats_clear     "Clear stats"
         br_stats_clear_confirm "Clear all writing stats for \"%s\"?"
-        br_fav_added       "★ added to favorites: %s"
-        br_fav_removed     "☆ removed from favorites: %s"
+        br_fav_added       "[+] added to favorites: %s"
+        br_fav_removed     "[-] removed from favorites: %s"
         br_exists          "'%s' already exists"
         br_deleted         "deleted '%s'"
-        br_renamed         "renamed → '%s'"
+        br_renamed         "renamed -> '%s'"
         br_delete          "Delete \"%s\"?"
         br_files           "%d file%s"
         br_recent          "Recent"
@@ -871,7 +871,7 @@ set ::i18n {
         help_file_info     "File info"
         help_sel_info      "Selection info"
         help_words_chars   "Words: %-8d  Chars: %d"
-        help_shortcuts     "Writhdeck — keyboard shortcuts"
+        help_shortcuts     "Writhdeck - keyboard shortcuts"
         help_close         "Press any key to close"
         help_k_save        "Save"
         help_k_undo        "Undo"
@@ -888,15 +888,15 @@ set ::i18n {
         help_k_lnum        "Line numbers"
         help_k_open        "Open (browser)"
         help_k_typewriter  "Typewriter / focus mode (toggle)"
-        help_k_ctrl_arrows "Ctrl+↑↓  Paragraph  ·  Ctrl+←→ / Alt+BF  Word"
+        help_k_ctrl_arrows "Ctrl+Up/Dn  Paragraph  |  Ctrl+Lt/Rt / Alt+BF  Word"
         help_k_toc         "Table of contents"
         help_k_help        "This help"
         help_shift_arrows  "Shift+Arrows  Extend selection"
         help_k_split       "Split view (toggle)"
-        help_k_split_focus "Split view — cycle focus"
+        help_k_split_focus "Split view - cycle focus"
         br_toc_title       "Browser sections"
         br_toc_empty       "no sections"
-        br_toc_bar         "↑↓ nav  ↵ jump  esc cancel"
+        br_toc_bar         "Up/Dn nav  Enter jump  esc cancel"
         dlg_yes            "Yes"
         dlg_no             "No"
         dlg_cancel         "Cancel"
@@ -906,12 +906,12 @@ set ::i18n {
     fr {
         toc_title          "Table des matières"
         toc_no_headings    "aucun titre trouvé"
-        toc_jump_bar       "↵ aller  esc/ctrl+q annuler"
+        toc_jump_bar       "Enter aller  esc/ctrl+q annuler"
         toc_headings       "%d titre%s"
         br_no_docs         "Aucun document. Appuyez sur n pour en créer un."
         br_help_gui        " h:aide (n)ouveau  t:bloc-notes  (f)av  (s)tats  (b)ackup  d:supprimer  (r)enommer  (i)nfos  z:recharger  %s sections  (q)uitter"
         br_help_tui        "%s aide (n)ouveau bloc-no(t)es  (f)av  (s)tats  (b)ackup  d:supprimer  (r)enommer  (i)nfos  %s sections  (q)uitter"
-        br_backed_up       "sauvegarde %s → %s"
+        br_backed_up       "sauvegarde %s -> %s"
         br_favorites       "Favoris"
         br_stats_title     "Statistiques d'écriture"
         br_stats_no_data   "Aucune statistique d'écriture pour ce fichier."
@@ -919,11 +919,11 @@ set ::i18n {
         br_stats_total     "Total"
         br_stats_clear     "Effacer les stats"
         br_stats_clear_confirm "Effacer toutes les statistiques de \"%s\" ?"
-        br_fav_added       "★ ajouté aux favoris : %s"
-        br_fav_removed     "☆ retiré des favoris : %s"
+        br_fav_added       "[+] ajouté aux favoris : %s"
+        br_fav_removed     "[-] retiré des favoris : %s"
         br_exists          "'%s' existe déjà"
         br_deleted         "'%s' supprimé"
-        br_renamed         "renommé → '%s'"
+        br_renamed         "renommé -> '%s'"
         br_delete          "Supprimer \"%s\" ?"
         br_files           "%d fichier%s"
         br_recent          "Récents"
@@ -937,7 +937,7 @@ set ::i18n {
         help_file_info     "Infos fichier"
         help_sel_info      "Infos sélection"
         help_words_chars   "Mots : %-8d  Caract. : %d"
-        help_shortcuts     "Writhdeck — raccourcis clavier"
+        help_shortcuts     "Writhdeck - raccourcis clavier"
         help_close         "Appuyer sur une touche pour fermer"
         help_k_save        "Enregistrer"
         help_k_undo        "Annuler"
@@ -954,15 +954,15 @@ set ::i18n {
         help_k_lnum        "Numéros de lignes"
         help_k_open        "Ouvrir (explorateur)"
         help_k_typewriter  "Mode machine à écrire / focus (bascule)"
-        help_k_ctrl_arrows "Ctrl+↑↓  Paragraphe  ·  Ctrl+←→ / Alt+BF  Mot"
+        help_k_ctrl_arrows "Ctrl+Up/Dn  Paragraphe  |  Ctrl+Lt/Rt / Alt+BF  Mot"
         help_k_toc         "Table des matières"
         help_k_help        "Cette aide"
         help_shift_arrows  "Maj+Flèches   Étendre la sélection"
         help_k_split       "Vue partagée (bascule)"
-        help_k_split_focus "Vue partagée — changer de fenêtre"
+        help_k_split_focus "Vue partagée - changer de fenêtre"
         br_toc_title       "Sections du navigateur"
         br_toc_empty       "aucune section"
-        br_toc_bar         "↑↓ nav  ↵ aller  esc annuler"
+        br_toc_bar         "Up/Dn nav  Enter aller  esc annuler"
         dlg_yes            "Oui"
         dlg_no             "Non"
         dlg_cancel         "Annuler"
@@ -994,7 +994,7 @@ proc toggle-dark-mode {} {
 }
 
 # ─── config ───────────────────────────────────────────────────────────────────
-# validate font family (font families is a Tk command — skip in TUI)
+# validate font family (font families is a Tk command - skip in TUI)
 if {!$::no_gui && $::cfg_font_family ne "Mono"} {
     if {[lsearch -exact [font families] $::cfg_font_family] < 0} {
         puts stderr "writhdeck: font family '$::cfg_font_family' not found, using Mono"
@@ -1379,7 +1379,7 @@ if {$::cfg_bar_height > 0} {
     pack propagate .br.bar 0
 }
 
-# browser state — each entry: {type dir name}  (type = header | file | favorite | recent)
+# browser state - each entry: {type dir name}  (type = header | file | favorite | recent)
 set ::br_entries {}
 
 proc br-refresh {} {
@@ -1644,7 +1644,7 @@ proc br-stats {} {
     set w .stats
     catch {destroy $w}
     toplevel $w
-    wm title $w "[t br_stats_title] — [file tail $path]"
+    wm title $w "[t br_stats_title] - [file tail $path]"
     wm resizable $w 0 0
     wm transient $w .
     grab $w
@@ -1659,7 +1659,7 @@ proc br-stats {} {
     foreach date [lsort -decreasing [dict keys $fdata]] {
         set n [dict get $fdata $date]
         incr grand_total $n
-        set lbl [expr {$date eq $today ? "$date  ← [t br_stats_today]" : $date}]
+        set lbl [expr {$date eq $today ? "$date  <- [t br_stats_today]" : $date}]
         $w.t insert end [format "  %-26s %d\n" $lbl $n]
     }
     $w.t insert end "\n"
@@ -2065,7 +2065,7 @@ proc ln-toggle {} {
 # ─── file I/O ─────────────────────────────────────────────────────────────────
 proc load-file {path} {
     set ::filename $path
-    wm title . "Writhdeck — [file tail $path]"
+    wm title . "Writhdeck - [file tail $path]"
     .ed.t configure -undo 0
 
     .ed.t delete 1.0 end
@@ -2134,7 +2134,7 @@ proc save-as {} {
     }
     set ::filename $new_path
     set ::scratchpad 0
-    wm title . "Writhdeck — [file tail $new_path]"
+    wm title . "Writhdeck - [file tail $new_path]"
     save-file
 }
 
@@ -2632,7 +2632,7 @@ proc help-dialog {} {
     set w .help
     catch {destroy $w}
     toplevel $w
-    wm title $w "Help — Writhdeck"
+    wm title $w "Help - Writhdeck"
     wm resizable $w 0 0
     wm transient $w .
     grab $w
@@ -2686,15 +2686,15 @@ proc help-dialog {} {
             [key-label $::cfg_key_undo]         "Undo" \
             [key-label $::cfg_key_redo]         "Redo" \
             [key-label $::cfg_key_typewriter]   "Typewriter / focus mode (toggle)" \
-            "Ctrl+↑↓ / Ctrl+←→"                "Paragraph / word navigation" \
+            "Ctrl+Up/Dn / Ctrl+Lt/Rt"           "Paragraph / word navigation" \
             [key-label $::cfg_key_toc]          "Table of contents  (${hm}title${hm})" \
             [key-label $::cfg_key_fullscreen]   "Fullscreen" \
             [key-label $::cfg_key_split]        "Split view (toggle)" \
-            [key-label $::cfg_key_split_focus]  "Split view — cycle focus" \
+            [key-label $::cfg_key_split_focus]  "Split view - cycle focus" \
             [key-label $::cfg_key_help]         "Help" \
         ] \
         "BROWSER" [list \
-            "↵ / double-click"                  "Open" \
+            "Enter / double-click"               "Open" \
             "n"                                 "New file" \
             "t"                                 "Scratchpad (temp, no disk file)" \
             "f"                                 "Toggle favorite" \
@@ -3019,7 +3019,7 @@ proc open-scratchpad {} {
     set ::ln_last_count 0
     set ::gui_wc_line_cache {}
     set ::gui_wc_last_nlines 0
-    wm title . "Writhdeck — ** scratchpad **"
+    wm title . "Writhdeck - ** scratchpad **"
     highlight-headings
     ed-status
     focus .ed.t
@@ -3217,7 +3217,7 @@ proc tui-help-dialog {rows cols wc cc {sel_wc -1} {sel_cc -1}} {
     set _e ""
     # two-column line: key(10) + action(19) | key(10) + action
     set f2 "  %-10s %-19s%-10s %s"
-    # Each entry: {text inv} — inv=1 renders in reverse video
+    # Each entry: {text inv} - inv=1 renders in reverse video
     set lines [list \
         [list "  WrithDeck" 1] \
         [list "  $::version" 0] \
@@ -3262,7 +3262,7 @@ proc tui-help-dialog {rows cols wc cc {sel_wc -1} {sel_cc -1}} {
         [list "" 0] \
         [list "  BROWSER" 1] \
         [list "" 0] \
-        [list [format $fb "↵"              "Open file"]                0] \
+        [list [format $fb "Enter"          "Open file"]                0] \
         [list [format $fb "n"              "New file"]                 0] \
         [list [format $fb "t"              "Scratchpad"]               0] \
         [list [format $fb "f"              "Toggle favorite"]          0] \
@@ -3297,7 +3297,7 @@ proc tui-help-dialog {rows cols wc cc {sel_wc -1} {sel_cc -1}} {
                 tui-move $row_y 0; puts -nonewline "\033\[K"
             }
         }
-        set hint [expr {$max_scroll > 0 ? "  ↑↓ scroll   q / Ctrl+H  close" : "  q / Ctrl+H  close"}]
+        set hint [expr {$max_scroll > 0 ? "  Up/Dn scroll   q / Ctrl+H  close" : "  q / Ctrl+H  close"}]
         tui-bar [expr {$rows-1}] $hint "" $cols
         flush stdout
         set key [tui-getch]
@@ -3834,13 +3834,13 @@ proc tui-browser {} {
                     } else {
                         set _fdata [dict get $::daily_data $_path]
                         set _today [clock format [clock seconds] -format "%Y-%m-%d"]
-                        set _lines [list [list "  [t br_stats_title] — $name" 1] [list "" 0] \
+                        set _lines [list [list "  [t br_stats_title] - $name" 1] [list "" 0] \
                             [list [format "  %-14s %s" "Date" "Words"] 1]]
                         set _grand_total 0
                         foreach _date [lsort -decreasing [dict keys $_fdata]] {
                             set _n [dict get $_fdata $_date]
                             incr _grand_total $_n
-                            set _lbl [expr {$_date eq $_today ? "$_date  ← [t br_stats_today]" : $_date}]
+                            set _lbl [expr {$_date eq $_today ? "$_date  <- [t br_stats_today]" : $_date}]
                             lappend _lines [list [format "  %-28s %d" $_lbl $_n] 0]
                         }
                         lappend _lines [list "" 0]
@@ -4174,7 +4174,7 @@ proc tui-editor {filepath} {
             set isd [lindex $isd_cache [expr {$li-1}]]
             set seg_len [string length $seg]
 
-            # left margin + line number — written inline from col 0 (no tui-move within line)
+            # left margin + line number - written inline from col 0 (no tui-move within line)
             if {$ln_w > 0 && $scol == 0} {
                 tui-attr dim
                 puts -nonewline "[string repeat { } $marg][format "%[expr {$ln_w-1}]d " $li]"
@@ -4183,7 +4183,7 @@ proc tui-editor {filepath} {
                 puts -nonewline [string repeat { } $coff]
             }
 
-            # text (with selection highlight) — cursor now at col $coff
+            # text (with selection highlight) - cursor now at col $coff
             set sf -1; set st -1
             if {$sel_r ne {}} {
                 if      {$li > $_sly && $li < $_ely}         { set sf 0;                              set st $seg_len } \
@@ -4221,7 +4221,7 @@ proc tui-editor {filepath} {
                 }
                 tui-render-inline-seg $seg $scol $_spans $sf $st
             }
-            # right padding — fill to end of line with spaces (no \033[K)
+            # right padding - fill to end of line with spaces (no \033[K)
             tui-attr off
             puts -nonewline [string repeat { } [expr {$tw - $seg_len + $marg + 1}]]
         }

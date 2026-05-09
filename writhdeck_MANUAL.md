@@ -213,14 +213,14 @@ Default mode, requires Tk.
 | Ctrl+H                   | Help dialog (date/time, file stats, selection stats if text selected) |
 | Ctrl+L                   | Show/hide line numbers                                                |
 | Ctrl+D                   | Toggle dark/light theme                                               |
-| Ctrl+↑ / Ctrl+↓          | Jump to previous / next paragraph                                     |
-| Ctrl+← / Ctrl+→          | Jump to previous / next word                                          |
+| Ctrl+Up / Ctrl+Down       | Jump to previous / next paragraph                                     |
+| Ctrl+Left / Ctrl+Right    | Jump to previous / next word                                          |
 | F11                      | Table of contents                                                     |
 | F3                       | Toggle split view                                                     |
 | F4                       | Split view — cycle focus between panes                                |
 | Alt+Enter                | Fullscreen toggle                                                     |
 | Tab                      | Insert 4 spaces                                                       |
-| Shift+↑↓←→               | Extend selection                                                      |
+| Shift+Up/Down/Left/Right  | Extend selection                                                      |
 
 ### Shortcuts — Browser
 
@@ -281,12 +281,12 @@ Activated via `--no-gui` / `--tui` / `--ng`, or when no windowing system is avai
 | Ctrl+H                            | Help                                                       |
 | Ctrl+L                            | Show/hide line numbers                                     |
 | Ctrl+D                            | Toggle dark/light theme (reverse video)                    |
-| Ctrl+↑ / Ctrl+↓                   | Jump to previous / next paragraph (terminal emulator only) |
-| Ctrl+← / Ctrl+→ or Alt+B / Alt+F | Jump to previous / next word                               |
+| Ctrl+Up / Ctrl+Down                | Jump to previous / next paragraph (terminal emulator only) |
+| Ctrl+Left / Ctrl+Right or Alt+B / Alt+F | Jump to previous / next word                        |
 | F11                               | Table of contents (Esc / Ctrl+Q to close, Enter to jump)  |
 | Ctrl+A                            | Select all                                                 |
 | Ctrl+K                            | Toggle sticky selection (first press: anchor; second: cancel) |
-| Shift+↑↓←→                        | Extend selection                                           |
+| Shift+Up/Down/Left/Right           | Extend selection                                           |
 | Ctrl+C                            | Copy (via xclip / xsel / wl-copy)                         |
 | Ctrl+X                            | Cut                                                        |
 | Ctrl+V                            | Paste (multi-line supported)                               |
@@ -531,14 +531,14 @@ Mode par défaut, nécessite Tk.
 | Ctrl+H                   | Dialogue d'aide (date/heure, stats du fichier, stats de sélection si texte)  |
 | Ctrl+L                   | Afficher/masquer les numéros de ligne                                         |
 | Ctrl+D                   | Basculer thème sombre/clair                                                   |
-| Ctrl+↑ / Ctrl+↓          | Sauter au paragraphe précédent / suivant                                      |
-| Ctrl+← / Ctrl+→          | Sauter au mot précédent / suivant                                             |
+| Ctrl+Up / Ctrl+Down       | Sauter au paragraphe précédent / suivant                                      |
+| Ctrl+Left / Ctrl+Right    | Sauter au mot précédent / suivant                                             |
 | F11                      | Table des matières                                                            |
 | F3                       | Basculer la vue fractionnée                                                   |
 | F4                       | Vue fractionnée — cycle du focus entre les volets                             |
 | Alt+Entrée               | Basculer le plein écran                                                       |
 | Tab                      | Insérer 4 espaces                                                             |
-| Shift+↑↓←→               | Étendre la sélection                                                          |
+| Shift+Up/Down/Left/Right  | Étendre la sélection                                                          |
 
 ### Raccourcis — Navigateur
 
@@ -599,12 +599,12 @@ Activé via `--no-gui` / `--tui` / `--ng`, ou si aucun système de fenêtrage n'
 | Ctrl+H                              | Aide                                                              |
 | Ctrl+L                              | Afficher/masquer les numéros de ligne                             |
 | Ctrl+D                              | Basculer thème sombre/clair (vidéo inverse)                       |
-| Ctrl+↑ / Ctrl+↓                     | Sauter au paragraphe précédent / suivant (émulateur uniquement)   |
-| Ctrl+← / Ctrl+→ ou Alt+B / Alt+F   | Sauter au mot précédent / suivant                                 |
+| Ctrl+Up / Ctrl+Down                  | Sauter au paragraphe précédent / suivant (émulateur uniquement)   |
+| Ctrl+Left / Ctrl+Right ou Alt+B / Alt+F | Sauter au mot précédent / suivant                            |
 | F11                                 | Table des matières (Échap / Ctrl+Q pour fermer, Entrée pour sauter) |
 | Ctrl+A                              | Tout sélectionner                                                 |
 | Ctrl+K                              | Sélection collante (1er appui : ancre ; 2e appui : annuler)       |
-| Shift+↑↓←→                          | Étendre la sélection                                              |
+| Shift+Up/Down/Left/Right             | Étendre la sélection                                              |
 | Ctrl+C                              | Copier (via xclip / xsel / wl-copy)                               |
 | Ctrl+X                              | Couper                                                            |
 | Ctrl+V                              | Coller (multiligne supporté)                                      |
