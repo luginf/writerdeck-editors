@@ -1316,9 +1316,33 @@ pack .br.mid.lst -fill both  -expand 1
 pack .br.mid     -fill both  -expand 1
 
 frame .br.bar -bg $bg_bar
-label .br.bar.help \
-    -text [format [t br_help_gui] $::cfg_lbl_toc] \
-    -bg $bg_bar -fg $fg_bar -font $font_sm -anchor w -padx 4 -pady $bar_pady
+text .br.bar.help -height 1 -width 80 -bg $bg_bar -fg $fg_bar -font $font_sm \
+    -border 0 -highlightthickness 0 -state disabled -wrap none
+.br.bar.help tag configure bold -font [list [lindex $font_sm 0] [lindex $font_sm 1] bold]
+
+set help_text [format [t br_help_gui] $::cfg_lbl_toc]
+.br.bar.help configure -state normal
+.br.bar.help delete 1.0 end
+
+set i 0
+while {$i < [string length $help_text]} {
+    set char [string index $help_text $i]
+    if {$char eq "("} {
+        incr i
+        set shortcut [string index $help_text $i]
+        .br.bar.help insert end $shortcut bold
+        incr i 2
+    } elseif {[string index $help_text [expr {$i+1}]] eq ":"} {
+        .br.bar.help insert end $char bold
+        .br.bar.help insert end ":"
+        incr i 2
+    } else {
+        .br.bar.help insert end $char
+        incr i
+    }
+}
+.br.bar.help configure -state disabled
+
 label .br.bar.cnt -textvariable ::br_status \
     -bg $bg_bar -fg $fg_bar -font $font_sm -anchor e -padx 8 -pady $bar_pady
 pack .br.bar.help -side left
