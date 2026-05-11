@@ -931,10 +931,14 @@ set ::i18n {
         dlg_cancel         "Cancel"
         goto_title         "Go to line"
         goto_prompt        "Line:"
-        profile_config_title   "Profile Font Settings"
-        profile_config_profile "Profile:"
-        profile_config_font    "Font:"
-        profile_config_size    "Size:"
+        profile_config_title   "Configuration"
+        profile_config_default_profile "Default profile:"
+        profile_config_default_scheme  "Default color scheme:"
+        profile_config_profile "Active profile:"
+        profile_config_font    "Font family:"
+        profile_config_size    "Font size:"
+        profile_config_margin_w "Margin width:"
+        profile_config_margin_h "Margin height:"
         profile_config_apply   "Apply"
         profile_config_cancel  "Cancel"
     }
@@ -1003,10 +1007,14 @@ set ::i18n {
         dlg_cancel         "Annuler"
         goto_title         "Aller à la ligne"
         goto_prompt        "Ligne :"
-        profile_config_title   "Paramètres de police des profils"
-        profile_config_profile "Profil :"
+        profile_config_title   "Configuration"
+        profile_config_default_profile "Profil par défaut :"
+        profile_config_default_scheme  "Schéma de couleurs par défaut :"
+        profile_config_profile "Profil actif :"
         profile_config_font    "Police :"
         profile_config_size    "Taille :"
+        profile_config_margin_w "Largeur marge :"
+        profile_config_margin_h "Hauteur marge :"
         profile_config_apply   "Appliquer"
         profile_config_cancel  "Annuler"
     }
@@ -2570,23 +2578,38 @@ bind .ed.t <Control-KP_Add>  { font-resize  1; break }
 bind .ed.t <Control-minus>   { font-resize -1; break }
 bind .ed.t <Control-KP_Subtract> { font-resize -1; break }
 
-proc profile-apply-fonts {profile font size} {
-    dict set ::cfg_profiles $profile font_family $font
-    dict set ::cfg_profiles $profile font_size $size
-    ini-save
-    if {$profile eq $::cfg_profile} {
-        profile-apply $profile
-        if {[info exists ::editor_open]} {
-            set f [list $::cfg_font_family $::cfg_font_size]
-            set ::font $f
-            catch {.ed.t configure -font $f}
-            foreach side {l r} {
-                catch {.ed.pw.${side}.t configure -font $f}
-            }
-            .ed.t tag configure heading -font [list $::cfg_font_family $::cfg_font_size bold]
-            apply-line-spacing
-        }
+proc profile-config-update-profile {w} {
+    set profile $::profile_config_profile
+    if {$profile eq ""} return
+
+    set cur_font $::cfg_font_family
+    if {[dict exists $::cfg_profiles $profile font_family]} {
+        set cur_font [dict get $::cfg_profiles $profile font_family]
     }
+    $w.profile.ffont.entry delete 0 end
+    $w.profile.ffont.entry insert 0 $cur_font
+
+    set cur_size $::cfg_font_size
+    if {[dict exists $::cfg_profiles $profile font_size]} {
+        set cur_size [dict get $::cfg_profiles $profile font_size]
+    }
+    $w.fsize.spin set $cur_size
+
+    set cur_mw $::cfg_margin_width
+    if {[dict exists $::cfg_profiles $profile margin_width]} {
+        set cur_mw [dict get $::cfg_profiles $profile margin_width]
+    }
+    $w.fmarginw.spin set $cur_mw
+
+    set cur_mh $::cfg_margin_height
+    if {[dict exists $::cfg_profiles $profile margin_height]} {
+        set cur_mh [dict get $::cfg_profiles $profile margin_height]
+    }
+    $w.fmarginh.spin set $cur_mh
+
+    set idx [lsearch -exact [lsort [font families]] $cur_font]
+    $w.profile.fonts selection clear 0 end
+    if {$idx >= 0} { $w.profile.fonts selection set $idx; $w.profile.fonts see $idx }
 }
 
 proc profile-config-dialog {} {
@@ -2594,11 +2617,12 @@ proc profile-config-dialog {} {
     catch {destroy $w}
     toplevel $w
     wm title $w [t profile_config_title]
-    wm resizable $w 0 0
     wm transient $w .
     grab $w
 
     set profiles [lsort [dict keys $::cfg_profiles]]
+    set schemes [lsort [dict keys $::cfg_schemes]]
+
     if {[llength $profiles] == 0} {
         label $w.msg -text "No profiles defined" -font $::font_sm -fg $::fg_bar -bg $::bg -padx 16 -pady 12
         button $w.close -text [t profile_config_cancel] -font $::font_sm \
@@ -2609,80 +2633,146 @@ proc profile-config-dialog {} {
         return
     }
 
-    set cur_profile_idx 0
-    if {[set idx [lsearch -exact $profiles $::cfg_profile]] >= 0} {
-        set cur_profile_idx $idx
-    }
-    set cur_profile [lindex $profiles $cur_profile_idx]
+    # --- Global settings frame ---
+    frame $w.global -relief ridge -borderwidth 2
+    pack $w.global -fill x -padx 8 -pady 8
 
-    label $w.lbl_profile -text [t profile_config_profile] -font $::font_sm -fg $::fg -bg $::bg
-    pack $w.lbl_profile -anchor w -padx 12 -pady {8 2}
+    label $w.global.title -text "Global Settings" -font $::font_sm -fg $::fg_bar -bg $::bg
+    pack $w.global.title -anchor w -padx 8 -pady {4 2}
 
-    frame $w.fprofile
-    pack $w.fprofile -fill x -padx 12 -pady {0 8}
-    tk_optionMenu $w.fprofile.om ::profile_config_var {*}$profiles
-    $w.fprofile.om configure -bg $::bg_bar -fg $::fg_bar -highlightthickness 0
-    set ::profile_config_var [lindex $profiles $cur_profile_idx]
-    pack $w.fprofile.om -anchor w
+    label $w.global.lbl_defprof -text [t profile_config_default_profile] -font $::font_sm
+    pack $w.global.lbl_defprof -anchor w -padx 12 -pady {4 2}
+    frame $w.global.fprof
+    pack $w.global.fprof -fill x -padx 12 -pady {0 6}
+    tk_optionMenu $w.global.fprof.om ::profile_config_default_prof {*}$profiles
+    $w.global.fprof.om configure -bg $::bg_bar -fg $::fg_bar -highlightthickness 0
+    set ::profile_config_default_prof $::cfg_profile
+    pack $w.global.fprof.om -anchor w
 
-    label $w.lbl_font -text [t profile_config_font] -font $::font_sm -fg $::fg -bg $::bg
-    pack $w.lbl_font -anchor w -padx 12 -pady {8 2}
+    label $w.global.lbl_scheme -text [t profile_config_default_scheme] -font $::font_sm
+    pack $w.global.lbl_scheme -anchor w -padx 12 -pady {4 2}
+    frame $w.global.fscheme
+    pack $w.global.fscheme -fill x -padx 12 -pady {0 6}
+    tk_optionMenu $w.global.fscheme.om ::profile_config_default_scheme {*}$schemes
+    $w.global.fscheme.om configure -bg $::bg_bar -fg $::fg_bar -highlightthickness 0
+    set ::profile_config_default_scheme $::cfg_scheme
+    pack $w.global.fscheme.om -anchor w
 
-    entry $w.font -width 35 -font $::font_sm
-    set cur_font $::cfg_font_family
-    if {[dict exists $::cfg_profiles $cur_profile font_family]} {
-        set cur_font [dict get $::cfg_profiles $cur_profile font_family]
-    }
-    $w.font insert 0 $cur_font
-    pack $w.font -fill x -padx 12 -pady {0 2}
+    # --- Profile-specific settings frame ---
+    frame $w.profile -relief ridge -borderwidth 2
+    pack $w.profile -fill both -expand 1 -padx 8 -pady 8
 
-    label $w.lbl_fonts -text "Available fonts:" -font $::font_sm -fg $::fg -bg $::bg
-    pack $w.lbl_fonts -anchor w -padx 12
+    label $w.profile.title -text [t profile_config_profile] -font $::font_sm -fg $::fg_bar -bg $::bg
+    pack $w.profile.title -anchor w -padx 8 -pady {4 2}
 
-    listbox $w.fonts -height 6 -width 40 -font $::font_sm -selectmode single
+    # Profile selector row
+    frame $w.profile.fprof
+    pack $w.profile.fprof -fill x -padx 12 -pady {0 6}
+    label $w.profile.fprof.lbl -text [t profile_config_profile] -font $::font_sm -width 15 -anchor w
+    tk_optionMenu $w.profile.fprof.om ::profile_config_profile {*}$profiles
+    $w.profile.fprof.om configure -bg $::bg_bar -fg $::fg_bar -highlightthickness 0
+    set ::profile_config_profile [lindex $profiles 0]
+    pack $w.profile.fprof.lbl -side left
+    pack $w.profile.fprof.om -side left -fill x -expand 1
+
+    # Font family row
+    frame $w.profile.ffont
+    pack $w.profile.ffont -fill x -padx 12 -pady 4
+    label $w.profile.ffont.lbl -text [t profile_config_font] -font $::font_sm -width 15 -anchor w
+    entry $w.profile.ffont.entry -width 30 -font $::font_sm
+    pack $w.profile.ffont.lbl -side left
+    pack $w.profile.ffont.entry -side left -fill x -expand 1
+
+    # Available fonts listbox
+    label $w.profile.lbl_fonts -text "Available fonts:" -font $::font_sm
+    pack $w.profile.lbl_fonts -anchor w -padx 12 -pady {4 2}
+    listbox $w.profile.fonts -height 5 -width 40 -font $::font_sm -selectmode single
     foreach f [lsort [font families]] {
-        $w.fonts insert end $f
+        $w.profile.fonts insert end $f
     }
-    if {$cur_font ne ""} {
-        set idx [lsearch -exact [lsort [font families]] $cur_font]
-        if {$idx >= 0} { $w.fonts selection set $idx; $w.fonts see $idx }
-    }
-    pack $w.fonts -fill both -expand 1 -padx 12 -pady 2
+    pack $w.profile.fonts -fill both -expand 1 -padx 12 -pady 2
 
-    bind $w.fonts <<ListboxSelect>> {
+    bind $w.profile.fonts <<ListboxSelect>> {
         set sel [%W curselection]
         if {[llength $sel] > 0} {
             set font_var [%W get [lindex $sel 0]]
-            .profile_config.font delete 0 end
-            .profile_config.font insert 0 $font_var
+            .profile_config.profile.ffont.entry delete 0 end
+            .profile_config.profile.ffont.entry insert 0 $font_var
         }
     }
 
-    label $w.lbl_size -text [t profile_config_size] -font $::font_sm -fg $::fg -bg $::bg
-    pack $w.lbl_size -anchor w -padx 12 -pady {8 2}
-
+    # Font size row
     frame $w.fsize
-    pack $w.fsize -fill x -padx 12 -pady {0 8}
+    pack $w.fsize -fill x -padx 12 -pady 4
+    label $w.fsize.lbl -text [t profile_config_size] -font $::font_sm -width 15 -anchor w
     spinbox $w.fsize.spin -from 6 -to 72 -width 5 -font $::font_sm
-    set cur_size $::cfg_font_size
-    if {[dict exists $::cfg_profiles $cur_profile font_size]} {
-        set cur_size [dict get $::cfg_profiles $cur_profile font_size]
-    }
-    $w.fsize.spin set $cur_size
-    pack $w.fsize.spin -anchor w
+    pack $w.fsize.lbl -side left
+    pack $w.fsize.spin -side left
+
+    # Margin width row
+    frame $w.fmarginw
+    pack $w.fmarginw -fill x -padx 12 -pady 4
+    label $w.fmarginw.lbl -text [t profile_config_margin_w] -font $::font_sm -width 15 -anchor w
+    spinbox $w.fmarginw.spin -from 0 -to 200 -width 5 -font $::font_sm
+    pack $w.fmarginw.lbl -side left
+    pack $w.fmarginw.spin -side left
+
+    # Margin height row
+    frame $w.fmarginh
+    pack $w.fmarginh -fill x -padx 12 -pady 4
+    label $w.fmarginh.lbl -text [t profile_config_margin_h] -font $::font_sm -width 15 -anchor w
+    spinbox $w.fmarginh.spin -from 0 -to 200 -width 5 -font $::font_sm
+    pack $w.fmarginh.lbl -side left
+    pack $w.fmarginh.spin -side left
+
+    # Update profile display when changed via trace
+    trace add variable ::profile_config_profile write [list apply {{name1 name2 op} {
+        profile-config-update-profile .profile_config
+    }}]
+
+    # Load initial values
+    profile-config-update-profile $w
 
     # Button frame
     frame $w.btns
-    pack $w.btns -fill x -padx 12 -pady 8
+    pack $w.btns -fill x -padx 8 -pady 8
 
     button $w.btns.apply -text [t profile_config_apply] -font $::font_sm \
         -bg $::bg_bar -fg $::fg_bar \
         -command {
-            set font [.profile_config.font get]
+            set profile $::profile_config_profile
+            set font [.profile_config.profile.ffont.entry get]
             set size [.profile_config.fsize.spin get]
-            set profile $::profile_config_var
-            if {$font eq "" || $size eq ""} return
-            profile-apply-fonts $profile $font $size
+            set mw [.profile_config.fmarginw.spin get]
+            set mh [.profile_config.fmarginh.spin get]
+            set def_prof $::profile_config_default_prof
+            set def_scheme $::profile_config_default_scheme
+
+            if {$font eq "" || $size eq "" || $mw eq "" || $mh eq ""} return
+
+            dict set ::cfg_profiles $profile font_family $font
+            dict set ::cfg_profiles $profile font_size $size
+            dict set ::cfg_profiles $profile margin_width $mw
+            dict set ::cfg_profiles $profile margin_height $mh
+            set ::cfg_profile $def_prof
+            set ::cfg_scheme $def_scheme
+
+            ini-save
+
+            if {$profile eq $::cfg_profile} {
+                profile-apply $profile
+                if {[info exists ::editor_open]} {
+                    set f [list $::cfg_font_family $::cfg_font_size]
+                    set ::font $f
+                    catch {.ed.t configure -font $f}
+                    foreach side {l r} {
+                        catch {.ed.pw.${side}.t configure -font $f}
+                    }
+                    .ed.t tag configure heading -font [list $::cfg_font_family $::cfg_font_size bold]
+                    apply-line-spacing
+                }
+            }
+
             destroy .profile_config
         }
     pack $w.btns.apply -side left -padx 4
@@ -2692,7 +2782,7 @@ proc profile-config-dialog {} {
     pack $w.btns.cancel -side left -padx 4
 
     bind $w <Escape> [list destroy $w]
-    focus $w.font
+    focus $w.profile.ffont.entry
 }
 
 proc help-dialog {} {
