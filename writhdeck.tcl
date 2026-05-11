@@ -1320,48 +1320,31 @@ text .br.bar.help -height 1 -width 80 -bg $bg_bar -fg $fg_bar -font $font_sm \
     -border 0 -highlightthickness 0 -state disabled -wrap none
 .br.bar.help tag configure bold -font [list [lindex $font_sm 0] [lindex $font_sm 1] bold]
 
-set shortcut_map {
-    h {help-dialog}
-    n {br-new}
-    t {open-scratchpad}
-    f {br-toggle-favorite}
-    s {br-stats}
-    b {br-backup}
-    d {br-delete}
-    r {br-rename}
-    i {br-info-shortcut}
-    c {profile-config-dialog}
-    q {exit}
-    z {br-reload}
-}
-
-foreach {key cmd} $shortcut_map {
-    .br.bar.help tag configure key_$key -foreground $fg_bar
-    .br.bar.help tag bind key_$key <Button-1> $cmd
-    .br.bar.help tag bind key_$key <Enter> {.br.bar.help config -cursor hand2}
-    .br.bar.help tag bind key_$key <Leave> {.br.bar.help config -cursor arrow}
-}
-
-set help_text [format [t br_help_gui] $::cfg_lbl_toc]
 .br.bar.help configure -state normal
 .br.bar.help delete 1.0 end
 
-set i 0
-while {$i < [string length $help_text]} {
-    set char [string index $help_text $i]
-    set prev_char [expr {$i > 0 ? [string index $help_text [expr {$i-1}]] : " "}]
-    if {$i + 1 < [string length $help_text] && [string index $help_text [expr {$i+1}]] eq ":" && \
-        ($char >= "a" && $char <= "z" || $char >= "A" && $char <= "Z") && \
-        $prev_char eq " "} {
-        set key_tag "key_[string tolower $char]"
-        .br.bar.help insert end $char [list bold $key_tag]
-        .br.bar.help insert end ":"
-        incr i 2
-    } else {
-        .br.bar.help insert end $char
-        incr i
-    }
+foreach {char cmd label} {
+    h help-dialog "help"
+    n br-new "new"
+    t open-scratchpad "scratchpad"
+    f br-toggle-favorite "fav"
+    s br-stats "stats"
+    b br-backup "backup"
+    d br-delete "delete"
+    r br-rename "rename"
+    i br-info-shortcut "info"
+    c profile-config-dialog "config"
+    z br-reload "reload"
+    q exit "quit"
+} {
+    .br.bar.help tag configure key_$char -foreground $fg_bar
+    .br.bar.help tag bind key_$char <Button-1> $cmd
+    .br.bar.help tag bind key_$char <Enter> {.br.bar.help config -cursor hand2}
+    .br.bar.help tag bind key_$char <Leave> {.br.bar.help config -cursor arrow}
+    .br.bar.help insert end $char [list bold key_$char]
+    .br.bar.help insert end ":$label  "
 }
+.br.bar.help insert end [format " %s:sections  " $::cfg_lbl_toc]
 .br.bar.help configure -state disabled
 
 label .br.bar.cnt -textvariable ::br_status \
@@ -1471,7 +1454,6 @@ proc input-dialog {title prompt} {
     wm title $w $title
     wm resizable $w 0 0
     wm transient $w .
-    grab $w
 
     label  $w.l   -text $prompt -font $::font_sm -padx 12 -pady 8 -anchor w
     entry  $w.e   -width 28    -font $::font_sm
@@ -1483,6 +1465,8 @@ proc input-dialog {title prompt} {
     pack $w.l -fill x
     pack $w.e -fill x -padx 12
     pack $w.f
+    update
+    grab $w
 
     bind $w.e <Return> {set ::dlg_val [.dlg.e get]; destroy .dlg}
     bind $w    <Escape> {set ::dlg_val ""; destroy .dlg}
@@ -1500,13 +1484,14 @@ proc info-dialog {msg} {
     wm title $w "Writhdeck"
     wm resizable $w 0 0
     wm transient $w .
-    grab $w
     label  $w.l -text $msg -font $::font_sm -padx 16 -pady 12 -anchor w -wraplength 340
     button $w.b -text "OK" -font $::font_sm -command [list destroy $w]
     pack $w.l -fill x
     pack $w.b -anchor e -padx 8 -pady 6
     bind $w <Return> [list destroy $w]
     bind $w <Escape> [list destroy $w]
+    update
+    grab $w
     focus $w.b
     tkwait window $w
 }
@@ -1518,7 +1503,6 @@ proc confirm-dialog {msg {default yes}} {
     wm title $w "Writhdeck"
     wm resizable $w 0 0
     wm transient $w .
-    grab $w
     label  $w.l   -text $msg -font $::font_sm -padx 16 -pady 12 -anchor w -wraplength 340
     frame  $w.f
     button $w.f.y -text [t dlg_yes] -font $::font_sm \
@@ -1532,7 +1516,9 @@ proc confirm-dialog {msg {default yes}} {
     bind $w <Escape> { set ::dlg_val no; destroy .cdlg }
     bind $w y        { set ::dlg_val yes; destroy .cdlg }
     bind $w n        { set ::dlg_val no;  destroy .cdlg }
-    if {$default eq "yes"} { after idle [list focus $w.f.y] } else { after idle [list focus $w.f.n] }
+    update
+    grab $w
+    if {$default eq "yes"} { focus $w.f.y } else { focus $w.f.n }
     set ::dlg_val no
     tkwait window $w
     return $::dlg_val
@@ -1545,7 +1531,6 @@ proc yesnocancel-dialog {msg} {
     wm title $w "Writhdeck"
     wm resizable $w 0 0
     wm transient $w .
-    grab $w
     label  $w.l   -text $msg -font $::font_sm -padx 16 -pady 12 -anchor w -wraplength 340
     frame  $w.f
     button $w.f.y -text [t dlg_yes]    -font $::font_sm \
@@ -1559,6 +1544,8 @@ proc yesnocancel-dialog {msg} {
     pack $w.f -anchor e -padx 8
     bind $w <Return> { catch { [focus] invoke } }
     bind $w <Escape> { set ::dlg_val cancel; destroy .yncdlg }
+    update
+    grab $w
     bind $w y        { set ::dlg_val yes;    destroy .yncdlg }
     bind $w n        { set ::dlg_val no;     destroy .yncdlg }
     after idle [list focus $w.f.y]
@@ -1650,7 +1637,6 @@ proc br-stats {} {
     wm title $w "[t br_stats_title] - [file tail $path]"
     wm resizable $w 0 0
     wm transient $w .
-    grab $w
     text $w.t -font $::font_sm -state normal -bg $::bg -fg $::fg \
         -borderwidth 0 -padx 16 -pady 12 -width 36 \
         -height [expr {$nrows + 7}] -cursor arrow
@@ -1682,6 +1668,8 @@ proc br-stats {} {
     pack $w.btns.ok    -side right -padx 8 -pady 8
     pack $w.t    -fill both -expand 1
     pack $w.btns -fill x
+    update
+    grab $w
     bind $w.t <KeyPress-q> "[list after idle [list destroy $w]]; break"
     bind $w.t <Control-h>  "[list after idle [list destroy $w]]; break"
     bind $w   <Control-h>  [list after idle [list destroy $w]]
@@ -2683,6 +2671,8 @@ proc profile-config-dialog {} {
             -command "destroy $w" -bg $::bg_bar -fg $::fg_bar
         pack $w.msg -fill x
         pack $w.close -pady 8
+        update
+        grab $w
         focus $w.close
         return
     }
@@ -2871,6 +2861,8 @@ proc profile-config-dialog {} {
         -bg $::bg_bar -fg $::fg_bar -command [list destroy $w]
     pack $w.btns.cancel -side left -padx 4
 
+    update
+    grab $w
     bind $w <Escape> [list destroy $w]
     focus $w.profile.ffont.entry
 }
@@ -2882,7 +2874,6 @@ proc help-dialog {} {
     wm title $w "Help - Writhdeck"
     wm resizable $w 0 0
     wm transient $w .
-    grab $w
 
     set hm $::cfg_heading_marker
     set sections {}
@@ -2985,6 +2976,8 @@ proc help-dialog {} {
     }
     pack $w.ok -pady 8
 
+    update
+    grab $w
     bind $w.t <Up>         {%W yview scroll -1 units; break}
     bind $w.t <Down>       {%W yview scroll  1 units; break}
     bind $w.t <Prior>      {%W yview scroll -5 units; break}
