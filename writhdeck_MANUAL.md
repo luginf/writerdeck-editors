@@ -108,7 +108,7 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 | `blink_cursor`          | `0`     | Blinking cursor                                                                                   |
 | `line_numbers`          | `0`     | Show line numbers                                                                                 |
 | `cursor_restore`        | `1`     | Restore cursor position on reopen                                                                 |
-| `lang`                  | `en`    | Interface language (`en` or `fr`)                                                                 |
+| `lang`                  | `en`    | Interface language: `en`, `fr`, `de`, `es`, `ko`, `no`; also selectable in config dialog (c key) |
 | `dark_mode`             | `1`     | Dark theme; `0` = light                                                                           |
 | `word_goal`             | `500`   | Daily word goal shown by the `goal` status token; `0` to disable                                 |
 
@@ -238,6 +238,7 @@ Default mode, requires Tk.
 | d                    | Delete file                                                         |
 | r                    | Rename file                                                         |
 | i                    | Show full path                                                      |
+| c                    | Configuration — profiles, fonts, margins, color scheme, language    |
 | z                    | Reload — relaunch WrithDeck (returns to browser)                    |
 | h / Ctrl+H           | Help                                                                |
 | Ctrl+O               | Open any file (system dialog)                                       |
@@ -386,7 +387,7 @@ Si `--gui` et `--no-gui` sont tous les deux présents, `--no-gui` a la priorité
 - Position du curseur restaurée entre les sessions (`.writhdeck.json`)
 - Configuration rechargée à chaque ouverture de document (pas de redémarrage nécessaire)
 - Basculement thème sombre/clair (`Ctrl+D` par défaut, configurable)
-- Langue de l'interface : `lang = en` ou `fr`
+- **Support multi-langue** : Anglais, Français, Allemand, Espagnol, Coréen, Norvégien (sélectionnable dans le dialogue config ou via INI)
 - **Comportement unifié du navigateur** : après la fermeture d'un fichier, GUI et TUI retournent au navigateur (configurable via `browser`)
 - **Bloc-notes** : tampon temporaire en mémoire, pas de fichier disque tant qu'on ne sauvegarde pas explicitement
 - **Dialogue d'aide** : affiche le nombre de mots/caractères de la sélection quand du texte est sélectionné (GUI et TUI)
@@ -427,7 +428,7 @@ Tous les raccourcis clavier sont configurables via la section `[keys]`.
 | `blink_cursor`          | `0`    | Curseur clignotant                                                                                   |
 | `line_numbers`          | `0`    | Afficher les numéros de ligne                                                                        |
 | `cursor_restore`        | `1`    | Restaurer la position du curseur à la réouverture                                                    |
-| `lang`                  | `en`   | Langue de l'interface (`en` ou `fr`)                                                                 |
+| `lang`                  | `en`   | Langue de l'interface : `en`, `fr`, `de`, `es`, `ko`, `no` ; aussi sélectionnable dans le dialogue config (touche c) |
 | `dark_mode`             | `1`    | Thème sombre ; `0` = clair                                                                           |
 | `word_goal`             | `500`  | Objectif de mots journalier affiché par le jeton `goal` ; `0` pour désactiver                        |
 
@@ -557,6 +558,7 @@ Mode par défaut, nécessite Tk.
 | d                    | Supprimer le fichier                                                    |
 | r                    | Renommer le fichier                                                     |
 | i                    | Afficher le chemin complet                                              |
+| c                    | Configuration — profils, polices, marges, couleurs, langue              |
 | z                    | Recharger — relancer WrithDeck (retour au browser)                      |
 | h / Ctrl+H           | Aide                                                                    |
 | Ctrl+O               | Ouvrir un fichier quelconque (dialogue système)                         |
@@ -627,6 +629,7 @@ Activé via `--no-gui` / `--tui` / `--ng`, ou si aucun système de fenêtrage n'
 | d            | Supprimer le fichier                                                    |
 | r            | Renommer le fichier                                                     |
 | i            | Afficher le chemin complet                                              |
+| c            | Configuration — profils, polices, marges, couleurs, langue              |
 | z            | Recharger — relancer WrithDeck (retour au browser)                      |
 | h / Ctrl+H   | Aide                                                                    |
 | q / Ctrl+Q   | Quitter                                                                 |

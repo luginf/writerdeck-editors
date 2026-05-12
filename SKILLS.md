@@ -10,19 +10,25 @@ Affichée dans l'aide GUI (section DATE & TIME) et l'aide TUI (en-tête en inver
 
 > **Règle** : mettre à jour la version (`set ::version "vYYYYMMDD"`) à chaque modification fonctionnelle, avec la date du jour.
 
-## Structure du code (`writhdeck.tcl`, ~4 700+ lignes)
+## Structure modulaire (généré via Makefile)
 
-| Zone | Lignes approx. | Contenu |
+Le code est organisé en modules dans `src/`, concaténés par `make` pour générer les fichiers exécutables. Lecture des fichiers source pour développement ; lecture des fichiers générés (`writhdeck.tcl`, `writhdeck-cli.tcl`) pour comprendre l'ordre d'exécution.
+
+| Module | Lignes | Contenu |
 |---|---|---|
-| Version + Bootstrap | 1–125 | `::version`, shebang, args, détection GUI/TUI |
-| Persistance état | 126–272 | `.writhdeck.json`, curseurs, favoris, récents, stats |
-| INI / config | 273–835 | `ini-load`, `ini-save`, profils, schemes, clés, i18n |
-| Utils partagées | 836–1345 | `list-docs`, `br-dirs`, `do-backup`, `build-extra-entries` |
-| **GUI block** (`if {!$::no_gui}`) | 1346–3100+ | Browser, éditeur, dialogs, TOC, split view, typewriter, `profile-config-dialog` |
-| TUI — utils | 3100+–3600+ | `tui-getch`, `tui-bar`, `tui-prompt` |
-| TUI — browser | 3600+–3750+ | `tui-browser` |
-| TUI — éditeur | 3750+–4700+ | `tui-toc`, `tui-editor` |
-| Démarrage | 4700+–fin | `tui-main`, entrée GUI/TUI |
+| `src/boot.tcl` | ~80 | Polyglot sh/Tcl, args, détection Tk, `::HOME_DIR`, `tilde-expand` |
+| `src/boot-cli.tcl` | ~80 | Variante CLI : pas de Tk, force `::no_gui 1` |
+| `src/state.tcl` | ~147 | `.writhdeck.json`, curseurs, favoris, récents, stats quotidiennes |
+| `src/config.tcl` | ~804 | INI, profils, thèmes, clés, système i18n complet, `proc t` |
+| `src/common.tcl` | ~204 | `list-docs`, `br-dirs`, `do-backup`, `build-extra-entries`, parseurs |
+| `src/gui.tcl` | ~2001 | Bloc GUI (Tk) entier enveloppé dans `if {!$::no_gui}` |
+| `src/tui.tcl` | ~1644 | Interface TUI — `tui-init`, `tui-browser`, `tui-editor`, `tui-main` |
+| `src/main.tcl` | ~31 | Dispatch final : GUI ou TUI selon `$::no_gui` |
+| `src/main-cli.tcl` | ~2 | Entry point CLI : appelle `tui-main` directement |
+
+**Fichiers générés** (~5000 lignes) :
+- `writhdeck.tcl` — version complète GUI+TUI avec tous les modules + marqueurs de section
+- `writhdeck-cli.tcl` — version TUI seule (sans `src/gui.tcl`, pas de chargement Tk)
 
 ## Persistance — `.writhdeck.json`
 
@@ -178,6 +184,61 @@ Les deux fichiers générés sont exécutables, trackés dans git, et ont des ma
 - Les deux fichiers générés **remplacent** l'ancien `writhdeck.tcl` monolithique
 - `src/` est la source of truth ; les fichiers générés sont des artefacts de build trackés
 - Toute modification fonctionnelle se fait dans `src/` puis `make` régénère les exécutables
+
+## Tests de régression
+
+Les tests préviennent les bugs et assurent la cohérence. Lancés automatiquement via `make test`.
+
+**Tests disponibles** :
+- `make test-i18n` — Valide les traductions (clés complètes, format strings cohérents)
+- `make test-syntax` — Vérifie la syntaxe Tcl via `info complete`
+- `make test-gui` — Teste le chargement de `writhdeck.tcl` en mode GUI
+- `make test-cli` — Teste le chargement de `writhdeck-cli.tcl` en mode CLI
+- `make test-langs` — Teste différentes combinaisons LANGUAGES
+- `make test` — Lance tous les tests
+
+Stockés dans `tests/` :
+- `tests/test-i18n.tcl` — Validation des dictionnaires i18n
+- `tests/test-syntax.tcl` — Vérification syntaxe Tcl
+- `tests/README.md` — Documentation des tests
+
+Avant de committer, s'assurer que `make test` passe sans erreur.
+
+## Système i18n (6 langues)
+
+Stocké dans `src/i18n/`, chaque fichier définit les traductions d'une langue (122 clés).
+
+**Langues supportées** :
+- `en.tcl` — English (fallback, toujours incluse)
+- `fr.tcl` — Français
+- `de.tcl` — Deutsch
+- `es.tcl` — Español
+- `ko.tcl` — 한국어
+- `no.tcl` — Norsk
+
+**Récupérer une traduction dans le code** :
+```tcl
+set msg [t br_help_gui]                          # "h:help  n:new  ..."
+set msg [format [t help_cur_time] "12:30"]      # Avec arguments
+```
+
+La proc `t {key args}` (dans `src/config.tcl`) consulte `::i18n[$::cfg_lang]` et retourne le contenu anglais en fallback si la clé manque.
+
+**Construire avec une sélection de langues** :
+```bash
+make LANGUAGES="en"                 # Minimal : 95 KB
+make LANGUAGES="en fr"              # Standard : 131 KB
+make LANGUAGES="en fr de es ko no"  # Complet : 280 KB
+```
+
+Le Makefile détecte automatiquement tous les fichiers `src/i18n/*.tcl` via `AVAILABLE_LANGS`. Ajouter une langue : créer `src/i18n/XX.tcl` avec les 122 clés, puis `make` l'inclut automatiquement.
+
+**Validation des traductions** :
+```bash
+make test-i18n    # Vérifie : toutes les clés présentes, pas de doublons, format strings cohérents
+```
+
+Voir `src/i18n/README.md` pour le guide complet (format, ajout de langue, format strings `%s`/`%d`, validation).
 
 ## Idées non implémentées
 

@@ -12,7 +12,16 @@ tclsh writhdeck.tcl --cli file.txt     # TUI, open file directly
 ./writhdeck.tcl --tui                  # polyglot sh/Tcl bootstrap, TUI mode
 ```
 
-Build with `make` to generate `writhdeck.tcl` and `writhdeck-cli.tcl` from source modules in `src/`. Both generated files are executable and tracked in git. There are no tests, no dependencies beyond Tcl/Tk 8.6+.
+Build with `make` to generate `writhdeck.tcl` and `writhdeck-cli.tcl` from source modules in `src/`. Both generated files are executable and tracked in git. Dependencies: Tcl/Tk 8.6+ (Tk only required for GUI mode).
+
+Run tests to catch regressions:
+```sh
+make test              # Run all regression tests
+make test-i18n        # Validate translations
+make test-syntax      # Check Tcl syntax
+make test-gui         # Test GUI build
+make test-cli         # Test CLI build
+```
 
 ## Version
 
@@ -22,24 +31,31 @@ set ::version "v20260509"
 ```
 Update it on every functional change.
 
-## Code structure
+## Generated file structure
 
-The file has two major runtime branches controlled by `$::no_gui`:
+After `make`, the generated `writhdeck.tcl` contains these sections (concatenated from source modules):
 
-| Zone | Lines (approx.) | Content |
-|---|---|---|
-| Bootstrap | 1–125 | Polyglot sh/Tcl, args, Tk detection, `::HOME_DIR`, `tilde-expand` |
-| State persistence | 126–272 | `.writhdeck.json`, cursors, favorites, recents, daily stats |
-| INI / config | 273–835 | `ini-load`, `ini-save`, profiles, schemes, keys, i18n |
-| Shared utils | 836–1345 | `list-docs`, `br-dirs`, `do-backup`, `build-extra-entries`, inline parsers |
-| **GUI block** (`if {!$::no_gui}`) | 1346–3100+ | Browser frame, editor frame, dialogs (help, config, info, backup, etc.), TOC, split view, typewriter |
-| TUI core | 3100+–3600+ | `tui-init`, `tui-getch`, `tui-bar`, word-wrap, layout |
-| TUI helpers | 3600+–3750+ | Prompt, clipboard, selection |
-| TUI browser | 3750+–4050+ | `tui-browser` |
-| TUI editor | 4050+–4700+ | `tui-toc`, `tui-editor`, `tui-main` |
-| Entry point | 4700+–end | Dispatch GUI / TUI |
+| Section | Source module | Lines | Content |
+|---|---|---|---|
+| Bootstrap | `src/boot.tcl` | 1–80 | Polyglot sh/Tcl, args, Tk detection, `::HOME_DIR`, `tilde-expand` |
+| State | `src/state.tcl` | 81–228 | `.writhdeck.json` persistence, cursors, favorites, recents, daily stats |
+| Config | `src/config.tcl` | 229–1033 | INI loading/saving, profiles, schemes, keys, i18n system, theme init |
+| Common | `src/common.tcl` | 1034–1238 | `list-docs`, `br-dirs`, `do-backup`, `build-extra-entries`, inline parsers |
+| **GUI** | `src/gui.tcl` | 1239–3240 | Wrapped in `if {!$::no_gui}` — browser, editor, dialogs, TOC, split view |
+| **TUI** | `src/tui.tcl` | 3241–4885 | Terminal UI — `tui-init`, `tui-browser`, `tui-editor`, `tui-main`, helpers |
+| Entry point | `src/main.tcl` | 4886–4917 | Dispatch: `if {$::no_gui}` → TUI, else → GUI |
 
-The GUI block is a single `if {!$::no_gui} { ... } ;# end if {!$::no_gui}` spanning most of the GUI-related code.
+The GUI block (`src/gui.tcl`) is wrapped in `if {!$::no_gui} { ... }` at build time, so CLI builds exclude it entirely.
+
+### Section headers
+
+Generated files have readable section headers:
+```tcl
+# ===================================================================
+# state.tcl
+# ===================================================================
+```
+These markers help navigate the ~5000-line file during development.
 
 ## Key rules
 
@@ -165,27 +181,58 @@ The codebase is organized in `src/` directory and built via `Makefile`:
 | `src/main-cli.tcl` | ~2 | CLI entry point (always calls `tui-main`) |
 
 **Build targets** (via `make`):
-- `writhdeck.tcl` — full version (GUI+TUI, ~4979 lines with section headers)
-- `writhdeck-cli.tcl` — CLI-only (TUI, ~2899 lines, no Tk loading)
+- `make` or `make all` — generate both files with all available languages
+- `make LANGUAGES="en"` — build with English only
+- `make LANGUAGES="en fr de es ko"` — build with specific languages
 - `make clean` — remove generated files
-- `make LANGUAGES="en fr de es"` — build with specific languages (default: `en fr`)
+- `make test` — run regression tests
+- `make test-i18n` — validate translations only
+- `make test-syntax` — check Tcl syntax only
 
-Both generated files are executable, tracked in git, and have section headers (`# === state.tcl ===`) for readability.
+The Makefile uses `AVAILABLE_LANGS` to auto-detect all `src/i18n/*.tcl` files, so new language files are automatically included in builds. English is always prepended (even if not listed).
+
+Both generated files are:
+- Executable (with shebang, +x mode)
+- Tracked in git (not ignored)
+- Have section headers (`# === state.tcl ===`) for readability during debugging
 
 ## Internationalization (i18n)
 
-Translation strings are stored in modular files under `src/i18n/`:
-- `src/i18n/en.tcl` — English translations
-- `src/i18n/fr.tcl` — French translations
-- `src/i18n/de.tcl` — German translations
-- `src/i18n/es.tcl` — Spanish translations
+Modular language system with 6 supported languages. Store translations in `src/i18n/`:
 
-Each file defines translations via `dict set ::i18n LANG { key "value" ... }`. The Makefile concatenates selected language files into the final build based on the `LANGUAGES` variable (default: `en fr`). This allows you to:
-- Build a minimal distribution with just English: `make LANGUAGES="en"`
-- Include all languages: `make LANGUAGES="en fr de es"`
-- Add new languages: create `src/i18n/LANG.tcl` and reference it in Makefile
+**Language files** (122 keys each):
+- `src/i18n/en.tcl` — English (always included, fallback language)
+- `src/i18n/fr.tcl` — Français
+- `src/i18n/de.tcl` — Deutsch
+- `src/i18n/es.tcl` — Español
+- `src/i18n/ko.tcl` — 한국어 (Korean)
+- `src/i18n/no.tcl` — Norsk (Norwegian)
 
-The proc `t {key args}` (defined in `src/config.tcl`) retrieves translations at runtime based on `$::cfg_lang` (from INI file).
+Each file defines `dict set ::i18n LANG { key "value" ... }` with all 122 keys required for completeness.
+
+**Build with specific languages:**
+```bash
+make LANGUAGES="en"              # English only (~95KB)
+make LANGUAGES="en fr de es"     # Selected languages (~250KB)
+make                             # All available languages (~280KB) — auto-detected
+```
+
+English is always included as a fallback language (for missing keys in other languages).
+
+**Using translations in code:**
+```tcl
+set msg [t help_date_time]              # Retrieves from ::i18n[$::cfg_lang]
+set msg [format [t help_cur_time] "12:30"]  # With arguments
+```
+
+The proc `t {key args}` (in `src/config.tcl`) falls back to English if a key is missing. Users select language via `lang = CODE` in `~/.writhdeck.ini` or the language dropdown in the config dialog (`c` key in browser).
+
+**Testing translations:**
+```bash
+make test-i18n    # Validates all languages have complete keys + matching format strings
+```
+
+See `src/i18n/README.md` for adding new languages and comprehensive i18n documentation.
 
 ## SKILLS.md
 

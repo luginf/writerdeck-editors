@@ -61,7 +61,7 @@ clean:
 	rm -f writhdeck.tcl writhdeck-cli.tcl
 	@echo "Cleaned build artifacts"
 
-.PHONY: test-gui test-cli test
+.PHONY: test-gui test-cli test test-i18n test-syntax test-langs
 
 test-gui: writhdeck.tcl
 	@echo "Testing writhdeck.tcl (GUI mode)..."
@@ -71,5 +71,20 @@ test-cli: writhdeck-cli.tcl
 	@echo "Testing writhdeck-cli.tcl (TUI mode)..."
 	@tclsh writhdeck-cli.tcl --help > /dev/null && echo "✓ CLI version loads"
 
-test: test-gui test-cli
-	@echo "All tests passed"
+test-i18n:
+	@echo "Testing i18n translations..."
+	@tclsh tests/test-i18n.tcl
+
+test-syntax:
+	@echo "Checking Tcl syntax..."
+	@tclsh tests/test-syntax.tcl
+
+test-langs:
+	@echo "Testing builds with different language combinations..."
+	@$(MAKE) clean > /dev/null && $(MAKE) LANGUAGES="fr" > /dev/null && echo "✓ LANGUAGES=fr (includes en automatically)"
+	@$(MAKE) clean > /dev/null && $(MAKE) LANGUAGES="de es" > /dev/null && echo "✓ LANGUAGES=de es"
+	@$(MAKE) clean > /dev/null && $(MAKE) > /dev/null && echo "✓ Default build (all languages)"
+
+test: test-i18n test-syntax test-gui test-cli test-langs
+	@echo ""
+	@echo "✓ All regression tests passed"
