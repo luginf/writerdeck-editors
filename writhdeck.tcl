@@ -938,7 +938,7 @@ set ::bg_sel $bg_sel
 
 
 # ===========================================================================
-# i18n (de)
+# i18n (de en es fr ko no)
 # ===========================================================================
 dict set ::i18n en {
     toc_title          "Table of contents"
@@ -947,7 +947,7 @@ dict set ::i18n en {
     toc_headings       "%d heading%s"
     br_no_docs         "No documents yet. Press n to create one."
     br_help_gui        "h:help  n:new  t:scratchpad  f:fav  s:stats  b:backup  d:delete  r:rename  i:info  c:config  z:reload  %s:sections  q:quit"
-    br_help_tui        "%s help (n)ew scra(t)chpad (f)av (s)tats (b)ackup  (d)elete (r)ename (i)nfo (w)ords %s sections (q)uit"
+    br_help_tui        "h:%s  n:new  t:scratchpad  f:fav  s:stats  b:backup  d:delete  r:rename  i:info  w:words  %s:sections  q:quit"
     br_backed_up       "backup %s -> %s"
     br_favorites       "Favorites"
     br_stats_title     "Writing stats"
@@ -1046,7 +1046,25 @@ dict set ::i18n en {
     br_help_help           "Help"
     br_help_quit_app       "Quit"
     br_key_sections        "sections"
+    help_writhdeck         "WRITHDECK"
+    help_version           "Version"
+    help_date_time_sect    "DATE & TIME"
+    help_current_time      "Current time"
+    help_date              "Date"
+    help_editor_sect       "EDITOR"
+    help_save_as           "Save as"
+    help_return_browser    "Return to browser"
+    help_find_next         "Find (Enter: next  Shift+Enter: prev)"
+    help_find_replace      "Find & Replace (Enter: replace one  Ctrl+Enter: all)"
+    help_para_word         "Paragraph / word navigation"
+    help_toc_marker        "Table of contents  (%s)"
+    help_browser_sect      "BROWSER"
+    help_open              "Open"
+    help_double_click      "Enter / double-click"
+    help_key_open_text     "Open"
+    help_k_fullscreen      "Fullscreen"
 }
+
 dict set ::i18n de {
     toc_title          "Inhaltsverzeichnis"
     toc_no_headings    "keine Ueberschriften gefunden"
@@ -1054,7 +1072,7 @@ dict set ::i18n de {
     toc_headings       "%d Ueberschrift%s"
     br_no_docs         "Keine Dokumente. Druecke n, um ein Dokument zu erstellen."
     br_help_gui        "h:hilfe  n:neu  t:notizen  f:fav  s:statistiken  b:sicherung  d:loeschen  r:umbenennen  i:info  c:konfiguration  z:neuladen  %s:abschnitte  q:beenden"
-    br_help_tui        "%s hilfe (n)eu noti(z)en  (f)av  (s)tatistiken  (b)ackup  (d)elete  (u)mbenennen  (i)nfo  (w)oerter  %s abschnitte  (q)uit"
+    br_help_tui        "h:%s  n:neu  t:notizen  f:fav  s:statistiken  b:sicherung  d:loeschen  r:umbenennen  i:info  w:woerter  %s:abschnitte  q:beenden"
     br_backed_up       "sicherung %s -> %s"
     br_favorites       "Favoriten"
     br_stats_title     "Schreibstatistiken"
@@ -1153,7 +1171,525 @@ dict set ::i18n de {
     br_help_help           "Hilfe"
     br_help_quit_app       "Beenden"
     br_key_sections        "abschnitte"
+    help_writhdeck         "WRITHDECK"
+    help_version           "Version"
+    help_date_time_sect    "DATUM & UHRZEIT"
+    help_current_time      "Aktuelle Uhrzeit"
+    help_date              "Datum"
+    help_editor_sect       "EDITOR"
+    help_save_as           "Speichern unter"
+    help_return_browser    "Zurück zum Browser"
+    help_find_next         "Suchen (Eingabe: naechstes  Umschalt+Eingabe: vorheriges)"
+    help_find_replace      "Suchen und ersetzen (Eingabe: eines ersetzen  Strg+Eingabe: alles)"
+    help_para_word         "Absatz- / Wort-Navigation"
+    help_toc_marker        "Inhaltsverzeichnis  (%s)"
+    help_browser_sect      "BROWSER"
+    help_open              "Oeffnen"
+    help_double_click      "Eingabe / Doppelklick"
+    help_key_open_text     "Oeffnen"
+    help_k_fullscreen      "Vollbild"
 }
+
+dict set ::i18n es {
+    toc_title          "Tabla de contenidos"
+    toc_no_headings    "no se encontraron encabezados"
+    toc_jump_bar       "Enter saltar  esc/ctrl+q cancelar"
+    toc_headings       "%d encabezado%s"
+    br_no_docs         "Sin documentos. Presiona n para crear uno."
+    br_help_gui        "h:ayuda  n:nuevo  t:notas  f:fav  s:estadisticas  b:copia  d:eliminar  r:renombrar  i:info  c:configuracion  z:recargar  %s:secciones  q:salir"
+    br_help_tui        "h:%s  n:nuevo  t:notas  f:fav  s:estadisticas  b:copia  d:eliminar  r:renombrar  i:info  w:palabras  %s:secciones  q:salir"
+    br_backed_up       "copia %s -> %s"
+    br_favorites       "Favoritos"
+    br_stats_title     "Estadisticas de escritura"
+    br_stats_no_data   "Sin estadisticas de escritura para este archivo."
+    br_stats_today     "Hoy"
+    br_stats_total     "Total"
+    br_stats_clear     "Borrar estadisticas"
+    br_stats_clear_confirm "Borrar todas las estadisticas de escritura para \"%s\"?"
+    br_fav_added       "[+] anadido a favoritos: %s"
+    br_fav_removed     "[-] eliminado de favoritos: %s"
+    br_exists          "'%s' ya existe"
+    br_deleted         "'%s' eliminado"
+    br_renamed         "renombrado -> '%s'"
+    br_delete          "Eliminar \"%s\"?"
+    br_files           "%d archivo%s"
+    br_recent          "Recientes"
+    ed_saved           "guardado"
+    ed_watch_reload       "\"%s\" fue modificado externamente. Recargar?"
+    ed_watch_reload_dirty "\"%s\" fue modificado externamente y tiene cambios sin guardar. Recargar?"
+    ed_save_before     "Guardar \"%s\" antes de cerrar?"
+    ed_save_before_tui "guardar antes de cerrar? (s/n/c=cancelar)"
+    help_date_time     "Fecha y hora"
+    help_cur_time      "Hora actual: %-12s  Fecha: %s"
+    help_file_info     "Info del archivo"
+    help_sel_info      "Info de seleccion"
+    help_words_chars   "Palabras: %-8d  Caracteres: %d"
+    help_shortcuts     "Writhdeck - atajos de teclado"
+    help_close         "Presiona cualquier tecla para cerrar"
+    help_k_save        "Guardar"
+    help_k_undo        "Deshacer"
+    help_k_redo        "Rehacer"
+    help_k_close       "Cerrar / Esc"
+    help_k_sel_all     "Seleccionar todo"
+    help_k_sticky      "Activar seleccion"
+    help_k_copy        "Copiar"
+    help_k_find        "Buscar"
+    help_k_cut         "Cortar"
+    help_k_replace     "Reemplazar"
+    help_k_paste       "Pegar"
+    help_k_goto        "Ir a linea"
+    help_k_lnum        "Numeros de linea"
+    help_k_open        "Abrir (navegador)"
+    help_k_typewriter  "Modo maquina de escribir / enfoque (activar)"
+    help_k_ctrl_arrows "Ctrl+Arriba/Abajo  Parrafo  |  Ctrl+Izq/Der / Alt+BF  Palabra"
+    help_k_toc         "Tabla de contenidos"
+    help_k_help        "Esta ayuda"
+    help_shift_arrows  "Mayus+Flechas  Extender seleccion"
+    help_k_split       "Vista dividida (activar)"
+    help_k_split_focus "Vista dividida - cambiar enfoque"
+    br_toc_title       "Secciones del navegador"
+    br_toc_empty       "sin secciones"
+    br_toc_bar         "Arriba/Abajo nav  Enter saltar  esc cancelar"
+    dlg_yes            "Si"
+    dlg_no             "No"
+    dlg_cancel         "Cancelar"
+    goto_title         "Ir a linea"
+    goto_prompt        "Linea:"
+    profile_config_title   "Configuracion"
+    profile_config_default_profile "Perfil predeterminado:"
+    profile_config_default_scheme  "Esquema de color predeterminado:"
+    profile_config_language        "Idioma:"
+    profile_config_edit_profile "Editar perfil:"
+    profile_config_font    "Fuente:"
+    profile_config_size    "Tamano de fuente:"
+    profile_config_margin_w "Ancho de margen:"
+    profile_config_margin_h "Alto de margen:"
+    profile_config_apply   "Aplicar"
+    profile_config_cancel  "Cancelar"
+    br_key_help            "ayuda"
+    br_key_new             "nuevo"
+    br_key_scratchpad      "notas"
+    br_key_fav             "fav"
+    br_key_stats           "estadisticas"
+    br_key_backup          "copia"
+    br_key_delete          "eliminar"
+    br_key_rename          "renombrar"
+    br_key_info            "info"
+    br_key_words           "palabras"
+    br_key_config          "configuracion"
+    br_key_reload          "recargar"
+    br_key_quit            "salir"
+    br_help_new_file       "Nuevo archivo"
+    br_help_scratchpad     "Notas (temporal, sin archivo)"
+    br_help_toggle_fav     "Activar favorito"
+    br_help_writing_stats  "Estadisticas de escritura"
+    br_help_backup         "Copia (copia en backups/ con marca de tiempo)"
+    br_help_show_path      "Mostrar ruta completa"
+    br_help_word_occ       "Ocurrencias de palabras"
+    br_help_delete_file    "Eliminar"
+    br_help_rename_file    "Renombrar"
+    br_help_font_settings  "Configuracion de fuente por perfil"
+    br_help_reload         "Recargar"
+    br_help_browser_sections "Secciones del navegador"
+    br_help_fullscreen_br  "Pantalla completa"
+    br_help_open_file_br   "Abrir archivo"
+    br_help_help           "Ayuda"
+    br_help_quit_app       "Salir"
+    br_key_sections        "secciones"
+    help_writhdeck         "WRITHDECK"
+    help_version           "Version"
+    help_date_time_sect    "FECHA Y HORA"
+    help_current_time      "Hora actual"
+    help_date              "Fecha"
+    help_editor_sect       "EDITOR"
+    help_save_as           "Guardar como"
+    help_return_browser    "Volver al navegador"
+    help_find_next         "Buscar (Intro: siguiente  Mayus+Intro: anterior)"
+    help_find_replace      "Buscar y reemplazar (Intro: reemplazar uno  Ctrl+Intro: todo)"
+    help_para_word         "Navegacion por parrafo / palabra"
+    help_toc_marker        "Tabla de contenidos  (%s)"
+    help_browser_sect      "NAVEGADOR"
+    help_open              "Abrir"
+    help_double_click      "Intro / Doble clic"
+    help_key_open_text     "Abrir"
+    help_k_fullscreen      "Pantalla completa"
+}
+
+dict set ::i18n fr {
+    toc_title          "Table des matières"
+    toc_no_headings    "aucun titre trouvé"
+    toc_jump_bar       "Enter aller  esc/ctrl+q annuler"
+    toc_headings       "%d titre%s"
+    br_no_docs         "Aucun document. Appuyez sur n pour en créer un."
+    br_help_gui        "h:aide  n:nouveau  t:bloc-notes  f:fav  s:stats  b:backup  d:supprimer  r:renommer  i:infos  c:config  z:recharger  %s:sections  q:quitter"
+    br_help_tui        "h:%s  n:nouveau  t:bloc-notes  f:fav  s:stats  b:backup  d:supprimer  r:renommer  i:infos  w:mots  %s:sections  q:quitter"
+    br_backed_up       "sauvegarde %s -> %s"
+    br_favorites       "Favoris"
+    br_stats_title     "Statistiques d'écriture"
+    br_stats_no_data   "Aucune statistique d'écriture pour ce fichier."
+    br_stats_today     "Aujourd'hui"
+    br_stats_total     "Total"
+    br_stats_clear     "Effacer les stats"
+    br_stats_clear_confirm "Effacer toutes les statistiques de \"%s\" ?"
+    br_fav_added       "[+] ajouté aux favoris : %s"
+    br_fav_removed     "[-] retiré des favoris : %s"
+    br_exists          "'%s' existe déjà"
+    br_deleted         "'%s' supprimé"
+    br_renamed         "renommé -> '%s'"
+    br_delete          "Supprimer \"%s\" ?"
+    br_files           "%d fichier%s"
+    br_recent          "Récents"
+    ed_saved           "enregistré"
+    ed_watch_reload       "\"%s\" a été modifié externement. Recharger ?"
+    ed_watch_reload_dirty "\"%s\" a été modifié externement et vous avez des modifications non sauvegardées. Recharger ?"
+    ed_save_before     "Enregistrer \"%s\" avant de fermer ?"
+    ed_save_before_tui "enregistrer avant de fermer ? (o/n/c=annuler)"
+    help_date_time     "Date & Heure"
+    help_cur_time      "Heure actuelle: %-12s  Date : %s"
+    help_file_info     "Infos fichier"
+    help_sel_info      "Infos sélection"
+    help_words_chars   "Mots : %-8d  Caract. : %d"
+    help_shortcuts     "Writhdeck - raccourcis clavier"
+    help_close         "Appuyer sur une touche pour fermer"
+    help_k_save        "Enregistrer"
+    help_k_undo        "Annuler"
+    help_k_redo        "Rétablir"
+    help_k_close       "Fermer / Esc"
+    help_k_sel_all     "Tout sélectionner"
+    help_k_sticky      "Activer sélection"
+    help_k_copy        "Copier"
+    help_k_find        "Chercher"
+    help_k_cut         "Couper"
+    help_k_replace     "Remplacer"
+    help_k_paste       "Coller"
+    help_k_goto        "Aller à la ligne"
+    help_k_lnum        "Numéros de lignes"
+    help_k_open        "Ouvrir (explorateur)"
+    help_k_typewriter  "Mode machine à écrire / focus (bascule)"
+    help_k_ctrl_arrows "Ctrl+Up/Dn  Paragraphe  |  Ctrl+Lt/Rt / Alt+BF  Mot"
+    help_k_toc         "Table des matières"
+    help_k_help        "Cette aide"
+    help_shift_arrows  "Maj+Flèches   Étendre la sélection"
+    help_k_split       "Vue partagée (bascule)"
+    help_k_split_focus "Vue partagée - changer de fenêtre"
+    br_toc_title       "Sections du navigateur"
+    br_toc_empty       "aucune section"
+    br_toc_bar         "Up/Dn nav  Enter aller  esc annuler"
+    dlg_yes            "Oui"
+    dlg_no             "Non"
+    dlg_cancel         "Annuler"
+    goto_title         "Aller à la ligne"
+    goto_prompt        "Ligne :"
+    profile_config_title   "Configuration"
+    profile_config_default_profile "Profil par défaut :"
+    profile_config_default_scheme  "Schéma de couleurs par défaut :"
+    profile_config_language        "Langue :"
+    profile_config_edit_profile "Éditer le profil :"
+    profile_config_font    "Police :"
+    profile_config_size    "Taille :"
+    profile_config_margin_w "Largeur marge :"
+    profile_config_margin_h "Hauteur marge :"
+    profile_config_apply   "Appliquer"
+    profile_config_cancel  "Annuler"
+    br_key_help            "aide"
+    br_key_new             "nouveau"
+    br_key_scratchpad      "bloc-notes"
+    br_key_fav             "fav"
+    br_key_stats           "stats"
+    br_key_backup          "backup"
+    br_key_delete          "supprimer"
+    br_key_rename          "renommer"
+    br_key_info            "infos"
+    br_key_words           "mots"
+    br_key_config          "config"
+    br_key_reload          "recharger"
+    br_key_quit            "quitter"
+    br_help_new_file       "Nouveau fichier"
+    br_help_scratchpad     "Bloc-notes (temp, pas de fichier)"
+    br_help_toggle_fav     "Basculer en favoris"
+    br_help_writing_stats  "Statistiques d'écriture"
+    br_help_backup         "Sauvegarde (copie dans backups/ avec timestamp)"
+    br_help_show_path      "Afficher le chemin complet"
+    br_help_word_occ       "Occurrences de mots"
+    br_help_delete_file    "Supprimer"
+    br_help_rename_file    "Renommer"
+    br_help_font_settings  "Paramètres de police par profil"
+    br_help_reload         "Recharger"
+    br_help_browser_sections "Sections du navigateur"
+    br_help_fullscreen_br  "Plein écran"
+    br_help_open_file_br   "Ouvrir un fichier"
+    br_help_help           "Aide"
+    br_help_quit_app       "Quitter"
+    br_key_sections        "sections"
+    help_writhdeck         "WRITHDECK"
+    help_version           "Version"
+    help_date_time_sect    "DATE & HEURE"
+    help_current_time      "Heure actuelle"
+    help_date              "Date"
+    help_editor_sect       "ÉDITEUR"
+    help_save_as           "Enregistrer sous"
+    help_return_browser    "Retour au navigateur"
+    help_find_next         "Chercher (Entrée : suivant  Maj+Entrée : précédent)"
+    help_find_replace      "Chercher et remplacer (Entrée : remplacer un  Ctrl+Entrée : tout)"
+    help_para_word         "Navigation par paragraphe / mot"
+    help_toc_marker        "Table des matières  (%s)"
+    help_browser_sect      "NAVIGATEUR"
+    help_open              "Ouvrir"
+    help_double_click      "Entrée / double-clic"
+    help_key_open_text     "Ouvrir"
+    help_k_fullscreen      "Plein écran"
+}
+
+dict set ::i18n ko {
+    toc_title          "목차"
+    toc_no_headings    "제목을 찾을 수 없음"
+    toc_jump_bar       "이동 입력  esc/ctrl+q 취소"
+    toc_headings       "%d개의 제목"
+    br_no_docs         "문서가 없습니다. n을 눌러서 새 문서를 만드세요."
+    br_help_gui        "h:도움말  n:새로운  t:메모장  f:즐겨찾기  s:통계  b:백업  d:삭제  r:이름변경  i:정보  c:설정  z:다시로드  %s:섹션  q:종료"
+    br_help_tui        "h:%s  n:새로운  t:메모장  f:즐겨찾기  s:통계  b:백업  d:삭제  r:이름변경  i:정보  w:단어  %s:섹션  q:종료"
+    br_backed_up       "백업 %s -> %s"
+    br_favorites       "즐겨찾기"
+    br_stats_title     "작문 통계"
+    br_stats_no_data   "이 파일에 대한 작문 통계가 없습니다."
+    br_stats_today     "오늘"
+    br_stats_total     "합계"
+    br_stats_clear     "통계 지우기"
+    br_stats_clear_confirm "\"%s\"의 모든 작문 통계를 지우시겠습니까?"
+    br_fav_added       "[+] 즐겨찾기에 추가됨: %s"
+    br_fav_removed     "[-] 즐겨찾기에서 제거됨: %s"
+    br_exists          "'%s'는 이미 존재합니다"
+    br_deleted         "삭제됨 '%s'"
+    br_renamed         "이름 변경 -> '%s'"
+    br_delete          "\"%s\"를 삭제하시겠습니까?"
+    br_files           "%d개 파일"
+    br_recent          "최근"
+    ed_saved           "저장됨"
+    ed_watch_reload       "\"%s\"가 외부에서 수정되었습니다. 다시 로드하시겠습니까?"
+    ed_watch_reload_dirty "\"%s\"가 외부에서 수정되었으며 저장하지 않은 변경 사항이 있습니다. 다시 로드하시겠습니까?"
+    ed_save_before     "종료하기 전에 \"%s\"를 저장하시겠습니까?"
+    ed_save_before_tui "종료하기 전에 저장하시겠습니까? (y/n/c=취소)"
+    help_date_time     "날짜 및 시간"
+    help_cur_time      "현재 시간:  %-12s  날짜: %s"
+    help_file_info     "파일 정보"
+    help_sel_info      "선택 정보"
+    help_words_chars   "단어: %-8d  문자: %d"
+    help_shortcuts     "Writhdeck - 키보드 바로가기"
+    help_close         "아무 키나 눌러서 닫기"
+    help_k_save        "저장"
+    help_k_undo        "실행 취소"
+    help_k_redo        "다시 실행"
+    help_k_close       "닫기 / Esc"
+    help_k_sel_all     "모두 선택"
+    help_k_sticky      "선택 토글"
+    help_k_copy        "복사"
+    help_k_find        "찾기"
+    help_k_cut         "잘라내기"
+    help_k_replace     "바꾸기"
+    help_k_paste       "붙여넣기"
+    help_k_goto        "줄로 이동"
+    help_k_lnum        "줄 번호"
+    help_k_open        "열기 (브라우저)"
+    help_k_typewriter  "타이프라이터 / 포커스 모드 (토글)"
+    help_k_ctrl_arrows "Ctrl+위/아래  단락  |  Ctrl+좌/우 / Alt+좌/우  단어"
+    help_k_toc         "목차"
+    help_k_help        "이 도움말"
+    help_shift_arrows  "Shift+화살표  선택 확장"
+    help_k_split       "분할 보기 (토글)"
+    help_k_split_focus "분할 보기 - 포커스 순환"
+    br_toc_title       "브라우저 섹션"
+    br_toc_empty       "섹션 없음"
+    br_toc_bar         "위/아래 이동  Enter 이동  esc 취소"
+    dlg_yes            "예"
+    dlg_no             "아니오"
+    dlg_cancel         "취소"
+    goto_title         "줄로 이동"
+    goto_prompt        "줄:"
+    profile_config_title   "설정"
+    profile_config_default_profile "기본 프로필:"
+    profile_config_default_scheme  "기본 색상 체계:"
+    profile_config_language        "언어:"
+    profile_config_edit_profile "프로필 편집:"
+    profile_config_font    "글꼴 가족:"
+    profile_config_size    "글꼴 크기:"
+    profile_config_margin_w "여백 너비:"
+    profile_config_margin_h "여백 높이:"
+    profile_config_apply   "적용"
+    profile_config_cancel  "취소"
+    br_key_help            "도움말"
+    br_key_new             "새로운"
+    br_key_scratchpad      "메모장"
+    br_key_fav             "즐겨찾기"
+    br_key_stats           "통계"
+    br_key_backup          "백업"
+    br_key_delete          "삭제"
+    br_key_rename          "이름변경"
+    br_key_info            "정보"
+    br_key_words           "단어"
+    br_key_config          "설정"
+    br_key_reload          "다시로드"
+    br_key_quit            "종료"
+    br_help_new_file       "새 파일"
+    br_help_scratchpad     "메모장 (임시, 디스크 파일 없음)"
+    br_help_toggle_fav     "즐겨찾기 토글"
+    br_help_writing_stats  "작문 통계"
+    br_help_backup         "백업 (타임스탬프가 있는 backups/에 복사)"
+    br_help_show_path      "전체 경로 표시"
+    br_help_word_occ       "단어 발생"
+    br_help_delete_file    "삭제"
+    br_help_rename_file    "이름 변경"
+    br_help_font_settings  "프로필별 글꼴 설정"
+    br_help_reload         "다시 로드"
+    br_help_browser_sections "브라우저 섹션"
+    br_help_fullscreen_br  "전체 화면"
+    br_help_open_file_br   "파일 열기"
+    br_help_help           "도움말"
+    br_help_quit_app       "종료"
+    br_key_sections        "섹션"
+    help_writhdeck         "WRITHDECK"
+    help_version           "버전"
+    help_date_time_sect    "날짜 및 시간"
+    help_current_time      "현재 시간"
+    help_date              "날짜"
+    help_editor_sect       "편집기"
+    help_save_as           "다른 이름으로 저장"
+    help_return_browser    "브라우저로 돌아가기"
+    help_find_next         "찾기 (Enter: 다음  Shift+Enter: 이전)"
+    help_find_replace      "찾기 및 바꾸기 (Enter: 하나 바꾸기  Ctrl+Enter: 모두)"
+    help_para_word         "단락 / 단어 탐색"
+    help_toc_marker        "목차  (%s)"
+    help_browser_sect      "브라우저"
+    help_open              "열기"
+    help_double_click      "Enter / 더블 클릭"
+    help_key_open_text     "열기"
+    help_k_fullscreen      "전체 화면"
+}
+
+dict set ::i18n no {
+    toc_title          "Innholdsfortegnelse"
+    toc_no_headings    "ingen overskrifter funnet"
+    toc_jump_bar       "Skriv inn hopp  esc/ctrl+q avbryt"
+    toc_headings       "%d overskrift(er)"
+    br_no_docs         "Ingen dokumenter ennå. Trykk n for å lage en ny."
+    br_help_gui        "h:hjelp  n:ny  t:notisbok  f:favoritt  s:statistikk  b:sikkerhetskopi  d:slett  r:gi nytt navn  i:info  c:innstillinger  z:last på nytt  %s:avsnitt  q:avslutt"
+    br_help_tui        "h:%s  n:ny  t:notisbok  f:favoritt  s:statistikk  b:sikkerhetskopi  d:slett  r:gi nytt navn  i:info  w:ord  %s:avsnitt  q:avslutt"
+    br_backed_up       "sikkerhetskopi %s -> %s"
+    br_favorites       "Favoritter"
+    br_stats_title     "Skrivstatistikk"
+    br_stats_no_data   "Ingen skrivstatistikk ennå for denne filen."
+    br_stats_today     "I dag"
+    br_stats_total     "Totalt"
+    br_stats_clear     "Slett statistikk"
+    br_stats_clear_confirm "Slette all skrivstatistikk for \"%s\"?"
+    br_fav_added       "[+] lagt til favoritter: %s"
+    br_fav_removed     "[-] fjernet fra favoritter: %s"
+    br_exists          "'%s' eksisterer allerede"
+    br_deleted         "slettet '%s'"
+    br_renamed         "gitt nytt navn -> '%s'"
+    br_delete          "Slette \"%s\"?"
+    br_files           "%d fil(er)"
+    br_recent          "Nylige"
+    ed_saved           "lagret"
+    ed_watch_reload       "\"%s\" ble endret eksternt. Last på nytt?"
+    ed_watch_reload_dirty "\"%s\" ble endret eksternt og du har ulagrede endringer. Last på nytt?"
+    ed_save_before     "Lagre \"%s\" før lukking?"
+    ed_save_before_tui "lagre før lukking? (y/n/c=avbryt)"
+    help_date_time     "Dato og tid"
+    help_cur_time      "Gjeldende tid:  %-12s  Dato: %s"
+    help_file_info     "Filinfo"
+    help_sel_info      "Valginformasjon"
+    help_words_chars   "Ord: %-8d  Tegn: %d"
+    help_shortcuts     "Writhdeck - tastatursnarveier"
+    help_close         "Trykk en tast for å lukke"
+    help_k_save        "Lagre"
+    help_k_undo        "Angre"
+    help_k_redo        "Gjør igjen"
+    help_k_close       "Lukk / Esc"
+    help_k_sel_all     "Velg alt"
+    help_k_sticky      "Veksle valg"
+    help_k_copy        "Kopier"
+    help_k_find        "Finn"
+    help_k_cut         "Klipp ut"
+    help_k_replace     "Erstatt"
+    help_k_paste       "Lim inn"
+    help_k_goto        "Gå til linje"
+    help_k_lnum        "Linjenumre"
+    help_k_open        "Åpne (nettleser)"
+    help_k_typewriter  "Skrivemaskintilstand / fokusmodus (veksle)"
+    help_k_ctrl_arrows "Ctrl+Opp/Ned  Avsnitt  |  Ctrl+Venstre/Høyre / Alt+Bak/Frem  Ord"
+    help_k_toc         "Innholdsfortegnelse"
+    help_k_help        "Denne hjelpen"
+    help_shift_arrows  "Shift+Piler  Utvid valg"
+    help_k_split       "Delvis visning (veksle)"
+    help_k_split_focus "Delvis visning - syklus fokus"
+    br_toc_title       "Nettleseravsnitt"
+    br_toc_empty       "ingen avsnitt"
+    br_toc_bar         "Opp/Ned navigering  Enter hopp  esc avbryt"
+    dlg_yes            "Ja"
+    dlg_no             "Nei"
+    dlg_cancel         "Avbryt"
+    goto_title         "Gå til linje"
+    goto_prompt        "Linje:"
+    profile_config_title   "Innstillinger"
+    profile_config_default_profile "Standardprofil:"
+    profile_config_default_scheme  "Standardfargeplan:"
+    profile_config_language        "Språk:"
+    profile_config_edit_profile "Rediger profil:"
+    profile_config_font    "Skrifttype:"
+    profile_config_size    "Skriftstørrelse:"
+    profile_config_margin_w "Marginebredde:"
+    profile_config_margin_h "Marginehøyde:"
+    profile_config_apply   "Bruk"
+    profile_config_cancel  "Avbryt"
+    br_key_help            "hjelp"
+    br_key_new             "ny"
+    br_key_scratchpad      "notisbok"
+    br_key_fav             "favoritt"
+    br_key_stats           "statistikk"
+    br_key_backup          "sikkerhetskopi"
+    br_key_delete          "slett"
+    br_key_rename          "gi nytt navn"
+    br_key_info            "info"
+    br_key_words           "ord"
+    br_key_config          "innstillinger"
+    br_key_reload          "last på nytt"
+    br_key_quit            "avslutt"
+    br_help_new_file       "Ny fil"
+    br_help_scratchpad     "Notisbok (midlertidig, ingen diskfil)"
+    br_help_toggle_fav     "Veksle favoritt"
+    br_help_writing_stats  "Skrivstatistikk"
+    br_help_backup         "Sikkerhetskopi (kopier til sikkerhetskopi/ med tidsstempel)"
+    br_help_show_path      "Vis fullstendig sti"
+    br_help_word_occ       "Ordforkomster"
+    br_help_delete_file    "Slett"
+    br_help_rename_file    "Gi nytt navn"
+    br_help_font_settings  "Skriftinnstillinger etter profil"
+    br_help_reload         "Last på nytt"
+    br_help_browser_sections "Nettleseravsnitt"
+    br_help_fullscreen_br  "Fullskjerm"
+    br_help_open_file_br   "Åpne fil"
+    br_help_help           "Hjelp"
+    br_help_quit_app       "Avslutt"
+    br_key_sections        "avsnitt"
+    help_writhdeck         "WRITHDECK"
+    help_version           "Versjon"
+    help_date_time_sect    "DATO OG TID"
+    help_current_time      "Gjeldende tid"
+    help_date              "Dato"
+    help_editor_sect       "EDITOR"
+    help_save_as           "Lagre som"
+    help_return_browser    "Tilbake til nettleser"
+    help_find_next         "Finn (Enter: neste  Shift+Enter: forrige)"
+    help_find_replace      "Finn og erstatt (Enter: erstatt en  Ctrl+Enter: alt)"
+    help_para_word         "Avsnitt- / ordnavigering"
+    help_toc_marker        "Innholdsfortegnelse  (%s)"
+    help_browser_sect      "NETTLESER"
+    help_open              "Apne"
+    help_double_click      "Enter / Dobbeltklipp"
+    help_key_open_text     "Apne"
+    help_k_fullscreen      "Fullskjerm"
+}
+
 
 # ===========================================================================
 # common.tcl
@@ -1427,14 +1963,17 @@ pack .br.mid     -fill both  -expand 1
 
 frame .br.bar -bg $bg_bar
 frame .br.bar.left -bg $bg_bar
-label .br.bar.help1 -text "" -bg $bg_bar -fg $fg_bar -font $font_sm -anchor w -padx 2 -pady 1
-label .br.bar.help2 -text "" -bg $bg_bar -fg $fg_bar -font $font_sm -anchor w -padx 2 -pady 1
-pack .br.bar.help1 -in .br.bar.left -side top -fill both -expand 0
-pack .br.bar.help2 -in .br.bar.left -side top -fill both -expand 0
 
-set _line1 ""
-set _line2 ""
-set _idx 0
+text .br.bar.help -height 2 -width 90 -bg $bg_bar -fg $fg_bar -font $font_sm \
+    -borderwidth 0 -highlightthickness 0 -padx 2 -pady 1 -wrap none -state disabled -cursor arrow
+pack .br.bar.help -in .br.bar.left -side top -fill both -expand 0
+
+.br.bar.help tag configure link -foreground $fg_bar
+set _hover_bg [lindex [theme-colors] 6]
+.br.bar.help tag configure link_hover -background $_hover_bg
+
+# Build help bar with clickable shortcuts
+set _shortcuts {}
 foreach {char cmd key} {
     h help-dialog br_key_help
     n br-new br_key_new
@@ -1450,16 +1989,32 @@ foreach {char cmd key} {
     z br-reload br_key_reload
     q exit br_key_quit
 } {
-    if {$_idx < 7} {
-        append _line1 "$char:[t $key]  "
-    } else {
-        append _line2 "$char:[t $key]  "
+    set label "$char:[t $key]"
+    lappend _shortcuts [list $label $cmd]
+}
+lappend _shortcuts [list "$::cfg_lbl_toc:[t br_key_sections]" "toc-dialog"]
+
+# Populate the help bar with clickable links
+.br.bar.help configure -state normal
+.br.bar.help delete 1.0 end
+set _idx 0
+foreach item $_shortcuts {
+    lassign $item label cmd
+    if {$_idx == 7} {
+        .br.bar.help insert end "\n"
     }
+    set start [.br.bar.help index end-1c]
+    .br.bar.help insert end "$label  "
+    set end [.br.bar.help index end-3c]
+    set tag_name "link_$_idx"
+    .br.bar.help tag add $tag_name $start $end
+    .br.bar.help tag bind $tag_name <Enter> [list .br.bar.help tag add link_hover $start $end]
+    .br.bar.help tag bind $tag_name <Leave> [list .br.bar.help tag remove link_hover $start $end]
+    .br.bar.help tag bind $tag_name <Button-1> [list $cmd]
+    .br.bar.help tag bind $tag_name <Motion> [list .br.bar.help configure -cursor hand2]
     incr _idx
 }
-append _line1 " $::cfg_lbl_toc:[t br_key_sections]"
-.br.bar.help1 configure -text $_line1
-.br.bar.help2 configure -text $_line2
+.br.bar.help configure -state disabled
 
 label .br.bar.cnt -textvariable ::br_status \
     -bg $bg_bar -fg $fg_bar -font $font_sm -anchor e -padx 8 -pady $bar_pady
@@ -2522,11 +3077,12 @@ proc apply-theme {} {
     set ::fg_bar $fg_bar; set ::bg_sel $bg_sel
     # browser
     foreach w {.br .br.mid} { catch { $w configure -bg $bg } }
-    foreach w {.br.title .br.bar.help1 .br.bar.help2 .br.bar.cnt} {
+    foreach w {.br.title .br.bar.help .br.bar.cnt} {
         catch { $w configure -bg $bg_bar -fg $fg_bar }
     }
     catch { .br.title configure -bg $bg -fg $fg }
     catch { .br.bar configure -bg $bg_bar }
+    catch { .br.bar.help tag configure link_hover -background $c_comment }
     catch { .br.mid.lst configure -bg $bg -fg $fg \
                 -selectbackground $bg_sel -selectforeground $fg }
     catch { .br.mid.sb configure -bg $bg_bar -troughcolor $bg }
@@ -3154,7 +3710,7 @@ proc help-dialog {} {
     set w .help
     catch {destroy $w}
     toplevel $w
-    wm title $w "Help - Writhdeck"
+    wm title $w "[t help_k_help] - Writhdeck"
     wm resizable $w 0 0
     wm transient $w .
 
@@ -3162,12 +3718,12 @@ proc help-dialog {} {
     set sections {}
     set height 23
     set _ts [clock seconds]
-    lappend sections "WRITHDECK" [list \
-        "Version"       $::version \
+    lappend sections [t help_writhdeck] [list \
+        [t help_version]       $::version \
     ]
-    lappend sections "DATE & TIME" [list \
-        "Current time"  [clock format $_ts -format "%H:%M:%S"] \
-        "Date"          [clock format $_ts -format "%Y-%m-%d"] \
+    lappend sections [t help_date_time_sect] [list \
+        [t help_current_time]  [clock format $_ts -format "%H:%M:%S"] \
+        [t help_date]          [clock format $_ts -format "%Y-%m-%d"] \
     ]
     incr height 5
     set _sel_txt ""
@@ -3196,26 +3752,26 @@ proc help-dialog {} {
         incr height 5
     }
     lappend sections \
-        "EDITOR" [list \
-            [key-label $::cfg_key_save]         "Save" \
-            [key-label $::cfg_key_save_as]      "Save as" \
-            [key-label $::cfg_key_close]          "Return to browser" \
-            [key-label $::cfg_key_find]         "Find (Enter: next  Shift+Enter: prev)" \
-            [key-label $::cfg_key_replace]      "Find & Replace (Enter: replace one  Ctrl+Enter: all)" \
-            [key-label $::cfg_key_open]         "Open file" \
-            [key-label $::cfg_key_goto]         "Go to line" \
-            [key-label $::cfg_key_undo]         "Undo" \
-            [key-label $::cfg_key_redo]         "Redo" \
-            [key-label $::cfg_key_typewriter]   "Typewriter / focus mode (toggle)" \
-            "Ctrl+Up/Dn / Ctrl+Lt/Rt"           "Paragraph / word navigation" \
-            [key-label $::cfg_key_toc]          "Table of contents  (${hm}title${hm})" \
-            [key-label $::cfg_key_fullscreen]   "Fullscreen" \
-            [key-label $::cfg_key_split]        "Split view (toggle)" \
-            [key-label $::cfg_key_split_focus]  "Split view - cycle focus" \
-            [key-label $::cfg_key_help]         "Help" \
+        [t help_editor_sect] [list \
+            [key-label $::cfg_key_save]         [t help_k_save] \
+            [key-label $::cfg_key_save_as]      [t help_save_as] \
+            [key-label $::cfg_key_close]        [t help_return_browser] \
+            [key-label $::cfg_key_find]         [t help_find_next] \
+            [key-label $::cfg_key_replace]      [t help_find_replace] \
+            [key-label $::cfg_key_open]         [t help_k_open] \
+            [key-label $::cfg_key_goto]         [t help_k_goto] \
+            [key-label $::cfg_key_undo]         [t help_k_undo] \
+            [key-label $::cfg_key_redo]         [t help_k_redo] \
+            [key-label $::cfg_key_typewriter]   [t help_k_typewriter] \
+            "Ctrl+Up/Dn / Ctrl+Lt/Rt"           [t help_para_word] \
+            [key-label $::cfg_key_toc]          [format [t help_toc_marker] "${hm}title${hm}"] \
+            [key-label $::cfg_key_fullscreen]   [t help_k_fullscreen] \
+            [key-label $::cfg_key_split]        [t help_k_split] \
+            [key-label $::cfg_key_split_focus]  [t help_k_split_focus] \
+            [key-label $::cfg_key_help]         [t help_k_help] \
         ] \
-        "BROWSER" [list \
-            "Enter / double-click"               "Open" \
+        [t help_browser_sect] [list \
+            [t help_double_click]               [t help_open] \
             "n"                                 [t br_help_new_file] \
             "t"                                 [t br_help_scratchpad] \
             "f"                                 [t br_help_toggle_fav] \
@@ -3253,7 +3809,7 @@ proc help-dialog {} {
     }
     $w.t configure -state disabled
 
-    button $w.ok -text "Close" -command [list destroy $w]
+    button $w.ok -text [t dlg_cancel] -command [list destroy $w]
     pack $w.t  -fill both -expand 1
     catch {
         label $w.logo -image [image create photo -data $::_icon_b64] \
@@ -4308,7 +4864,7 @@ proc tui-browser {} {
             while {$row < $rows-2} { tui-move $row 0; puts -nonewline "\033\[K"; incr row }
         }
         set plu [expr {$fcount != 1 ? "s" : ""}]
-        if {$::cfg_help_bar ne ""} { tui-help [expr {$rows-2}] [format [t br_help_tui] $::cfg_lbl_help $::cfg_lbl_toc] $cols }
+        if {$::cfg_help_bar ne ""} { tui-help [expr {$rows-2}] [format [t br_help_tui] [t br_key_help] $::cfg_lbl_toc] $cols }
         set clk [expr {[status-zone-of clock] ne "" ? "  [clock format [clock seconds] -format {%H:%M}]" : ""}]
         if {$msg ne ""} { tui-bar [expr {$rows-1}] " $msg" "${clk} " $cols; set msg ""
         } else { tui-bar [expr {$rows-1}] " [string map [list $::HOME_DIR ~] $::DOCS_DIR_DEFAULT]" \

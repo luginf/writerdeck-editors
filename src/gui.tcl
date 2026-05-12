@@ -37,14 +37,17 @@ pack .br.mid     -fill both  -expand 1
 
 frame .br.bar -bg $bg_bar
 frame .br.bar.left -bg $bg_bar
-label .br.bar.help1 -text "" -bg $bg_bar -fg $fg_bar -font $font_sm -anchor w -padx 2 -pady 1
-label .br.bar.help2 -text "" -bg $bg_bar -fg $fg_bar -font $font_sm -anchor w -padx 2 -pady 1
-pack .br.bar.help1 -in .br.bar.left -side top -fill both -expand 0
-pack .br.bar.help2 -in .br.bar.left -side top -fill both -expand 0
 
-set _line1 ""
-set _line2 ""
-set _idx 0
+text .br.bar.help -height 2 -width 90 -bg $bg_bar -fg $fg_bar -font $font_sm \
+    -borderwidth 0 -highlightthickness 0 -padx 2 -pady 1 -wrap none -state disabled -cursor arrow
+pack .br.bar.help -in .br.bar.left -side top -fill both -expand 0
+
+.br.bar.help tag configure link -foreground $fg_bar
+set _hover_bg [lindex [theme-colors] 6]
+.br.bar.help tag configure link_hover -background $_hover_bg
+
+# Build help bar with clickable shortcuts
+set _shortcuts {}
 foreach {char cmd key} {
     h help-dialog br_key_help
     n br-new br_key_new
@@ -60,16 +63,32 @@ foreach {char cmd key} {
     z br-reload br_key_reload
     q exit br_key_quit
 } {
-    if {$_idx < 7} {
-        append _line1 "$char:[t $key]  "
-    } else {
-        append _line2 "$char:[t $key]  "
+    set label "$char:[t $key]"
+    lappend _shortcuts [list $label $cmd]
+}
+lappend _shortcuts [list "$::cfg_lbl_toc:[t br_key_sections]" "toc-dialog"]
+
+# Populate the help bar with clickable links
+.br.bar.help configure -state normal
+.br.bar.help delete 1.0 end
+set _idx 0
+foreach item $_shortcuts {
+    lassign $item label cmd
+    if {$_idx == 7} {
+        .br.bar.help insert end "\n"
     }
+    set start [.br.bar.help index end-1c]
+    .br.bar.help insert end "$label  "
+    set end [.br.bar.help index end-3c]
+    set tag_name "link_$_idx"
+    .br.bar.help tag add $tag_name $start $end
+    .br.bar.help tag bind $tag_name <Enter> [list .br.bar.help tag add link_hover $start $end]
+    .br.bar.help tag bind $tag_name <Leave> [list .br.bar.help tag remove link_hover $start $end]
+    .br.bar.help tag bind $tag_name <Button-1> [list $cmd]
+    .br.bar.help tag bind $tag_name <Motion> [list .br.bar.help configure -cursor hand2]
     incr _idx
 }
-append _line1 " $::cfg_lbl_toc:[t br_key_sections]"
-.br.bar.help1 configure -text $_line1
-.br.bar.help2 configure -text $_line2
+.br.bar.help configure -state disabled
 
 label .br.bar.cnt -textvariable ::br_status \
     -bg $bg_bar -fg $fg_bar -font $font_sm -anchor e -padx 8 -pady $bar_pady
@@ -1132,11 +1151,12 @@ proc apply-theme {} {
     set ::fg_bar $fg_bar; set ::bg_sel $bg_sel
     # browser
     foreach w {.br .br.mid} { catch { $w configure -bg $bg } }
-    foreach w {.br.title .br.bar.help1 .br.bar.help2 .br.bar.cnt} {
+    foreach w {.br.title .br.bar.help .br.bar.cnt} {
         catch { $w configure -bg $bg_bar -fg $fg_bar }
     }
     catch { .br.title configure -bg $bg -fg $fg }
     catch { .br.bar configure -bg $bg_bar }
+    catch { .br.bar.help tag configure link_hover -background $c_comment }
     catch { .br.mid.lst configure -bg $bg -fg $fg \
                 -selectbackground $bg_sel -selectforeground $fg }
     catch { .br.mid.sb configure -bg $bg_bar -troughcolor $bg }
@@ -1764,7 +1784,7 @@ proc help-dialog {} {
     set w .help
     catch {destroy $w}
     toplevel $w
-    wm title $w "Help - Writhdeck"
+    wm title $w "[t help_k_help] - Writhdeck"
     wm resizable $w 0 0
     wm transient $w .
 
@@ -1772,12 +1792,12 @@ proc help-dialog {} {
     set sections {}
     set height 23
     set _ts [clock seconds]
-    lappend sections "WRITHDECK" [list \
-        "Version"       $::version \
+    lappend sections [t help_writhdeck] [list \
+        [t help_version]       $::version \
     ]
-    lappend sections "DATE & TIME" [list \
-        "Current time"  [clock format $_ts -format "%H:%M:%S"] \
-        "Date"          [clock format $_ts -format "%Y-%m-%d"] \
+    lappend sections [t help_date_time_sect] [list \
+        [t help_current_time]  [clock format $_ts -format "%H:%M:%S"] \
+        [t help_date]          [clock format $_ts -format "%Y-%m-%d"] \
     ]
     incr height 5
     set _sel_txt ""
@@ -1806,26 +1826,26 @@ proc help-dialog {} {
         incr height 5
     }
     lappend sections \
-        "EDITOR" [list \
-            [key-label $::cfg_key_save]         "Save" \
-            [key-label $::cfg_key_save_as]      "Save as" \
-            [key-label $::cfg_key_close]          "Return to browser" \
-            [key-label $::cfg_key_find]         "Find (Enter: next  Shift+Enter: prev)" \
-            [key-label $::cfg_key_replace]      "Find & Replace (Enter: replace one  Ctrl+Enter: all)" \
-            [key-label $::cfg_key_open]         "Open file" \
-            [key-label $::cfg_key_goto]         "Go to line" \
-            [key-label $::cfg_key_undo]         "Undo" \
-            [key-label $::cfg_key_redo]         "Redo" \
-            [key-label $::cfg_key_typewriter]   "Typewriter / focus mode (toggle)" \
-            "Ctrl+Up/Dn / Ctrl+Lt/Rt"           "Paragraph / word navigation" \
-            [key-label $::cfg_key_toc]          "Table of contents  (${hm}title${hm})" \
-            [key-label $::cfg_key_fullscreen]   "Fullscreen" \
-            [key-label $::cfg_key_split]        "Split view (toggle)" \
-            [key-label $::cfg_key_split_focus]  "Split view - cycle focus" \
-            [key-label $::cfg_key_help]         "Help" \
+        [t help_editor_sect] [list \
+            [key-label $::cfg_key_save]         [t help_k_save] \
+            [key-label $::cfg_key_save_as]      [t help_save_as] \
+            [key-label $::cfg_key_close]        [t help_return_browser] \
+            [key-label $::cfg_key_find]         [t help_find_next] \
+            [key-label $::cfg_key_replace]      [t help_find_replace] \
+            [key-label $::cfg_key_open]         [t help_k_open] \
+            [key-label $::cfg_key_goto]         [t help_k_goto] \
+            [key-label $::cfg_key_undo]         [t help_k_undo] \
+            [key-label $::cfg_key_redo]         [t help_k_redo] \
+            [key-label $::cfg_key_typewriter]   [t help_k_typewriter] \
+            "Ctrl+Up/Dn / Ctrl+Lt/Rt"           [t help_para_word] \
+            [key-label $::cfg_key_toc]          [format [t help_toc_marker] "${hm}title${hm}"] \
+            [key-label $::cfg_key_fullscreen]   [t help_k_fullscreen] \
+            [key-label $::cfg_key_split]        [t help_k_split] \
+            [key-label $::cfg_key_split_focus]  [t help_k_split_focus] \
+            [key-label $::cfg_key_help]         [t help_k_help] \
         ] \
-        "BROWSER" [list \
-            "Enter / double-click"               "Open" \
+        [t help_browser_sect] [list \
+            [t help_double_click]               [t help_open] \
             "n"                                 [t br_help_new_file] \
             "t"                                 [t br_help_scratchpad] \
             "f"                                 [t br_help_toggle_fav] \
@@ -1863,7 +1883,7 @@ proc help-dialog {} {
     }
     $w.t configure -state disabled
 
-    button $w.ok -text "Close" -command [list destroy $w]
+    button $w.ok -text [t dlg_cancel] -command [list destroy $w]
     pack $w.t  -fill both -expand 1
     catch {
         label $w.logo -image [image create photo -data $::_icon_b64] \

@@ -737,7 +737,7 @@ proc tui-browser {} {
             while {$row < $rows-2} { tui-move $row 0; puts -nonewline "\033\[K"; incr row }
         }
         set plu [expr {$fcount != 1 ? "s" : ""}]
-        if {$::cfg_help_bar ne ""} { tui-help [expr {$rows-2}] [format [t br_help_tui] $::cfg_lbl_help $::cfg_lbl_toc] $cols }
+        if {$::cfg_help_bar ne ""} { tui-help [expr {$rows-2}] [format [t br_help_tui] [t br_key_help] $::cfg_lbl_toc] $cols }
         set clk [expr {[status-zone-of clock] ne "" ? "  [clock format [clock seconds] -format {%H:%M}]" : ""}]
         if {$msg ne ""} { tui-bar [expr {$rows-1}] " $msg" "${clk} " $cols; set msg ""
         } else { tui-bar [expr {$rows-1}] " [string map [list $::HOME_DIR ~] $::DOCS_DIR_DEFAULT]" \
