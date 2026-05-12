@@ -1625,22 +1625,14 @@ proc tui-editor {filepath} {
 proc tui-word-occurrences {fpath rows cols} {
     if {![file exists $fpath]} return
 
-    set sorted [get-word-occurrences $fpath]
-    if {[llength $sorted] == 0} return
+    set word_data [get-word-occurrences $fpath]
+    if {[llength $word_data] == 0} return
 
     catch {
-        set content [chan read [open $fpath r]]
-        set counts [dict create]
-        foreach word [regexp -all -inline {\w+} [string tolower $content]] {
-            if {[string length $word] > 2} {
-                dict incr counts $word
-            }
-        }
-
         set all_lines [list [list "  Word Occurrences" 1] [list "" 0] \
             [list [format "  %-30s %s" "Word" "Count"] 1]]
-        foreach word $sorted {
-            set count [dict get $counts $word]
+        foreach pair $word_data {
+            lassign $pair word count
             lappend all_lines [list [format "  %-30s %6d" $word $count] 0]
         }
 

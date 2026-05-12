@@ -294,7 +294,7 @@ Activated via `--no-gui` / `--tui` / `--ng`, or when no windowing system is avai
 | Ctrl+C                                  | Copy (via xclip / xsel / wl-copy)                            |
 | Ctrl+X                                  | Cut                                                          |
 | Ctrl+V                                  | Paste (multi-line supported)                                 |
-| Tab                                     | Insert 4 spaces                                              |
+| Tab                                     | Insert literal tab character                                 |
 
 ### Shortcuts — Browser
 

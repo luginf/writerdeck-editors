@@ -2,9 +2,9 @@
 
 ## Version
 
-Format : `vYYYYMMDD` (ex. `v20260511`). Définie ligne ~32 :
+Format : `vYYYYMMDD` (ex. `v20260512`). Définie ligne ~32 :
 ```tcl
-set ::version "v20260511"
+set ::version "v20260513"
 ```
 Affichée dans l'aide GUI (section DATE & TIME) et l'aide TUI (en-tête en inversé + ligne dessous).
 
@@ -260,6 +260,7 @@ Voir `src/i18n/README.md` pour le guide complet (format, ajout de langue, format
 - **Titre du browser** : Affiche "Writhdeck Browser" au lieu de "Writhdeck"
 - **Alias `--cli`** : `--cli` est un alias de `--tui` pour le mode terminal
 - **Makefile robuste** : Détecte les changements des sources et régénère même si les fichiers existent
+- **Correction `get-word-occurrences`** : retourne maintenant des paires `{mot count}` (au lieu de simples mots). Handle fichier correctement fermé. Les appelants (`word-occurrences-dialog`, `tui-word-occurrences`) n'ouvrent plus le fichier une deuxième fois. Itération : `foreach pair $word_data { lassign $pair word count }`
 
 ## Déjà implémenté (à ne pas re-suggérer)
 

@@ -754,8 +754,6 @@ proc ini-save {} {
         }
     }
     close $fh
-    flush stdout
-    flush stderr
 }
 
 proc schemes-init {} {
@@ -847,12 +845,6 @@ proc keys-init {} {
     set ::cfg_key_error [join $conflicts "  "]
 }
 keys-init
-
-if {$::cfg_docs_dir ne ""} {
-    set ::DOCS_DIR [file normalize [tilde-expand $::cfg_docs_dir]]
-    if {$::DOCS_DIR eq $::DOCS_DIR_DEFAULT} { set ::DOCS_DIR $::DOCS_DIR_DEFAULT }
-    file mkdir $::DOCS_DIR
-}
 
 # --- i18n --------------------------------------------------------------------
 set ::i18n [dict create]
@@ -1205,6 +1197,13 @@ dict set ::i18n fr {
 schemes-init
 ini-load
 
+# Apply docs_dir from config (must be after ini-load)
+if {$::cfg_docs_dir ne ""} {
+    set ::DOCS_DIR [file normalize [tilde-expand $::cfg_docs_dir]]
+    if {$::DOCS_DIR eq $::DOCS_DIR_DEFAULT} { set ::DOCS_DIR $::DOCS_DIR_DEFAULT }
+    file mkdir $::DOCS_DIR
+}
+
 # Initialize fonts and theme colors (must be after ini-load to use selected scheme/profile)
 set font    [list $::cfg_font_family $::cfg_font_size]
 set bar_pady [expr {$::cfg_bar_height > 0 \
@@ -1435,9 +1434,10 @@ proc _cmp_word_count {counts a b} {
 proc get-word-occurrences {fpath} {
     set counts [dict create]
     if {[catch {
-        set content [chan read [open $fpath r]]
-        set words [regexp -all -inline {\w+} [string tolower $content]]
-        foreach word $words {
+        set fh [open $fpath r]
+        set content [read $fh]
+        close $fh
+        foreach word [regexp -all -inline {\w+} [string tolower $content]] {
             if {[string length $word] > 2} {
                 dict incr counts $word
             }
@@ -1445,7 +1445,11 @@ proc get-word-occurrences {fpath} {
     }]} {
         return [list]
     }
-    return [lsort -command [list _cmp_word_count $counts] [dict keys $counts]]
+    set result {}
+    foreach word [lsort -command [list _cmp_word_count $counts] [dict keys $counts]] {
+        lappend result [list $word [dict get $counts $word]]
+    }
+    return $result
 }
 
 
@@ -3079,22 +3083,14 @@ proc tui-editor {filepath} {
 proc tui-word-occurrences {fpath rows cols} {
     if {![file exists $fpath]} return
 
-    set sorted [get-word-occurrences $fpath]
-    if {[llength $sorted] == 0} return
+    set word_data [get-word-occurrences $fpath]
+    if {[llength $word_data] == 0} return
 
     catch {
-        set content [chan read [open $fpath r]]
-        set counts [dict create]
-        foreach word [regexp -all -inline {\w+} [string tolower $content]] {
-            if {[string length $word] > 2} {
-                dict incr counts $word
-            }
-        }
-
         set all_lines [list [list "  Word Occurrences" 1] [list "" 0] \
             [list [format "  %-30s %s" "Word" "Count"] 1]]
-        foreach word $sorted {
-            set count [dict get $counts $word]
+        foreach pair $word_data {
+            lassign $pair word count
             lappend all_lines [list [format "  %-30s %6d" $word $count] 0]
         }
 

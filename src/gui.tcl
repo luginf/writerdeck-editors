@@ -376,27 +376,19 @@ proc word-occurrences-dialog {fpath} {
     wm geometry $w 400x500
     wm transient $w .
 
-    set sorted [get-word-occurrences $fpath]
-    if {[llength $sorted] == 0} {
+    set word_data [get-word-occurrences $fpath]
+    if {[llength $word_data] == 0} {
         info-dialog "No words to display"
         return
     }
 
     catch {
-        set content [chan read [open $fpath r]]
-        set counts [dict create]
-        foreach word [regexp -all -inline {\w+} [string tolower $content]] {
-            if {[string length $word] > 2} {
-                dict incr counts $word
-            }
-        }
-
         frame $w.f
         listbox $w.f.lb -font [list [lindex $::font 0] 9] -yscrollcommand [list $w.f.sb set] -width 50 -height 20
         scrollbar $w.f.sb -orient vertical -command [list $w.f.lb yview]
 
-        foreach word $sorted {
-            set count [dict get $counts $word]
+        foreach pair $word_data {
+            lassign $pair word count
             $w.f.lb insert end [format "%-30s %6d" $word $count]
         }
 

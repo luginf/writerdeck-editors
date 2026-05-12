@@ -521,8 +521,6 @@ proc ini-save {} {
         }
     }
     close $fh
-    flush stdout
-    flush stderr
 }
 
 proc schemes-init {} {
@@ -614,12 +612,6 @@ proc keys-init {} {
     set ::cfg_key_error [join $conflicts "  "]
 }
 keys-init
-
-if {$::cfg_docs_dir ne ""} {
-    set ::DOCS_DIR [file normalize [tilde-expand $::cfg_docs_dir]]
-    if {$::DOCS_DIR eq $::DOCS_DIR_DEFAULT} { set ::DOCS_DIR $::DOCS_DIR_DEFAULT }
-    file mkdir $::DOCS_DIR
-}
 
 # --- i18n --------------------------------------------------------------------
 set ::i18n [dict create]

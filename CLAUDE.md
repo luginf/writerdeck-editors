@@ -25,9 +25,9 @@ make test-cli         # Test CLI build
 
 ## Version
 
-Format `vYYYYMMDD` (e.g. `v20260508`), defined near line 32:
+Format `vYYYYMMDD` (e.g. `v20260512`), defined near line 32:
 ```tcl
-set ::version "v20260509"
+set ::version "v20260513"
 ```
 Update it on every functional change.
 
@@ -63,7 +63,9 @@ These markers help navigate the ~5000-line file during development.
 
 **`tilde-expand` before `file normalize`** — Tcl 9 no longer expands `~` in `file normalize`. Always call `tilde-expand $path` first when the path comes from user input (config file, prompts). The proc is defined after `::HOME_DIR` near line 110.
 
-**Procs shared between GUI and TUI must be defined outside the `if {!$::no_gui}` block.** Currently outside: all `state-*`, `daily-*`, `recent-*`, `build-extra-entries`, `toggle-favorite`, `do-backup`.
+**Procs shared between GUI and TUI must be defined outside the `if {!$::no_gui}` block.** Currently outside: all `state-*`, `daily-*`, `recent-*`, `build-extra-entries`, `toggle-favorite`, `do-backup`, `get-word-occurrences`.
+
+**`get-word-occurrences {fpath}`** — returns a list of `{word count}` pairs sorted by count descending. Opens, reads, and closes the file itself. Callers iterate with `foreach pair $word_data { lassign $pair word count }` — do not re-read the file.
 
 **i18n — always add both languages.** Any new string key must appear in both `en {}` and `fr {}` blocks of `::i18n`. Use `proc t {key args}` to retrieve.
 
