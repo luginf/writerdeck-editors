@@ -7,12 +7,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```sh
 wish writhdeck.tcl                     # GUI (Tk required)
 wish writhdeck.tcl file.txt            # GUI, open file directly
-tclsh writhdeck.tcl --no-gui           # TUI
-tclsh writhdeck.tcl --no-gui file.txt  # TUI, open file directly
-./writhdeck.tcl                        # polyglot sh/Tcl bootstrap
+tclsh writhdeck.tcl --tui              # TUI (--cli is an alias)
+tclsh writhdeck.tcl --cli file.txt     # TUI, open file directly
+./writhdeck.tcl --tui                  # polyglot sh/Tcl bootstrap, TUI mode
 ```
 
-No build step. The entire application is `writhdeck.tcl` (single file, ~4700 lines). There are no tests, no dependencies beyond Tcl/Tk 8.6+.
+Build with `make` to generate `writhdeck.tcl` and `writhdeck-cli.tcl` from source modules in `src/`. Both generated files are executable and tracked in git. There are no tests, no dependencies beyond Tcl/Tk 8.6+.
 
 ## Version
 
@@ -130,11 +130,17 @@ Section order: `DOCS_DIR_DEFAULT` → `DOCS_DIR` (if custom) → Favorites → R
 
 **`open-file-dialog`** — uses `[file dirname $::filename]` as `initialdir` when a file is open, otherwise `DOCS_DIR_DEFAULT`.
 
+## Editor behavior
+
+**Tab key** — inserts a literal tab character (`\t`), not spaces. Both GUI and TUI preserve tabs in files.
+
+**Reload (z key)** — closes current editor/scratchpad and returns to browser. Always relaunches the program without arguments, even if a file was open.
+
 ## Known limitations
 
 - No emoji support in GUI (Tk 8.6 color font limitation)
 - TUI mode blocked on Windows (`stty` absent)
-- No no-wrap mode and no tab mode (not planned)
+- No no-wrap mode (not planned)
 - Split view GUI only (TUI adaptation not planned yet)
 - `font_weight` not exposed in INI (removed, unreliable across fonts)
 

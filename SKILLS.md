@@ -192,6 +192,15 @@ Les deux fichiers générés sont exécutables, trackés dans git, et ont des ma
 - **Presse-papiers interne** : historique des N derniers copier-coller
 - **Statistiques de session** : temps d'écriture, mots ajoutés depuis l'ouverture 
 
+## Récemment implémenté
+
+- **Vraies tabulations** : Tab insère `\t` au lieu de 4 espaces (GUI et TUI)
+- **Reload retourne au browser** : `br-reload` (touche `z`) relance sans arguments, revenant toujours au browser
+- **Titre du browser** : Affiche "Writhdeck Browser" au lieu de "Writhdeck"
+- **Alias `--cli`** : `--cli` est un alias de `--tui` pour le mode terminal
+- **Makefile robuste** : Détecte les changements des sources et régénère même si les fichiers existent
+
 ## Déjà implémenté (à ne pas re-suggérer)
 
 - **Typewriter scrolling** : `typewriter-center`, `typewriter-tick`, mode Hemingway (`Ctrl+T`)
+- **Dialogue config profils** : Accès complet aux paramètres de police par profil (famille, taille, marges), sélection du profil par défaut, sélection du scheme de couleurs, preview en temps réel

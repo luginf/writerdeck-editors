@@ -5,9 +5,9 @@
 
 [🇬🇧](README.md) — [📖 Manuel](writhdeck_MANUAL.md)
 
-WrithDeck est un éditeur de texte sans distraction conçu pour les auteurs utilisant un writerdeck dédié — prototype fait maison ou ordinateur configuré spécifiquement pour l'écriture. Il fonctionne comme une application graphique épurée ou directement dans un terminal/TTY, le tout depuis un seul fichier sans installation.
+WrithDeck est un éditeur de texte sans distraction conçu pour les auteurs utilisant un writerdeck dédié — prototype fait maison ou ordinateur configuré spécifiquement pour l'écriture. Il fonctionne comme une application graphique (GUI) ou directement dans un terminal/TTY (TUI), le tout depuis un seul fichier exécutable sans installation.
 
-Coloration syntaxique inline, navigateur de fichiers, vue fractionnée, table des matières, interface entièrement thémable — environ 4 700 lignes de Tcl/Tk.
+Coloration syntaxique inline, navigateur de fichiers, vue fractionnée, table des matières, interface entièrement thémable — environ 5 000 lignes de Tcl/Tk, générées à partir de modules source.
 
 Que vous écriviez sur un Raspberry Pi Zero avec un écran E-ink, sur une tablette Android, en SSH, ou sur votre bureau, WrithDeck reste léger et vous laisse vous concentrer sur votre texte.
 
@@ -29,11 +29,12 @@ Tcl/Tk doit être installé sur votre système :
 ```sh
 wish writhdeck.tcl                     # GUI, navigateur de fichiers
 wish writhdeck.tcl file.txt            # GUI, ouvrir un fichier directement
-tclsh writhdeck.tcl --no-gui           # TUI, navigateur de fichiers
-tclsh writhdeck.tcl --no-gui file.txt  # TUI, ouvrir un fichier directement
+tclsh writhdeck.tcl --tui              # TUI, navigateur de fichiers (--no-gui, --cli aussi acceptés)
+tclsh writhdeck.tcl --cli file.txt     # TUI, ouvrir un fichier directement
+./writhdeck.tcl --tui                  # Exécution directe, mode TUI
 ```
 
-Vous pouvez aussi le lancer avec `./writhdeck.tcl` ou le copier dans votre PATH (par exemple `/usr/local/bin/`) pour un accès direct depuis n'importe où.
+Vous pouvez aussi copier `writhdeck.tcl` ou `writhdeck-cli.tcl` dans votre PATH (par exemple `/usr/local/bin/`) pour un accès direct depuis n'importe où. La version `writhdeck-cli.tcl` est TUI uniquement et ne nécessite pas Tk.
 
 📖 Voir le [manuel](writhdeck_MANUAL.md) pour la configuration, les raccourcis clavier et toutes les fonctionnalités.
 

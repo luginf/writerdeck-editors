@@ -5,9 +5,9 @@
 
 [🇫🇷](README.fr.md) — [📖 Manual](writhdeck_MANUAL.md)
  
-WrithDeck is a distraction-free text editor designed for writers using a dedicated writerdeck — a DIY prototype or a computer configured specifically for writing. It runs as a graphical application or directly in a terminal/TTY, all from a single file with no installation required.
+WrithDeck is a distraction-free text editor designed for writers using a dedicated writerdeck — a DIY prototype or a computer configured specifically for writing. It runs as a graphical application (GUI) or directly in a terminal/TTY (TUI), all from a single executable file with no installation required.
 
-Inline syntax highlighting, file browser, split view, table of contents, fully themeable interface — around 4,700 lines of Tcl/Tk.
+Inline syntax highlighting, file browser, split view, table of contents, fully themeable interface — around 5,000 lines of Tcl/Tk, generated from modular source files.
 
 Whether you're writing on a Raspberry Pi Zero with an E-ink screen, on an Android tablet, over SSH, or on your desktop, WrithDeck stays lightweight and lets you focus on your text.
 
@@ -29,11 +29,12 @@ Requires Tcl/Tk on your system:
 ```sh
 wish writhdeck.tcl                     # GUI, file browser
 wish writhdeck.tcl file.txt            # GUI, open file directly
-tclsh writhdeck.tcl --no-gui           # TUI, file browser
-tclsh writhdeck.tcl --no-gui file.txt  # TUI, open file directly
+tclsh writhdeck.tcl --tui              # TUI, file browser (--no-gui, --cli also work)
+tclsh writhdeck.tcl --cli file.txt     # TUI, open file directly
+./writhdeck.tcl --tui                  # Direct execution, TUI mode
 ```
 
-You can also run it directly with `./writhdeck.tcl` or copy it to your PATH (e.g. `/usr/local/bin/`) for direct access from anywhere.
+You can also copy `writhdeck.tcl` or `writhdeck-cli.tcl` to your PATH (e.g. `/usr/local/bin/`) for direct access from anywhere. The `writhdeck-cli.tcl` version is TUI-only and doesn't require Tk.
 
 📖 See the [manual](writhdeck_MANUAL.md) for configuration, keyboard shortcuts, and all features.
 
