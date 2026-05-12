@@ -202,3 +202,25 @@ proc toggle-favorite {path} {
     state-save
 }
 
+proc _cmp_word_count {counts a b} {
+    set cmp [expr {[dict get $counts $b] - [dict get $counts $a]}]
+    if {$cmp != 0} {return $cmp}
+    return [string compare $a $b]
+}
+
+proc get-word-occurrences {fpath} {
+    set counts [dict create]
+    if {[catch {
+        set content [chan read [open $fpath r]]
+        set words [regexp -all -inline {\w+} [string tolower $content]]
+        foreach word $words {
+            if {[string length $word] > 2} {
+                dict incr counts $word
+            }
+        }
+    }]} {
+        return [list]
+    }
+    return [lsort -command [list _cmp_word_count $counts] [dict keys $counts]]
+}
+

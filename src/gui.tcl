@@ -36,45 +36,51 @@ pack .br.mid.lst -fill both  -expand 1
 pack .br.mid     -fill both  -expand 1
 
 frame .br.bar -bg $bg_bar
-text .br.bar.help -height 1 -width 130 -bg $bg_bar -fg $fg_bar -font $font_sm \
-    -border 0 -highlightthickness 0 -state disabled -wrap none
-.br.bar.help tag configure bold -font [list [lindex $font_sm 0] [lindex $font_sm 1] bold]
+frame .br.bar.left -bg $bg_bar
+label .br.bar.help1 -text "" -bg $bg_bar -fg $fg_bar -font $font_sm -anchor w -padx 2 -pady 1
+label .br.bar.help2 -text "" -bg $bg_bar -fg $fg_bar -font $font_sm -anchor w -padx 2 -pady 1
+pack .br.bar.help1 -in .br.bar.left -side top -fill both -expand 0
+pack .br.bar.help2 -in .br.bar.left -side top -fill both -expand 0
 
-.br.bar.help configure -state normal
-.br.bar.help delete 1.0 end
-
-foreach {char cmd label} {
-    h help-dialog help
-    n br-new new
-    t open-scratchpad scratchpad
-    f br-toggle-favorite fav
-    s br-stats stats
-    b br-backup backup
-    d br-delete delete
-    r br-rename rename
-    i br-info-shortcut info
-    c profile-config-dialog config
-    z br-reload reload
-    q exit quit
+set _line1 ""
+set _line2 ""
+set _idx 0
+foreach {char cmd key} {
+    h help-dialog br_key_help
+    n br-new br_key_new
+    t open-scratchpad br_key_scratchpad
+    f br-toggle-favorite br_key_fav
+    s br-stats br_key_stats
+    b br-backup br_key_backup
+    d br-delete br_key_delete
+    r br-rename br_key_rename
+    i br-info-shortcut br_key_info
+    w word-occurrences-dialog br_key_words
+    c profile-config-dialog br_key_config
+    z br-reload br_key_reload
+    q exit br_key_quit
 } {
-    .br.bar.help tag configure key_$char -foreground $fg_bar
-    .br.bar.help tag bind key_$char <Button-1> $cmd
-    .br.bar.help tag bind key_$char <Enter> {.br.bar.help config -cursor hand2}
-    .br.bar.help tag bind key_$char <Leave> {.br.bar.help config -cursor arrow}
-    .br.bar.help insert end $char [list bold key_$char]
-    .br.bar.help insert end ":$label  "
+    if {$_idx < 7} {
+        append _line1 "$char:[t $key]  "
+    } else {
+        append _line2 "$char:[t $key]  "
+    }
+    incr _idx
 }
-.br.bar.help insert end [format " %s:sections  " $::cfg_lbl_toc]
-.br.bar.help configure -state disabled
+append _line1 " $::cfg_lbl_toc:[t br_key_sections]"
+.br.bar.help1 configure -text $_line1
+.br.bar.help2 configure -text $_line2
 
 label .br.bar.cnt -textvariable ::br_status \
     -bg $bg_bar -fg $fg_bar -font $font_sm -anchor e -padx 8 -pady $bar_pady
-pack .br.bar.help -side left
+pack .br.bar.left -side left
 pack .br.bar.cnt  -side right
 pack .br.bar -side bottom -fill x
 if {$::cfg_bar_height > 0} {
-    .br.bar configure -height $::cfg_bar_height
+    .br.bar configure -height [expr {$::cfg_bar_height * 2}]
     pack propagate .br.bar 0
+} else {
+    pack propagate .br.bar 1
 }
 
 # browser state - each entry: {type dir name}  (type = header | file | favorite | recent)
@@ -162,7 +168,8 @@ proc br-open {} {
 proc br-info-shortcut {} {
     set e [br-selected]
     if {[llength $e]} {
-        info-dialog [file join [lindex $e 1] [lindex $e 2]]
+        set fpath [file join [lindex $e 1] [lindex $e 2]]
+        file-info-dialog $fpath
     }
 }
 
@@ -214,6 +221,138 @@ proc info-dialog {msg} {
     grab $w
     focus $w.b
     tkwait window $w
+}
+
+proc file-info-dialog {fpath} {
+    if {![file exists $fpath]} {
+        info-dialog "File not found: $fpath"
+        return
+    }
+
+    set w .fidlg
+    catch {destroy $w}
+    toplevel $w
+    wm title $w "File Info"
+    wm transient $w .
+    wm minsize $w 450 180
+
+    set size [file size $fpath]
+    set mtime [file mtime $fpath]
+    set atime [file atime $fpath]
+    set mdate [clock format $mtime -format "%Y-%m-%d %H:%M:%S"]
+    set adate [clock format $atime -format "%Y-%m-%d %H:%M:%S"]
+
+    set size_str [expr {$size > 1024*1024 ? [format "%.1f MB" [expr {$size / (1024.0*1024)}]] : ($size > 1024 ? [format "%.1f KB" [expr {$size / 1024.0}]] : "$size bytes")}]
+
+    frame $w.info -bg $::bg
+    label $w.info.l1 -text "Path:" -font $::font_sm -bg $::bg -fg $::fg -anchor w
+    label $w.info.v1 -text "[string map [list $::HOME_DIR ~] $fpath]" -font $::font_sm -bg $::bg -fg $::fg -anchor w -wraplength 350
+
+    label $w.info.l2 -text "Size:" -font $::font_sm -bg $::bg -fg $::fg -anchor w
+    label $w.info.v2 -text "$size_str" -font $::font_sm -bg $::bg -fg $::fg -anchor w
+
+    label $w.info.l3 -text "Modified:" -font $::font_sm -bg $::bg -fg $::fg -anchor w
+    label $w.info.v3 -text "$mdate" -font $::font_sm -bg $::bg -fg $::fg -anchor w
+
+    label $w.info.l4 -text "Accessed:" -font $::font_sm -bg $::bg -fg $::fg -anchor w
+    label $w.info.v4 -text "$adate" -font $::font_sm -bg $::bg -fg $::fg -anchor w
+
+    grid $w.info.l1 -row 0 -column 0 -sticky nw -padx 8 -pady 4
+    grid $w.info.v1 -row 0 -column 1 -sticky nw -padx 8 -pady 4
+    grid $w.info.l2 -row 1 -column 0 -sticky nw -padx 8 -pady 4
+    grid $w.info.v2 -row 1 -column 1 -sticky nw -padx 8 -pady 4
+    grid $w.info.l3 -row 2 -column 0 -sticky nw -padx 8 -pady 4
+    grid $w.info.v3 -row 2 -column 1 -sticky nw -padx 8 -pady 4
+    grid $w.info.l4 -row 3 -column 0 -sticky nw -padx 8 -pady 4
+    grid $w.info.v4 -row 3 -column 1 -sticky nw -padx 8 -pady 4
+
+    frame $w.f -bg $::bg
+    button $w.f.ok -text "OK" -font $::font_sm -command [list destroy $w]
+    button $w.f.stats -text "Stats" -font $::font_sm -command [list file-stats-dialog $fpath]
+    button $w.f.words -text "Word Occurrences" -font $::font_sm -command [list word-occurrences-dialog $fpath]
+
+    pack $w.info -fill both -expand 1 -padx 8 -pady 8
+    pack $w.f -fill x -padx 8 -pady 6
+    pack $w.f.ok $w.f.stats $w.f.words -side left -padx 4
+
+    bind $w <Return> [list destroy $w]
+    bind $w <Escape> [list destroy $w]
+    update
+    grab $w
+    focus $w.f.ok
+    tkwait window $w
+}
+
+proc word-occurrences-dialog {fpath} {
+    if {![file exists $fpath]} return
+
+    set w .wodlg
+    catch {destroy $w}
+    toplevel $w
+    wm title $w "Word Occurrences"
+    wm geometry $w 400x500
+    wm transient $w .
+
+    set sorted [get-word-occurrences $fpath]
+    if {[llength $sorted] == 0} {
+        info-dialog "No words to display"
+        return
+    }
+
+    catch {
+        set content [chan read [open $fpath r]]
+        set counts [dict create]
+        foreach word [regexp -all -inline {\w+} [string tolower $content]] {
+            if {[string length $word] > 2} {
+                dict incr counts $word
+            }
+        }
+
+        frame $w.f
+        listbox $w.f.lb -font [list [lindex $::font 0] 9] -yscrollcommand [list $w.f.sb set] -width 50 -height 20
+        scrollbar $w.f.sb -orient vertical -command [list $w.f.lb yview]
+
+        foreach word $sorted {
+            set count [dict get $counts $word]
+            $w.f.lb insert end [format "%-30s %6d" $word $count]
+        }
+
+        pack $w.f.sb -side right -fill y
+        pack $w.f.lb -side left -fill both -expand 1
+        pack $w.f -fill both -expand 1 -padx 8 -pady 8
+
+        frame $w.btns
+        button $w.btns.ok -text "Close" -font $::font_sm -command [list destroy $w]
+        pack $w.btns.ok -padx 8 -pady 6
+        pack $w.btns -fill x
+    }
+
+    update
+    grab $w
+    focus $w.f.lb
+}
+
+proc file-stats-dialog {fpath} {
+    if {![file exists $fpath]} return
+
+    set e [list file [file dirname $fpath] [file tail $fpath]]
+    if {[llength $e]} {
+        lassign $e _ dir name
+        set path [file join $dir $name]
+        if {!$::state_cache_valid} { state-load }
+        if {![dict exists $::daily_data $path] || [dict size [dict get $::daily_data $path]] == 0} {
+            info-dialog "No statistics available for this file"
+            return
+        }
+        set fdata [dict get $::daily_data $path]
+        set msg "Daily writing stats for: [string map [list $::HOME_DIR ~] $path]\n\n"
+        append msg "Date          Words\n"
+        append msg "----          -----\n"
+        dict for {date count} $fdata {
+            append msg [format "%-14s %5d\n" $date $count]
+        }
+        info-dialog $msg
+    }
 }
 
 proc confirm-dialog {msg {default yes}} {
@@ -321,8 +460,16 @@ proc br-rename {} {
 }
 
 proc br-reload {} {
-    exec [info nameofexecutable] $::argv0 &
-    exit
+    set exe [info nameofexecutable]
+    set script $::argv0
+
+    if {[string equal $::tcl_platform(platform) "windows"]} {
+        catch {exec cmd /c "start \"\" \"$exe\" \"$script\"" >@1 2>@1}
+    } else {
+        catch {exec sh -c "exec \"$exe\" \"$script\" >/dev/null 2>&1 &"}
+    }
+
+    after 200 exit
 }
 
 proc br-backup {} {
@@ -405,7 +552,8 @@ bind .br.mid.lst <s>           { br-stats }
 bind .br.mid.lst <b>           { br-backup }
 bind .br.mid.lst <d>           { br-delete }
 bind .br.mid.lst <r>           { br-rename }
-bind .br.mid.lst <i>           { set e [br-selected]; if {[llength $e]} { info-dialog [file join [lindex $e 1] [lindex $e 2]] } }
+bind .br.mid.lst <i>           { set e [br-selected]; if {[llength $e]} { file-info-dialog [file join [lindex $e 1] [lindex $e 2]] } }
+bind .br.mid.lst <w>           { set e [br-selected]; if {[llength $e]} { word-occurrences-dialog [file join [lindex $e 1] [lindex $e 2]] } }
 bind .br.mid.lst <c>           { profile-config-dialog }
 bind .br.mid.lst <q>           { exit }
 bind .br.mid.lst <z>           { br-reload }
@@ -984,7 +1132,7 @@ proc apply-theme {} {
     set ::fg_bar $fg_bar; set ::bg_sel $bg_sel
     # browser
     foreach w {.br .br.mid} { catch { $w configure -bg $bg } }
-    foreach w {.br.title .br.bar.help .br.bar.cnt} {
+    foreach w {.br.title .br.bar.help1 .br.bar.help2 .br.bar.cnt} {
         catch { $w configure -bg $bg_bar -fg $fg_bar }
     }
     catch { .br.title configure -bg $bg -fg $fg }
@@ -1476,7 +1624,7 @@ proc profile-config-dialog {} {
     pack $w.fsize.spin -side left
 
     # Font preview
-    label $w.profile.preview -text "Preview" -font $::font_sm -bg $::bg
+    label $w.profile.preview -text "Preview" -font $::font_sm -bg $::bg -fg $::fg
     pack $w.profile.preview -fill x -padx 12 -pady {8 2}
 
     # Bind to update preview on font/size change (AFTER all widgets created)
@@ -1554,12 +1702,17 @@ proc profile-config-dialog {} {
             dict set ::cfg_profiles $profile font_size $size
             dict set ::cfg_profiles $profile margin_width $mw
             dict set ::cfg_profiles $profile margin_height $mh
+
+            # Check if the profile being edited is currently active BEFORE changing ::cfg_profile
+            set is_current_profile [expr {$profile eq $::cfg_profile}]
+
             set ::cfg_profile $def_prof
             set ::cfg_scheme $def_scheme
 
             ini-save
 
-            if {$profile eq $::cfg_profile} {
+            # Apply profile if it was the currently active one
+            if {$is_current_profile} {
                 profile-apply $profile
                 if {[info exists ::editor_open]} {
                     set f [list $::cfg_font_family $::cfg_font_size]
@@ -1661,19 +1814,22 @@ proc help-dialog {} {
         ] \
         "BROWSER" [list \
             "Enter / double-click"               "Open" \
-            "n"                                 "New file" \
-            "t"                                 "Scratchpad (temp, no disk file)" \
-            "f"                                 "Toggle favorite" \
-            "b"                                 "Backup (copies to backups/ with timestamp)" \
-            "i"                                 "Show full path" \
-            "d"                                 "Delete" \
-            "r"                                 "Rename" \
-            "c"                                 "Font settings by profile" \
-            [key-label $::cfg_key_toc]          "Browser sections" \
-            [key-label $::cfg_key_fullscreen]   "Fullscreen" \
-            [key-label $::cfg_key_open]         "Open file" \
-            "h / [key-label $::cfg_key_help]"   "Help" \
-            "q"                                 "Quit" \
+            "n"                                 [t br_help_new_file] \
+            "t"                                 [t br_help_scratchpad] \
+            "f"                                 [t br_help_toggle_fav] \
+            "s"                                 [t br_help_writing_stats] \
+            "b"                                 [t br_help_backup] \
+            "i"                                 [t br_help_show_path] \
+            "w"                                 [t br_help_word_occ] \
+            "d"                                 [t br_help_delete_file] \
+            "r"                                 [t br_help_rename_file] \
+            "c"                                 [t br_help_font_settings] \
+            "z"                                 [t br_help_reload] \
+            [key-label $::cfg_key_toc]          [t br_help_browser_sections] \
+            [key-label $::cfg_key_fullscreen]   [t br_help_fullscreen_br] \
+            [key-label $::cfg_key_open]         [t br_help_open_file_br] \
+            "h / [key-label $::cfg_key_help]"   [t br_help_help] \
+            "q"                                 [t br_help_quit_app] \
         ]
 
     text $w.t \

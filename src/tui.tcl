@@ -868,6 +868,15 @@ proc tui-browser {} {
                     }
                 }
             }
+            w {
+                if {$cfi >= 0} {
+                    lassign [lindex $entries $cfi] _ dir name
+                    set _path [file join $dir $name]
+                    if {[file isfile $_path]} {
+                        tui-word-occurrences $_path $rows $cols
+                    }
+                }
+            }
         }
         if {$key eq $::cfg_tui_help && $key ne "h"} {
             tui-help-dialog $rows $cols 0 0
@@ -1610,6 +1619,72 @@ proc tui-editor {filepath} {
         }
         if {$rst}       { set sticky -1 }
         if {$clear_sel} { set sel_anchor ""; set sel_sticky 0 }
+    }
+}
+
+proc tui-word-occurrences {fpath rows cols} {
+    if {![file exists $fpath]} return
+
+    set sorted [get-word-occurrences $fpath]
+    if {[llength $sorted] == 0} return
+
+    catch {
+        set content [chan read [open $fpath r]]
+        set counts [dict create]
+        foreach word [regexp -all -inline {\w+} [string tolower $content]] {
+            if {[string length $word] > 2} {
+                dict incr counts $word
+            }
+        }
+
+        set all_lines [list [list "  Word Occurrences" 1] [list "" 0] \
+            [list [format "  %-30s %s" "Word" "Count"] 1]]
+        foreach word $sorted {
+            set count [dict get $counts $word]
+            lappend all_lines [list [format "  %-30s %6d" $word $count] 0]
+        }
+
+        set _usable [expr {$rows-4}]
+        set _total [llength $all_lines]
+        set _scroll 0
+        set _w [expr {min(50, $cols-4)}]
+        set _left [expr {max(0,($cols-$_w)/2)}]
+        set _top  [expr {max(0,($rows-$_usable)/2)}]
+
+        while 1 {
+            if {$_scroll < 0} { set _scroll 0 }
+            if {$_scroll >= $_total - $_usable} { set _scroll [expr {$_total - $_usable}] }
+
+            puts -nonewline "\033\[2J"
+            for {set _i 0} {$_i < $_usable} {incr _i} {
+                set _idx [expr {$_scroll + $_i}]
+                if {$_idx < $_total} {
+                    tui-move [expr {$_top+$_i}] $_left
+                    lassign [lindex $all_lines $_idx] _txt _inv
+                    if {$_inv} { tui-attr reverse }
+                    puts -nonewline "[string range $_txt 0 [expr {$_w-1}]]\033\[K"
+                    if {$_inv} { tui-attr off }
+                } else {
+                    tui-move [expr {$_top+$_i}] $_left
+                    puts -nonewline "\033\[K"
+                }
+            }
+            tui-bar [expr {$rows-1}] "  UP/DOWN scroll  q close" "" $cols
+            flush stdout
+
+            set _k [tui-getch]
+            switch -- $_k {
+                q { break }
+                UP - k { incr _scroll -1 }
+                DOWN - j { incr _scroll 1 }
+                HOME { set _scroll 0 }
+                END { set _scroll [expr {$_total - $_usable}] }
+                default {
+                    if {$_k eq $::cfg_tui_help} { break }
+                }
+            }
+        }
+        puts -nonewline "\033\[2J"
     }
 }
 

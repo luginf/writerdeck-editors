@@ -134,7 +134,7 @@ Section order: `DOCS_DIR_DEFAULT` → `DOCS_DIR` (if custom) → Favorites → R
 
 **Tab key** — inserts a literal tab character (`\t`), not spaces. Both GUI and TUI preserve tabs in files.
 
-**Reload (z key)** — closes current editor/scratchpad and returns to browser. Always relaunches the program without arguments, even if a file was open.
+**Reload (z key)** — closes current editor/scratchpad and returns to browser. Always relaunches the program without arguments, even if a file was open. Uses platform-specific process launching (Windows `start` command, Unix shell background execution). Configuration apply button also triggers reload.
 
 ## Known limitations
 
@@ -168,8 +168,24 @@ The codebase is organized in `src/` directory and built via `Makefile`:
 - `writhdeck.tcl` — full version (GUI+TUI, ~4979 lines with section headers)
 - `writhdeck-cli.tcl` — CLI-only (TUI, ~2899 lines, no Tk loading)
 - `make clean` — remove generated files
+- `make LANGUAGES="en fr de es"` — build with specific languages (default: `en fr`)
 
 Both generated files are executable, tracked in git, and have section headers (`# === state.tcl ===`) for readability.
+
+## Internationalization (i18n)
+
+Translation strings are stored in modular files under `src/i18n/`:
+- `src/i18n/en.tcl` — English translations
+- `src/i18n/fr.tcl` — French translations
+- `src/i18n/de.tcl` — German translations
+- `src/i18n/es.tcl` — Spanish translations
+
+Each file defines translations via `dict set ::i18n LANG { key "value" ... }`. The Makefile concatenates selected language files into the final build based on the `LANGUAGES` variable (default: `en fr`). This allows you to:
+- Build a minimal distribution with just English: `make LANGUAGES="en"`
+- Include all languages: `make LANGUAGES="en fr de es"`
+- Add new languages: create `src/i18n/LANG.tcl` and reference it in Makefile
+
+The proc `t {key args}` (defined in `src/config.tcl`) retrieves translations at runtime based on `$::cfg_lang` (from INI file).
 
 ## SKILLS.md
 
