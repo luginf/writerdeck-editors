@@ -535,13 +535,23 @@ proc br-rename {} {
 }
 
 proc br-reload {} {
-    set exe [info nameofexecutable]
-    set script $::argv0
+    set exe      [info nameofexecutable]
+    set script   $::argv0
+    # when compiled (tclexecomp etc.), argv0 IS the binary — don't pass it as a script arg
+    set compiled [expr {[file normalize $script] eq [file normalize $exe]}]
 
-    if {[string equal $::tcl_platform(platform) "windows"]} {
-        catch {exec cmd /c "start \"\" \"$exe\" \"$script\"" >@1 2>@1}
+    if {$::tcl_platform(platform) eq "windows"} {
+        if {$compiled} {
+            catch {exec cmd /c "start \"\" \"$exe\"" >@1 2>@1}
+        } else {
+            catch {exec cmd /c "start \"\" \"$exe\" \"$script\"" >@1 2>@1}
+        }
     } else {
-        catch {exec sh -c "exec \"$exe\" \"$script\" >/dev/null 2>&1 &"}
+        if {$compiled} {
+            catch {exec sh -c "exec \"$exe\" >/dev/null 2>&1 &"}
+        } else {
+            catch {exec sh -c "exec \"$exe\" \"$script\" >/dev/null 2>&1 &"}
+        }
     }
 
     after 200 exit
