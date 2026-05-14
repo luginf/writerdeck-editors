@@ -6,7 +6,7 @@ dict set ::i18n no {
     br_no_docs         "Ingen dokumenter ennå. Trykk n for å lage en ny."
     br_help_gui        "h:hjelp  n:ny  t:notisbok  f:favoritt  s:statistikk  b:sikkerhetskopi  d:slett  r:gi nytt navn  i:info  c:innstillinger  z:last på nytt  %s:avsnitt  q:avslutt"
     br_help_tui        "h:%s  n:ny  t:notisbok  f:favoritt  s:statistikk  b:sikkerhetskopi  d:slett  r:gi nytt navn  i:info  c:innstillinger  w:ord  %s:avsnitt  q:avslutt"
-    br_backed_up       "sikkerhetskopi %s -> %s"
+    br_backed_up       "sikkerhetskopi %s -> %s  (%s)"
     br_favorites       "Favoritter"
     br_stats_title     "Skrivstatistikk"
     br_stats_no_data   "Ingen skrivstatistikk ennå for denne filen."

@@ -6,7 +6,7 @@ dict set ::i18n en {
     br_no_docs         "No documents yet. Press n to create one."
     br_help_gui        "h:help  n:new  t:scratchpad  f:fav  s:stats  b:backup  d:delete  r:rename  i:info  c:config  z:reload  %s:sections  q:quit"
     br_help_tui        "h:%s  n:new  t:scratchpad  f:fav  s:stats  b:backup  d:delete  r:rename  i:info  c:config  w:words  %s:sections  q:quit"
-    br_backed_up       "backup %s -> %s"
+    br_backed_up       "backup %s -> %s  (%s)"
     br_favorites       "Favorites"
     br_stats_title     "Writing stats"
     br_stats_no_data   "No writing stats yet for this file."

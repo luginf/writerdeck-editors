@@ -159,10 +159,40 @@ Mode activé en appuyant sur ESC dans l'éditeur (GUI ou TUI). Permet un accès 
 
 - `build-extra-entries {shown}` — construit les entrées favoris+récents, filtre `shown`
 - `toggle-favorite {path}` — bascule dans `::favorites_list` + `state-save`
-- `do-backup {dir name}` — copie vers `$DOCS_DIR/backups/nom_YYYY-MM-DDTHHhMM.ext`, retourne le nom
+- `do-backup {dir name}` — copie vers `$DOCS_DIR/backups/nom_YYYY-MM-DDTHHhMMmSS.ext` (timestamp avec secondes), retourne le chemin complet `$dst`. Le message de succès affiche `[file dirname $dst]` avec `~` pour le HOME.
+- `get-word-occurrences {fpath}` — ouvre avec `-encoding utf-8`, retourne des paires `{mot count}` triées par count décroissant.
 - `daily-clear {filepath}` — efface toutes les stats d'un fichier + `state-save`
 
 > **Règle** : toute proc appelée depuis `tui-browser` doit être définie **hors du bloc `if {!$::no_gui}`** (qui se termine ligne ~2934). Actuellement hors du bloc : `build-extra-entries`, `toggle-favorite`, `do-backup`, `daily-clear`, toutes les procs `daily-*`, `recent-*`, `state-*`.
+
+## Procs TUI — dialogs et overlays
+
+Définies dans `src/tui.tcl`, toutes suivent le pattern no-flicker :
+
+| Proc | Description |
+|---|---|
+| `tui-info-dialog {text rows cols}` | Overlay centré en reverse-video, attend n'importe quelle touche |
+| `tui-stats-dialog {filepath rows cols}` | Stats d'écriture : tri décroissant, total, `c` clear, `q` fermer. Retourne `[t br_stats_no_data]` si vide |
+| `tui-word-occurrences {fpath rows cols}` | Occurrences de mots scrollables (UP/DOWN/HOME/END), `q` fermer |
+| `tui-config-dialog {rows cols}` | Config timer/chronomètre |
+| `tui-help-dialog {rows cols wc cc ...}` | Aide scrollable |
+
+**Pattern no-flicker pour les dialogs TUI** :
+1. `puts -nonewline "\033\[2J\033\[H"; flush stdout` — une seule fois **avant** la boucle `while 1`
+2. `puts -nonewline "\033\[H"` — **dans** la boucle (repositionne le curseur sans effacer)
+3. Chaque ligne se termine par `\033\[K` (efface jusqu'à fin de ligne)
+4. Pas de `\033\[2J` après la boucle — le browser/éditeur redessine lui-même
+
+**`tui-getch` — comportement bloquant** :
+- Sans timer actif : lecture bloquante `read stdin 1` → curseur reste visible jusqu'au prochain appui
+- Avec timer actif (`cfg_chrono_show`) : poll 50ms → retourne `""` si pas de touche (le timer se met à jour)
+- Appel explicite `tui-getch 0` : non-bloquant, retourne `""` immédiatement
+
+**Scroll dans les overlays** : toujours borner avec `max(0, total - usable)` pour éviter les indices négatifs quand le contenu tient en une page (`lindex list -N` retourne `""` en Tcl).
+
+**Browser touche `i`** : appelle `tui-info-dialog` (overlay persistant). Ne jamais utiliser `set msg $path` pour les infos qui doivent rester visibles — `msg` est effacé après un seul tick de boucle.
+
+**GUI `profile-config-dialog`** : `grab $w` uniquement après `update` et création de tous les widgets. Un `grab` prématuré (avant que la fenêtre soit visible) lève "grab failed: window not viewable".
 
 ## Patterns à respecter
 
@@ -305,7 +335,14 @@ Voir `src/i18n/README.md` pour le guide complet (format, ajout de langue, format
 - **Titre du browser** : Affiche "Writhdeck Browser" au lieu de "Writhdeck"
 - **Alias `--cli`** : `--cli` est un alias de `--tui` pour le mode terminal
 - **Makefile robuste** : Détecte les changements des sources et régénère même si les fichiers existent
-- **Correction `get-word-occurrences`** : retourne maintenant des paires `{mot count}` (au lieu de simples mots). Handle fichier correctement fermé. Les appelants (`word-occurrences-dialog`, `tui-word-occurrences`) n'ouvrent plus le fichier une deuxième fois. Itération : `foreach pair $word_data { lassign $pair word count }`
+- **Correction `get-word-occurrences`** : retourne des paires `{mot count}`, ouvre avec `-encoding utf-8`. Itération : `foreach pair $word_data { lassign $pair word count }`
+- **No-flicker TUI** : `tui-config-dialog`, `tui-help-dialog`, `tui-word-occurrences` — clear unique avant boucle, `\033[H` dans la boucle
+- **`tui-getch` bloquant** : sans timer, lecture bloquante au lieu de spin → curseur stable
+- **`tui-stats-dialog`** : proc extraite du browser, réutilisée par modal ESC+s
+- **`tui-info-dialog`** : overlay persistant pour browser `i` et message "no words"
+- **`tui-word-occurrences` scroll fix** : `max(0, total - usable)` évite les indices négatifs
+- **Backup timestamp** : inclut les secondes (`%Hh%Mm%S`), message affiche le dossier de sauvegarde
+- **GUI config grab fix** : `grab $w` déplacé après `update` et création des widgets
 
 ## Déjà implémenté (à ne pas re-suggérer)
 

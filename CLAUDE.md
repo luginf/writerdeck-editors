@@ -65,7 +65,9 @@ These markers help navigate the ~5000-line file during development.
 
 **Procs shared between GUI and TUI must be defined outside the `if {!$::no_gui}` block.** Currently outside: all `state-*`, `daily-*`, `recent-*`, `build-extra-entries`, `toggle-favorite`, `do-backup`, `get-word-occurrences`.
 
-**`get-word-occurrences {fpath}`** — returns a list of `{word count}` pairs sorted by count descending. Opens, reads, and closes the file itself. Callers iterate with `foreach pair $word_data { lassign $pair word count }` — do not re-read the file.
+**`get-word-occurrences {fpath}`** — returns a list of `{word count}` pairs sorted by count descending. Opens with `-encoding utf-8`, reads, and closes the file itself. Callers iterate with `foreach pair $word_data { lassign $pair word count }` — do not re-read the file.
+
+**`do-backup {dir name}`** — copies to `$DOCS_DIR/backups/` with timestamp `%Y-%m-%dT%Hh%Mm%S` (includes seconds). Returns the full destination path `$dst`. Success message shows `[string map [list $::HOME_DIR ~] [file dirname $dst]]` (the backup folder path with ~ substitution).
 
 **i18n — always add both languages.** Any new string key must appear in both `en {}` and `fr {}` blocks of `::i18n`. Use `proc t {key args}` to retrieve.
 
@@ -144,6 +146,8 @@ Section order: `DOCS_DIR_DEFAULT` → `DOCS_DIR` (if custom) → Favorites → R
 
 **Help dialog close** — use `after idle [list destroy $w]; break` on keyboard bindings inside the Text widget; plain `destroy` triggers `<<TkTextBackspace>>` on the already-destroyed widget.
 
+**`grab $w` after `update`** — in Toplevel dialogs, `grab $w` must be called only after `update` and after all widgets are packed. Calling it immediately after `toplevel $w` (before any widgets exist) fails with "grab failed: window not viewable".
+
 | **`quit-app`** — only prompts to save if `$::filename ne "" |  | $::scratchpad`. |
 
 **`open-file-dialog`** — uses `[file dirname $::filename]` as `initialdir` when a file is open, otherwise `DOCS_DIR_DEFAULT`.
@@ -181,6 +185,22 @@ Configurable countdown timer and stopwatch accessible via ESC modal mode or ALT+
 - **TUI** (`tui-timer-alert`): Full-screen overlay with "TIMER FINISHED!" message + `bell` command
 - Sound controlled by `$::cfg_timer_sound` setting
 
+## TUI dialogs — pattern no-flicker
+
+TUI dialogs (config, help, stats, words) must not clear the screen on each redraw. The correct pattern:
+1. `puts -nonewline "\033\[2J\033\[H"; flush stdout` — once **before** the `while 1` loop (clears previous content)
+2. `puts -nonewline "\033\[H"` — inside the loop (cursor home, no erase; lines are overwritten with `\033\[K`)
+3. No `\033\[2J` after the loop — the caller (browser or editor) redraws its own content
+
+**`tui-getch` blocking** — when called with default argument (no timer active), performs a true blocking `read stdin 1` instead of returning `""` immediately. This keeps the cursor visible until the user types. When timer is active (`cfg_chrono_show`), uses 50ms poll to allow timer display updates.
+
+**TUI dialog procs** (defined in `src/tui.tcl`):
+- `tui-info-dialog {text rows cols}` — centered reverse-video overlay, waits for any key. Used by browser `i` key (full path) and `tui-word-occurrences` (no words found).
+- `tui-stats-dialog {filepath rows cols}` — writing stats overlay: sorted by date descending, reverse-video headers, total line, `c` to clear, `q`/Ctrl+H to close. Returns `[t br_stats_no_data]` if no data (caller sets status message).
+- `tui-word-occurrences {fpath rows cols}` — scrollable word occurrences overlay (UP/DOWN/HOME/END), `q` to close. Scroll bounds: `max(0, total - usable)` to avoid negative indices when content fits on one screen.
+
+**Browser `i` key (TUI)** — calls `tui-info-dialog` (persistent overlay) instead of setting the `msg` variable. `msg` is cleared after one loop tick; for persistent display an overlay is required.
+
 ## Modal command mode (ESC key)
 
 Editor mode activated by pressing ESC in editor (GUI or TUI). Allows quick access to common functions without breaking focus from text.
@@ -188,14 +208,15 @@ Editor mode activated by pressing ESC in editor (GUI or TUI). Allows quick acces
 **Modal mode features:**
 - **ESC** — toggle modal on/off (double ESC exits)
 - **t** — toggle timer on/off
-- **s** — show daily writing statistics (full-screen overlay)
-- **w** — show word occurrences (full-screen overlay in TUI, dialog in GUI)
+- **s** — show daily writing statistics — calls `tui-stats-dialog` (same overlay as browser `s`)
+- **w** — show word occurrences — calls `tui-word-occurrences` (same overlay as browser `w`)
 - **q** — quit/close current file (with save prompt if dirty)
 - **Other keys** — exit modal, revert to normal text entry
 
 **Implementation details:**
 - State tracked by `$::gui_cmd_mode` (GUI) and `$::tui_cmd_mode` (TUI)
 - Status message displayed in `::ed_bar_center` (GUI) or message line (TUI)
+- After closing `s`/`w` overlay: `set wrap_dirty 1` forces editor redraw
 - Keybindings check modal state before processing normal input
 - ESC logic in TUI editor: first check if already in modal mode (prevents accidental re-entry)
 

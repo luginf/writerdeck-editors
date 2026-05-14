@@ -294,9 +294,12 @@ proc info-dialog {msg} {
     wm title $w "Writhdeck"
     wm resizable $w 0 0
     wm transient $w .
-    label  $w.l -text $msg -font $::font_sm -padx 16 -pady 12 -anchor w -wraplength 340
+    text $w.t -font $::font_sm -padx 16 -pady 12 -wrap word -width 50 -height 3 \
+        -relief flat -bg [$w cget -bg] -fg $::fg -bd 0 -highlightthickness 0 -cursor arrow
+    $w.t insert end $msg
+    $w.t configure -state disabled
     button $w.b -text "OK" -font $::font_sm -command [list destroy $w]
-    pack $w.l -fill x
+    pack $w.t -fill x
     pack $w.b -anchor e -padx 8 -pady 6
     bind $w <Return> [list destroy $w]
     bind $w <Escape> [list destroy $w]
@@ -563,7 +566,7 @@ proc br-backup {} {
     if {![llength $e]} return
     lassign $e _ dir name
     set dst [do-backup $dir $name]
-    info-dialog [t br_backed_up $name [file tail $dst]]
+    info-dialog [t br_backed_up $name [string map [list $::HOME_DIR ~] [file dirname $dst]] [file tail $dst]]
 }
 
 proc br-toggle-favorite {} {

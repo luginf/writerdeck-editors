@@ -6,7 +6,7 @@ dict set ::i18n ko {
     br_no_docs         "문서가 없습니다. n을 눌러서 새 문서를 만드세요."
     br_help_gui        "h:도움말  n:새로운  t:메모장  f:즐겨찾기  s:통계  b:백업  d:삭제  r:이름변경  i:정보  c:설정  z:다시로드  %s:섹션  q:종료"
     br_help_tui        "h:%s  n:새로운  t:메모장  f:즐겨찾기  s:통계  b:백업  d:삭제  r:이름변경  i:정보  c:설정  w:단어  %s:섹션  q:종료"
-    br_backed_up       "백업 %s -> %s"
+    br_backed_up       "백업 %s -> %s  (%s)"
     br_favorites       "즐겨찾기"
     br_stats_title     "작문 통계"
     br_stats_no_data   "이 파일에 대한 작문 통계가 없습니다."

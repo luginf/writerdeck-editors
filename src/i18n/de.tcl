@@ -6,7 +6,7 @@ dict set ::i18n de {
     br_no_docs         "Keine Dokumente. Druecke n, um ein Dokument zu erstellen."
     br_help_gui        "h:hilfe  n:neu  t:notizen  f:fav  s:statistiken  b:sicherung  d:loeschen  r:umbenennen  i:info  c:konfiguration  z:neuladen  %s:abschnitte  q:beenden"
     br_help_tui        "h:%s  n:neu  t:notizen  f:fav  s:statistiken  b:sicherung  d:loeschen  r:umbenennen  i:info  c:konfiguration  w:woerter  %s:abschnitte  q:beenden"
-    br_backed_up       "sicherung %s -> %s"
+    br_backed_up       "sicherung %s -> %s  (%s)"
     br_favorites       "Favoriten"
     br_stats_title     "Schreibstatistiken"
     br_stats_no_data   "Noch keine Schreibstatistiken fuer diese Datei."

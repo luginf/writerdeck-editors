@@ -1054,7 +1054,7 @@ dict set ::i18n en {
     br_no_docs         "No documents yet. Press n to create one."
     br_help_gui        "h:help  n:new  t:scratchpad  f:fav  s:stats  b:backup  d:delete  r:rename  i:info  c:config  z:reload  %s:sections  q:quit"
     br_help_tui        "h:%s  n:new  t:scratchpad  f:fav  s:stats  b:backup  d:delete  r:rename  i:info  c:config  w:words  %s:sections  q:quit"
-    br_backed_up       "backup %s -> %s"
+    br_backed_up       "backup %s -> %s  (%s)"
     br_favorites       "Favorites"
     br_stats_title     "Writing stats"
     br_stats_no_data   "No writing stats yet for this file."
@@ -1191,7 +1191,7 @@ dict set ::i18n fr {
     br_no_docs         "Aucun document. Appuyez sur n pour en créer un."
     br_help_gui        "h:aide  n:nouveau  t:bloc-notes  f:fav  s:stats  b:backup  d:supprimer  r:renommer  i:infos  c:config  z:recharger  %s:sections  q:quitter"
     br_help_tui        "h:%s  n:nouveau  t:bloc-notes  f:fav  s:stats  b:backup  d:supprimer  r:renommer  i:infos  c:config  w:mots  %s:sections  q:quitter"
-    br_backed_up       "sauvegarde %s -> %s"
+    br_backed_up       "sauvegarde %s -> %s  (%s)"
     br_favorites       "Favoris"
     br_stats_title     "Statistiques d'écriture"
     br_stats_no_data   "Aucune statistique d'écriture pour ce fichier."
@@ -2419,7 +2419,7 @@ proc tui-browser {} {
                 if {$cfi >= 0} {
                     lassign [lindex $entries $cfi] _ dir name
                     set dst [do-backup $dir $name]
-                    set msg [t br_backed_up $name [file tail $dst]]
+                    set msg [t br_backed_up $name [string map [list $::HOME_DIR ~] [file dirname $dst]] [file tail $dst]]
                 }
             }
             d {
@@ -3080,25 +3080,31 @@ proc tui-editor {filepath} {
                         if {$filepath ne ""} {
                             set _r [tui-stats-dialog $filepath $rows $cols]
                             if {$_r ne ""} { set message $_r; set msg_time [clock seconds] }
-                            set wrap_dirty 1
                         }
+                        set ::tui_cmd_mode 0
+                        puts -nonewline "\033\[2J\033\[H"; flush stdout
+                        set wrap_dirty 1
                         set clear_sel 0
                     } elseif {$key eq "w"} {
                         lassign [tui-size] rows cols
                         if {$filepath ne ""} {
                             tui-word-occurrences $filepath $rows $cols
-                            set wrap_dirty 1
                         }
+                        set ::tui_cmd_mode 0
+                        puts -nonewline "\033\[2J\033\[H"; flush stdout
+                        set wrap_dirty 1
                         set clear_sel 0
-                    } else {
-                        # Any other key does nothing, stay in command mode
-                        set key ""
+                    } elseif {$key ne ""} {
+                        # Any non-empty key exits command mode
+                        set ::tui_cmd_mode 0
+                        set message ""
+                        set msg_time [clock seconds]
                         set clear_sel 0
                     }
                 } elseif {$key eq "ESC"} {
                     # Enter command mode with ESC (when not already in it)
                     set ::tui_cmd_mode 1
-                    set message "ESC: exit mode  t: timer  q: quit  s: stats  w: words  (other: back)"
+                    set message "ESC: exit mode  t: timer  q: quit  s: stats  w: words"
                     set msg_time [clock seconds]
                     set clear_sel 0
                 } elseif {$key eq $::cfg_tui_close} {
@@ -3266,6 +3272,8 @@ proc tui-editor {filepath} {
                         set _sel_cc [string length $_stxt]
                     }
                     tui-help-dialog $rows $cols $wc_cached $cc_cached $_sel_wc $_sel_cc
+                    puts -nonewline "\033\[2J\033\[H"; flush stdout
+                    set wrap_dirty 1
                     set clear_sel 0
                 } elseif {$key eq "ALT-t"} {
                     if {$::timer_active} { timer-pause } else { timer-start }

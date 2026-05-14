@@ -1185,7 +1185,7 @@ dict set ::i18n en {
     br_no_docs         "No documents yet. Press n to create one."
     br_help_gui        "h:help  n:new  t:scratchpad  f:fav  s:stats  b:backup  d:delete  r:rename  i:info  c:config  z:reload  %s:sections  q:quit"
     br_help_tui        "h:%s  n:new  t:scratchpad  f:fav  s:stats  b:backup  d:delete  r:rename  i:info  c:config  w:words  %s:sections  q:quit"
-    br_backed_up       "backup %s -> %s"
+    br_backed_up       "backup %s -> %s  (%s)"
     br_favorites       "Favorites"
     br_stats_title     "Writing stats"
     br_stats_no_data   "No writing stats yet for this file."
@@ -1322,7 +1322,7 @@ dict set ::i18n de {
     br_no_docs         "Keine Dokumente. Druecke n, um ein Dokument zu erstellen."
     br_help_gui        "h:hilfe  n:neu  t:notizen  f:fav  s:statistiken  b:sicherung  d:loeschen  r:umbenennen  i:info  c:konfiguration  z:neuladen  %s:abschnitte  q:beenden"
     br_help_tui        "h:%s  n:neu  t:notizen  f:fav  s:statistiken  b:sicherung  d:loeschen  r:umbenennen  i:info  c:konfiguration  w:woerter  %s:abschnitte  q:beenden"
-    br_backed_up       "sicherung %s -> %s"
+    br_backed_up       "sicherung %s -> %s  (%s)"
     br_favorites       "Favoriten"
     br_stats_title     "Schreibstatistiken"
     br_stats_no_data   "Noch keine Schreibstatistiken fuer diese Datei."
@@ -1459,7 +1459,7 @@ dict set ::i18n es {
     br_no_docs         "Sin documentos. Presiona n para crear uno."
     br_help_gui        "h:ayuda  n:nuevo  t:notas  f:fav  s:estadisticas  b:copia  d:eliminar  r:renombrar  i:info  c:configuracion  z:recargar  %s:secciones  q:salir"
     br_help_tui        "h:%s  n:nuevo  t:notas  f:fav  s:estadisticas  b:copia  d:eliminar  r:renombrar  i:info  c:configuracion  w:palabras  %s:secciones  q:salir"
-    br_backed_up       "copia %s -> %s"
+    br_backed_up       "copia %s -> %s  (%s)"
     br_favorites       "Favoritos"
     br_stats_title     "Estadisticas de escritura"
     br_stats_no_data   "Sin estadisticas de escritura para este archivo."
@@ -1596,7 +1596,7 @@ dict set ::i18n fr {
     br_no_docs         "Aucun document. Appuyez sur n pour en créer un."
     br_help_gui        "h:aide  n:nouveau  t:bloc-notes  f:fav  s:stats  b:backup  d:supprimer  r:renommer  i:infos  c:config  z:recharger  %s:sections  q:quitter"
     br_help_tui        "h:%s  n:nouveau  t:bloc-notes  f:fav  s:stats  b:backup  d:supprimer  r:renommer  i:infos  c:config  w:mots  %s:sections  q:quitter"
-    br_backed_up       "sauvegarde %s -> %s"
+    br_backed_up       "sauvegarde %s -> %s  (%s)"
     br_favorites       "Favoris"
     br_stats_title     "Statistiques d'écriture"
     br_stats_no_data   "Aucune statistique d'écriture pour ce fichier."
@@ -1733,7 +1733,7 @@ dict set ::i18n ko {
     br_no_docs         "문서가 없습니다. n을 눌러서 새 문서를 만드세요."
     br_help_gui        "h:도움말  n:새로운  t:메모장  f:즐겨찾기  s:통계  b:백업  d:삭제  r:이름변경  i:정보  c:설정  z:다시로드  %s:섹션  q:종료"
     br_help_tui        "h:%s  n:새로운  t:메모장  f:즐겨찾기  s:통계  b:백업  d:삭제  r:이름변경  i:정보  c:설정  w:단어  %s:섹션  q:종료"
-    br_backed_up       "백업 %s -> %s"
+    br_backed_up       "백업 %s -> %s  (%s)"
     br_favorites       "즐겨찾기"
     br_stats_title     "작문 통계"
     br_stats_no_data   "이 파일에 대한 작문 통계가 없습니다."
@@ -1870,7 +1870,7 @@ dict set ::i18n no {
     br_no_docs         "Ingen dokumenter ennå. Trykk n for å lage en ny."
     br_help_gui        "h:hjelp  n:ny  t:notisbok  f:favoritt  s:statistikk  b:sikkerhetskopi  d:slett  r:gi nytt navn  i:info  c:innstillinger  z:last på nytt  %s:avsnitt  q:avslutt"
     br_help_tui        "h:%s  n:ny  t:notisbok  f:favoritt  s:statistikk  b:sikkerhetskopi  d:slett  r:gi nytt navn  i:info  c:innstillinger  w:ord  %s:avsnitt  q:avslutt"
-    br_backed_up       "sikkerhetskopi %s -> %s"
+    br_backed_up       "sikkerhetskopi %s -> %s  (%s)"
     br_favorites       "Favoritter"
     br_stats_title     "Skrivstatistikk"
     br_stats_no_data   "Ingen skrivstatistikk ennå for denne filen."
@@ -2572,9 +2572,12 @@ proc info-dialog {msg} {
     wm title $w "Writhdeck"
     wm resizable $w 0 0
     wm transient $w .
-    label  $w.l -text $msg -font $::font_sm -padx 16 -pady 12 -anchor w -wraplength 340
+    text $w.t -font $::font_sm -padx 16 -pady 12 -wrap word -width 50 -height 3 \
+        -relief flat -bg [$w cget -bg] -fg $::fg -bd 0 -highlightthickness 0 -cursor arrow
+    $w.t insert end $msg
+    $w.t configure -state disabled
     button $w.b -text "OK" -font $::font_sm -command [list destroy $w]
-    pack $w.l -fill x
+    pack $w.t -fill x
     pack $w.b -anchor e -padx 8 -pady 6
     bind $w <Return> [list destroy $w]
     bind $w <Escape> [list destroy $w]
@@ -2841,7 +2844,7 @@ proc br-backup {} {
     if {![llength $e]} return
     lassign $e _ dir name
     set dst [do-backup $dir $name]
-    info-dialog [t br_backed_up $name [file tail $dst]]
+    info-dialog [t br_backed_up $name [string map [list $::HOME_DIR ~] [file dirname $dst]] [file tail $dst]]
 }
 
 proc br-toggle-favorite {} {
@@ -5757,7 +5760,7 @@ proc tui-browser {} {
                 if {$cfi >= 0} {
                     lassign [lindex $entries $cfi] _ dir name
                     set dst [do-backup $dir $name]
-                    set msg [t br_backed_up $name [file tail $dst]]
+                    set msg [t br_backed_up $name [string map [list $::HOME_DIR ~] [file dirname $dst]] [file tail $dst]]
                 }
             }
             d {
@@ -6418,25 +6421,31 @@ proc tui-editor {filepath} {
                         if {$filepath ne ""} {
                             set _r [tui-stats-dialog $filepath $rows $cols]
                             if {$_r ne ""} { set message $_r; set msg_time [clock seconds] }
-                            set wrap_dirty 1
                         }
+                        set ::tui_cmd_mode 0
+                        puts -nonewline "\033\[2J\033\[H"; flush stdout
+                        set wrap_dirty 1
                         set clear_sel 0
                     } elseif {$key eq "w"} {
                         lassign [tui-size] rows cols
                         if {$filepath ne ""} {
                             tui-word-occurrences $filepath $rows $cols
-                            set wrap_dirty 1
                         }
+                        set ::tui_cmd_mode 0
+                        puts -nonewline "\033\[2J\033\[H"; flush stdout
+                        set wrap_dirty 1
                         set clear_sel 0
-                    } else {
-                        # Any other key does nothing, stay in command mode
-                        set key ""
+                    } elseif {$key ne ""} {
+                        # Any non-empty key exits command mode
+                        set ::tui_cmd_mode 0
+                        set message ""
+                        set msg_time [clock seconds]
                         set clear_sel 0
                     }
                 } elseif {$key eq "ESC"} {
                     # Enter command mode with ESC (when not already in it)
                     set ::tui_cmd_mode 1
-                    set message "ESC: exit mode  t: timer  q: quit  s: stats  w: words  (other: back)"
+                    set message "ESC: exit mode  t: timer  q: quit  s: stats  w: words"
                     set msg_time [clock seconds]
                     set clear_sel 0
                 } elseif {$key eq $::cfg_tui_close} {
@@ -6604,6 +6613,8 @@ proc tui-editor {filepath} {
                         set _sel_cc [string length $_stxt]
                     }
                     tui-help-dialog $rows $cols $wc_cached $cc_cached $_sel_wc $_sel_cc
+                    puts -nonewline "\033\[2J\033\[H"; flush stdout
+                    set wrap_dirty 1
                     set clear_sel 0
                 } elseif {$key eq "ALT-t"} {
                     if {$::timer_active} { timer-pause } else { timer-start }

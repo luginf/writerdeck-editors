@@ -287,7 +287,7 @@ Default mode, requires Tk.
 | t                      | Scratchpad (in-memory buffer; Ctrl+S prompts for a name to save)      |
 | f                      | Toggle favorite                                                       |
 | s                      | Writing stats — daily word counts                                     |
-| b                      | Backup — copies to `backups/` with a `name_YYYY-MM-DDTHHhMM` stamp    |
+| b                      | Backup — copies to `backups/` with a `name_YYYY-MM-DDTHHhMMmSS` stamp    |
 | d                      | Delete file                                                           |
 | r                      | Rename file                                                           |
 | i                      | Show full path                                                        |
@@ -358,7 +358,7 @@ Activated via `--no-gui` / `--tui` / `--ng`, or when no windowing system is avai
 | t              | Scratchpad (in-memory buffer; Ctrl+S prompts for a name to save)      |
 | f              | Toggle favorite                                                       |
 | s              | Writing stats — daily word counts                                     |
-| b              | Backup — copies to `backups/` with a `name_YYYY-MM-DDTHHhMM` stamp    |
+| b              | Backup — copies to `backups/` with a `name_YYYY-MM-DDTHHhMMmSS` stamp    |
 | d              | Delete file                                                           |
 | r              | Rename file                                                           |
 | i              | Show full path                                                        |
@@ -660,7 +660,7 @@ Mode par défaut, nécessite Tk.
 | t                      | Bloc-notes (tampon en mémoire ; Ctrl+S demande un nom pour enregistrer)    |
 | f                      | Basculer favori                                                            |
 | s                      | Stats d'écriture — comptages journaliers                                   |
-| b                      | Sauvegarder — copie dans `backups/` avec horodatage `nom_YYYY-MM-DDTHHhMM` |
+| b                      | Sauvegarder — copie dans `backups/` avec horodatage `nom_YYYY-MM-DDTHHhMMmSS` |
 | d                      | Supprimer le fichier                                                       |
 | r                      | Renommer le fichier                                                        |
 | i                      | Afficher le chemin complet                                                 |
@@ -731,7 +731,7 @@ Activé via `--no-gui` / `--tui` / `--ng`, ou si aucun système de fenêtrage n'
 | t              | Bloc-notes (tampon en mémoire ; Ctrl+S demande un nom pour enregistrer)    |
 | f              | Basculer favori                                                            |
 | s              | Stats d'écriture — comptages journaliers                                   |
-| b              | Sauvegarder — copie dans `backups/` avec horodatage `nom_YYYY-MM-DDTHHhMM` |
+| b              | Sauvegarder — copie dans `backups/` avec horodatage `nom_YYYY-MM-DDTHHhMMmSS` |
 | d              | Supprimer le fichier                                                       |
 | r              | Renommer le fichier                                                        |
 | i              | Afficher le chemin complet                                                 |
