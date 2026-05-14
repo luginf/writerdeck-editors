@@ -220,7 +220,7 @@ proc build-extra-entries {shown} {
 proc do-backup {dir name} {
     set bdir [file join $::DOCS_DIR backups]
     file mkdir $bdir
-    set ts  [clock format [clock seconds] -format "%Y-%m-%dT%Hh%M"]
+    set ts  [clock format [clock seconds] -format "%Y-%m-%dT%Hh%Mm%S"]
     set dst [file join $bdir "[file rootname $name]_${ts}[file extension $name]"]
     set src [file join $dir $name]
     if {[file type $src] eq "link"} { set src [file normalize $src] }
@@ -249,7 +249,7 @@ proc _cmp_word_count {counts a b} {
 proc get-word-occurrences {fpath} {
     set counts [dict create]
     if {[catch {
-        set fh [open $fpath r]
+        set fh [open $fpath r]; chan configure $fh -encoding utf-8
         set content [read $fh]
         close $fh
         foreach word [regexp -all -inline {\w+} [string tolower $content]] {

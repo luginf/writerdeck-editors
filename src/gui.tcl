@@ -563,7 +563,7 @@ proc br-backup {} {
     if {![llength $e]} return
     lassign $e _ dir name
     set dst [do-backup $dir $name]
-    info-dialog [t br_backed_up $name [string map [list $::HOME_DIR ~] [file dirname $dst]]]
+    info-dialog [t br_backed_up $name [file tail $dst]]
 }
 
 proc br-toggle-favorite {} {
@@ -1852,7 +1852,6 @@ proc profile-config-dialog {} {
     wm title $w [t profile_config_title]
     wm transient $w .
     $w configure -bg $::bg
-    grab $w
 
     set profiles [lsort [dict keys $::cfg_profiles]]
     set schemes [lsort [dict keys $::cfg_schemes]]

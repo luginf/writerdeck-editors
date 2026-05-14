@@ -241,9 +241,11 @@ proc tui-help-dialog {rows cols wc cc {sel_wc -1} {sel_cc -1}} {
     set usable [expr {$rows - 2}]
     set scroll 0
 
+    puts -nonewline "\033\[2J\033\[H"; flush stdout
+
     while 1 {
         set max_scroll [expr {max(0, $h - $usable)}]
-        puts -nonewline "\033\[2J"
+        puts -nonewline "\033\[H"
         for {set i 0} {$i < $usable} {incr i} {
             set li [expr {$scroll + $i}]
             set row_y [expr {$i + 1}]
@@ -265,24 +267,29 @@ proc tui-help-dialog {rows cols wc cc {sel_wc -1} {sel_cc -1}} {
         if {$key eq "UP"   && $scroll > 0}            { incr scroll -1 }
         if {$key eq "DOWN" && $scroll < $max_scroll}  { incr scroll  1 }
     }
-    puts -nonewline "\033\[2J"
 }
 
 proc tui-getch {{timeout -1}} {
+    set _block 0
     if {$timeout < 0} {
-        set timeout 0
-        if {$::timer_active && $::cfg_chrono_show} { set timeout 50 }
+        if {$::timer_active && $::cfg_chrono_show} {
+            set timeout 50
+        } else {
+            set _block 1
+            set timeout 0
+        }
     }
     chan configure stdin -blocking 0
     set raw [read stdin 1]
     chan configure stdin -blocking 1
     if {$raw eq ""} {
-        # No immediate input, wait for timeout
         if {$timeout > 0} {
             after $timeout
             chan configure stdin -blocking 0
             set raw [read stdin 1]
             chan configure stdin -blocking 1
+        } elseif {$_block} {
+            set raw [read stdin 1]
         }
         if {$raw eq ""} { return "" }
     }
@@ -789,7 +796,7 @@ proc tui-browser {} {
             i {
                 if {$cfi >= 0} {
                     lassign [lindex $entries $cfi] _ dir name
-                    set msg [file join $dir $name]
+                    tui-info-dialog [file join $dir $name] $rows $cols
                 }
             }
             f {
@@ -805,56 +812,15 @@ proc tui-browser {} {
                 if {$cfi >= 0} {
                     lassign [lindex $entries $cfi] _ dir name
                     set _path [file join $dir $name]
-                    if {!$::state_cache_valid} { state-load }
-                    if {![dict exists $::daily_data $_path] || [dict size [dict get $::daily_data $_path]] == 0} {
-                        set msg [t br_stats_no_data]
-                    } else {
-                        set _fdata [dict get $::daily_data $_path]
-                        set _today [clock format [clock seconds] -format "%Y-%m-%d"]
-                        set _lines [list [list "  [t br_stats_title] - $name" 1] [list "" 0] \
-                            [list [format "  %-14s %s" "Date" "Words"] 1]]
-                        set _grand_total 0
-                        foreach _date [lsort -decreasing [dict keys $_fdata]] {
-                            set _n [dict get $_fdata $_date]
-                            incr _grand_total $_n
-                            set _lbl [expr {$_date eq $_today ? "$_date  <- [t br_stats_today]" : $_date}]
-                            lappend _lines [list [format "  %-28s %d" $_lbl $_n] 0]
-                        }
-                        lappend _lines [list "" 0]
-                        lappend _lines [list [format "  %-28s %d" [t br_stats_total] $_grand_total] 1]
-                        lappend _lines [list "" 0]
-                        set _h [llength $_lines]; set _w 46
-                        set _left [expr {max(0,($cols-$_w)/2)}]
-                        set _top  [expr {max(0,($rows-$_h)/2)}]
-                        puts -nonewline "\033\[2J"
-                        for {set _i 0} {$_i < $_h} {incr _i} {
-                            tui-move [expr {$_top+$_i}] $_left
-                            lassign [lindex $_lines $_i] _txt _inv
-                            if {$_inv} { tui-attr reverse }
-                            puts -nonewline "[string range $_txt 0 [expr {$_w-1}]]\033\[K"
-                            if {$_inv} { tui-attr off }
-                        }
-                        tui-bar [expr {$rows-1}] "  c [t br_stats_clear]   q / Ctrl+H  close" "" $cols
-                        flush stdout
-                        while 1 {
-                            set _k [tui-getch]
-                            if {$_k eq "q" || $_k eq $::cfg_tui_help} break
-                            if {$_k eq "c"} {
-                                if {[tui-confirm [t br_stats_clear_confirm $name] $rows $cols]} {
-                                    daily-clear $_path
-                                }
-                                break
-                            }
-                        }
-                        puts -nonewline "\033\[2J"
-                    }
+                    set _r [tui-stats-dialog $_path $rows $cols]
+                    if {$_r ne ""} { set msg $_r }
                 }
             }
             b {
                 if {$cfi >= 0} {
                     lassign [lindex $entries $cfi] _ dir name
                     set dst [do-backup $dir $name]
-                    set msg [t br_backed_up $name [string map [list $::HOME_DIR ~] [file dirname $dst]]]
+                    set msg [t br_backed_up $name [file tail $dst]]
                 }
             }
             d {
@@ -1511,78 +1477,18 @@ proc tui-editor {filepath} {
                             set ::session_file ""; return
                         }
                     } elseif {$key eq "s"} {
-                        # Show statistics
                         lassign [tui-size] rows cols
                         if {$filepath ne ""} {
-                            puts -nonewline "\033\[2J\033\[H"
-                            if {![dict exists $::daily_data $filepath] || [dict size [dict get $::daily_data $filepath]] == 0} {
-                                tui-move 0 0
-                                puts -nonewline [t br_stats_no_data]
-                                puts -nonewline "\033\[K"
-                            } else {
-                                set fdata [dict get $::daily_data $filepath]
-                                set stat_lines [list]
-                                lappend stat_lines "[t br_stats_title] - [file tail $filepath]"
-                                lappend stat_lines ""
-                                lappend stat_lines "Date          Words"
-                                lappend stat_lines "----          -----"
-                                dict for {date count} $fdata {
-                                    lappend stat_lines [format "%-14s %5d" $date $count]
-                                }
-                                set display_lines [expr {min([llength $stat_lines], $rows - 1)}]
-                                for {set _i 0} {$_i < $display_lines} {incr _i} {
-                                    tui-move $_i 0
-                                    set line [lindex $stat_lines $_i]
-                                    puts -nonewline [string range $line 0 [expr {$cols-1}]]
-                                    puts -nonewline "\033\[K"
-                                }
-                            }
-                            tui-bar [expr {$rows-1}] "Press any key to continue (ESC: exit)" "" $cols
-                            flush stdout
-                            set _key [tui-getch 0]
-                            if {$_key eq "ESC"} {
-                                set ::tui_cmd_mode 0
-                                set message ""
-                                set msg_time [clock seconds]
-                            }
+                            set _r [tui-stats-dialog $filepath $rows $cols]
+                            if {$_r ne ""} { set message $_r; set msg_time [clock seconds] }
+                            set wrap_dirty 1
                         }
                         set clear_sel 0
                     } elseif {$key eq "w"} {
-                        # Show word occurrences
                         lassign [tui-size] rows cols
                         if {$filepath ne ""} {
-                            puts -nonewline "\033\[2J\033\[H"
-                            set word_data [get-word-occurrences $filepath]
-                            if {[llength $word_data] == 0} {
-                                tui-move 0 0
-                                puts -nonewline "No words found"
-                                puts -nonewline "\033\[K"
-                            } else {
-                                set word_lines [list]
-                                lappend word_lines "Word Occurrences - [file tail $filepath]"
-                                lappend word_lines ""
-                                lappend word_lines [format "%-30s %s" "Word" "Count"]
-                                lappend word_lines [string repeat "-" 37]
-                                foreach pair $word_data {
-                                    lassign $pair word count
-                                    lappend word_lines [format "%-30s %6d" $word $count]
-                                }
-                                set display_lines [expr {min([llength $word_lines], $rows - 1)}]
-                                for {set _i 0} {$_i < $display_lines} {incr _i} {
-                                    tui-move $_i 0
-                                    set line [lindex $word_lines $_i]
-                                    puts -nonewline [string range $line 0 [expr {$cols-1}]]
-                                    puts -nonewline "\033\[K"
-                                }
-                            }
-                            tui-bar [expr {$rows-1}] "Press any key to continue (ESC: exit)" "" $cols
-                            flush stdout
-                            set _key [tui-getch 0]
-                            if {$_key eq "ESC"} {
-                                set ::tui_cmd_mode 0
-                                set message ""
-                                set msg_time [clock seconds]
-                            }
+                            tui-word-occurrences $filepath $rows $cols
+                            set wrap_dirty 1
                         }
                         set clear_sel 0
                     } else {
@@ -1784,11 +1690,78 @@ proc tui-editor {filepath} {
     }
 }
 
+proc tui-info-dialog {text rows cols} {
+    set _disp [string map [list $::HOME_DIR ~] $text]
+    set _w [expr {min([string length $_disp] + 4, $cols)}]
+    set _row [expr {$rows / 2}]
+    set _lcol [expr {max(0, ($cols - $_w) / 2)}]
+    puts -nonewline "\033\[2J\033\[H"
+    foreach _r [list [expr {$_row-1}] [expr {$_row+1}]] {
+        tui-move $_r 0; puts -nonewline "\033\[K"
+    }
+    tui-move $_row $_lcol
+    tui-attr reverse
+    puts -nonewline [string range "  $_disp  " 0 [expr {$_w-1}]]
+    tui-attr off
+    tui-bar [expr {$rows-1}] "  q / any key  close" "" $cols
+    flush stdout
+    set _k ""; while {$_k eq ""} { set _k [tui-getch] }
+}
+
+proc tui-stats-dialog {filepath rows cols} {
+    if {!$::state_cache_valid} { state-load }
+    set name [file tail $filepath]
+    if {![dict exists $::daily_data $filepath] || [dict size [dict get $::daily_data $filepath]] == 0} {
+        return [t br_stats_no_data]
+    }
+    set _fdata [dict get $::daily_data $filepath]
+    set _today [clock format [clock seconds] -format "%Y-%m-%d"]
+    set _lines [list [list "  [t br_stats_title] - $name" 1] [list "" 0] \
+        [list [format "  %-14s %s" "Date" "Words"] 1]]
+    set _grand_total 0
+    foreach _date [lsort -decreasing [dict keys $_fdata]] {
+        set _n [dict get $_fdata $_date]
+        incr _grand_total $_n
+        set _lbl [expr {$_date eq $_today ? "$_date  <- [t br_stats_today]" : $_date}]
+        lappend _lines [list [format "  %-28s %d" $_lbl $_n] 0]
+    }
+    lappend _lines [list "" 0]
+    lappend _lines [list [format "  %-28s %d" [t br_stats_total] $_grand_total] 1]
+    lappend _lines [list "" 0]
+    set _h [llength $_lines]; set _w 46
+    set _left [expr {max(0,($cols-$_w)/2)}]
+    set _top  [expr {max(0,($rows-$_h)/2)}]
+    puts -nonewline "\033\[2J\033\[H"
+    for {set _i 0} {$_i < $_h} {incr _i} {
+        tui-move [expr {$_top+$_i}] $_left
+        lassign [lindex $_lines $_i] _txt _inv
+        if {$_inv} { tui-attr reverse }
+        puts -nonewline "[string range $_txt 0 [expr {$_w-1}]]\033\[K"
+        if {$_inv} { tui-attr off }
+    }
+    tui-bar [expr {$rows-1}] "  c [t br_stats_clear]   q / Ctrl+H  close" "" $cols
+    flush stdout
+    while 1 {
+        set _k ""; while {$_k eq ""} { set _k [tui-getch] }
+        if {$_k eq "q" || $_k eq $::cfg_tui_help} break
+        if {$_k eq "c"} {
+            if {[tui-confirm [t br_stats_clear_confirm $name] $rows $cols]} {
+                daily-clear $filepath
+            }
+            break
+        }
+    }
+    return ""
+}
+
 proc tui-word-occurrences {fpath rows cols} {
     if {![file exists $fpath]} return
 
     set word_data [get-word-occurrences $fpath]
-    if {[llength $word_data] == 0} return
+    if {[llength $word_data] == 0} {
+        tui-info-dialog [t br_stats_no_data] $rows $cols
+        return
+    }
 
     catch {
         set all_lines [list [list "  Word Occurrences" 1] [list "" 0] \
@@ -1805,11 +1778,14 @@ proc tui-word-occurrences {fpath rows cols} {
         set _left [expr {max(0,($cols-$_w)/2)}]
         set _top  [expr {max(0,($rows-$_usable)/2)}]
 
-        while 1 {
-            if {$_scroll < 0} { set _scroll 0 }
-            if {$_scroll >= $_total - $_usable} { set _scroll [expr {$_total - $_usable}] }
+        puts -nonewline "\033\[2J\033\[H"; flush stdout
 
-            puts -nonewline "\033\[2J"
+        while 1 {
+            set _max_scroll [expr {max(0, $_total - $_usable)}]
+            if {$_scroll > $_max_scroll} { set _scroll $_max_scroll }
+            if {$_scroll < 0} { set _scroll 0 }
+
+            puts -nonewline "\033\[H"
             for {set _i 0} {$_i < $_usable} {incr _i} {
                 set _idx [expr {$_scroll + $_i}]
                 if {$_idx < $_total} {
@@ -1826,19 +1802,18 @@ proc tui-word-occurrences {fpath rows cols} {
             tui-bar [expr {$rows-1}] "  UP/DOWN scroll  q close" "" $cols
             flush stdout
 
-            set _k [tui-getch]
+            set _k ""; while {$_k eq ""} { set _k [tui-getch] }
             switch -- $_k {
                 q { break }
                 UP - k { incr _scroll -1 }
                 DOWN - j { incr _scroll 1 }
                 HOME { set _scroll 0 }
-                END { set _scroll [expr {$_total - $_usable}] }
+                END { set _scroll [expr {max(0, $_total - $_usable)}] }
                 default {
                     if {$_k eq $::cfg_tui_help} { break }
                 }
             }
         }
-        puts -nonewline "\033\[2J"
     }
 }
 
@@ -1879,8 +1854,10 @@ proc tui-config-dialog {rows cols} {
         set sel 0
         set max_fields 5
 
+        puts -nonewline "\033\[2J\033\[H"; flush stdout
+
         while 1 {
-            puts -nonewline "\033\[2J"
+            puts -nonewline "\033\[H"
 
             set _lines {}
             lappend _lines "  Config - Timer / Stopwatch"
@@ -1949,7 +1926,6 @@ proc tui-config-dialog {rows cols} {
                 q - "\x1B" { break }
             }
         }
-        puts -nonewline "\033\[2J"
     }
 }
 
