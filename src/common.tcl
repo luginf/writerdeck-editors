@@ -168,6 +168,7 @@ proc status-build {tokens state} {
     set words [dict get $state words]
     set chars [dict get $state chars]
     set clk   [dict get $state clock]
+    set timer [dict get $state timer]
     set result ""
     foreach tok $tokens {
         switch -- $tok {
@@ -180,6 +181,15 @@ proc status-build {tokens state} {
             chars    { append result "  ${chars}c" }
             goal     { if {$::cfg_word_goal > 0} { append result [format "  %d/%d" [daily-today $words] $::cfg_word_goal] } }
             clock    { append result "  $clk" }
+            timer    { if {$::cfg_chrono_show} {
+                set _m [expr {$timer / 60}]
+                set _s [expr {$timer % 60}]
+                if {$::timer_active} {
+                    append result [format " \[%d'%02d\"]" $_m $_s]
+                } else {
+                    append result [format "  %d'%02d\"" $_m $_s]
+                }
+            } }
             space    { append result " " }
             help_bar {}
         }

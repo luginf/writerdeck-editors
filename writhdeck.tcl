@@ -29,7 +29,7 @@ _w=$(stty -g 2>/dev/null); trap '[ -n "$_w" ] && stty "$_w" 2>/dev/null' EXIT IN
 #
 # # # # # # # # # # # #
 
-set ::version          "v20260513"
+set ::version          "v20260515"
 
 # bail out immediately when invoked by bash tab-completion
 if {[info exists ::env(COMP_LINE)] || [info exists ::env(COMP_POINT)]} { exit 0 }
@@ -446,10 +446,92 @@ set ::cfg_key_fullscreen   "Alt-Return"
 set ::cfg_key_split        "F3"
 set ::cfg_key_split_focus  "F4"
 set ::cfg_key_error        ""
+set ::cfg_timer_duration   25
+set ::cfg_timer_sound      1
+set ::cfg_timer_alert      1
+set ::cfg_chrono_show      1
+set ::cfg_timer_type       "countdown"
+set ::timer_active         0
+set ::timer_remaining      0
+set ::timer_last_tick      0
+set ::timer_schedule_id    ""
 set ::fullscreen 0
 set ::split_mode 0
 
 proc marker-val {v} { expr {$v eq "0" ? "" : $v} }
+
+proc timer-tick {} {
+    if {!$::timer_active} return
+    if {$::cfg_timer_type eq "countdown" && $::timer_remaining <= 0} return
+    set now [clock seconds]
+    if {$::timer_last_tick == 0} {
+        set ::timer_last_tick $now
+        return
+    }
+    if {$now > $::timer_last_tick} {
+        if {$::cfg_timer_type eq "countdown"} {
+            incr ::timer_remaining -[expr {$now - $::timer_last_tick}]
+            if {$::timer_remaining < 0} { set ::timer_remaining 0 }
+            if {$::timer_remaining == 0 && $::cfg_timer_alert} {
+                if {$::cfg_timer_sound} { puts -nonewline "\a"; flush stdout }
+            }
+        } else {
+            incr ::timer_remaining [expr {$now - $::timer_last_tick}]
+        }
+        set ::timer_last_tick $now
+        if {!$::no_gui} { catch {ed-status} }
+    }
+}
+
+proc timer-schedule {} {
+    if {$::timer_active && $::cfg_chrono_show} {
+        set ::timer_schedule_id [after 1000 timer-schedule-tick]
+    } else {
+        if {$::timer_schedule_id ne ""} {
+            catch {after cancel $::timer_schedule_id}
+            set ::timer_schedule_id ""
+        }
+    }
+}
+
+proc timer-schedule-tick {} {
+    timer-tick
+    timer-schedule
+}
+
+proc timer-start {} {
+    if {$::cfg_timer_type eq "countdown"} {
+        set ::timer_remaining [expr {$::cfg_timer_duration * 60}]
+    } else {
+        set ::timer_remaining 0
+    }
+    set ::timer_active 1
+    set ::timer_last_tick [clock seconds]
+    timer-schedule
+}
+
+proc timer-pause {} {
+    set ::timer_active 0
+    if {$::timer_schedule_id ne ""} {
+        catch {after cancel $::timer_schedule_id}
+        set ::timer_schedule_id ""
+    }
+}
+
+proc timer-reset {} {
+    set ::timer_active 0
+    if {$::cfg_timer_type eq "countdown"} {
+        set ::timer_remaining [expr {$::cfg_timer_duration * 60}]
+    } else {
+        set ::timer_remaining 0
+    }
+    set ::timer_last_tick 0
+    if {$::timer_schedule_id ne ""} {
+        catch {after cancel $::timer_schedule_id}
+        set ::timer_schedule_id ""
+    }
+    if {!$::no_gui} { catch {ed-status} }
+}
 
 proc profile-apply {name} {
     if {![dict exists $::cfg_profiles $name]} return
@@ -636,6 +718,11 @@ proc ini-load {} {
                 toc_key          { set ::cfg_key_toc          $v }
                 ln_key           { set ::cfg_key_line_numbers $v }
                 fullscreen_key   { set ::cfg_key_fullscreen   $v }
+                timer_duration   { set ::cfg_timer_duration   $v }
+                timer_sound      { set ::cfg_timer_sound      [string is true $v] }
+                timer_alert      { set ::cfg_timer_alert      [string is true $v] }
+                timer_type       { set ::cfg_timer_type       $v }
+                chrono_show      { set ::cfg_chrono_show      [string is true $v] }
             }
         }
     }
@@ -683,11 +770,17 @@ proc ini-save {} {
     puts $fh "help_bar       = $::cfg_help_bar"
     puts $fh "# word_goal: target word count shown in status bar with 'goal' token (0 = disabled)"
     puts $fh "word_goal      = $::cfg_word_goal"
-    puts $fh "# status bar zones - tokens: filename dirty sel ln col words chars goal clock help_bar space"
+    puts $fh "# status bar zones - tokens: filename dirty sel ln col words chars goal clock timer help_bar space"
     puts $fh "status_left    = $::cfg_status_left"
     puts $fh "status_center  = $::cfg_status_center"
     puts $fh "status_right   = $::cfg_status_right"
     puts $fh "dark_mode      = $::cfg_dark_mode"
+    puts $fh "# timer and stopwatch"
+    puts $fh "timer_duration = $::cfg_timer_duration"
+    puts $fh "timer_sound    = $::cfg_timer_sound"
+    puts $fh "timer_alert    = $::cfg_timer_alert"
+    puts $fh "timer_type     = $::cfg_timer_type"
+    puts $fh "chrono_show    = $::cfg_chrono_show"
     puts $fh ""
     puts $fh "\[keys\]"
     puts $fh "# Use Tk key names: Control-s, Alt-Return, F11, etc."
@@ -1073,7 +1166,7 @@ dict set ::i18n en {
     toc_headings       "%d heading%s"
     br_no_docs         "No documents yet. Press n to create one."
     br_help_gui        "h:help  n:new  t:scratchpad  f:fav  s:stats  b:backup  d:delete  r:rename  i:info  c:config  z:reload  %s:sections  q:quit"
-    br_help_tui        "h:%s  n:new  t:scratchpad  f:fav  s:stats  b:backup  d:delete  r:rename  i:info  w:words  %s:sections  q:quit"
+    br_help_tui        "h:%s  n:new  t:scratchpad  f:fav  s:stats  b:backup  d:delete  r:rename  i:info  c:config  w:words  %s:sections  q:quit"
     br_backed_up       "backup %s -> %s"
     br_favorites       "Favorites"
     br_stats_title     "Writing stats"
@@ -1191,6 +1284,17 @@ dict set ::i18n en {
     help_double_click      "Enter / double-click"
     help_key_open_text     "Open"
     help_k_fullscreen      "Fullscreen"
+    config_tab_profile     "Profile"
+    config_tab_timer       "Timer / Chrono"
+    timer_section          "Timer"
+    timer_duration         "Duration (min):"
+    timer_sound            "Sound at end:"
+    timer_alert            "Alert message:"
+    timer_type             "Type:"
+    timer_type_countdown   "countdown"
+    timer_type_stopwatch   "stopwatch"
+    chrono_section         "Stopwatch"
+    chrono_show            "Show in status bar:"
 }
 
 dict set ::i18n de {
@@ -1200,7 +1304,7 @@ dict set ::i18n de {
     toc_headings       "%d Ueberschrift%s"
     br_no_docs         "Keine Dokumente. Druecke n, um ein Dokument zu erstellen."
     br_help_gui        "h:hilfe  n:neu  t:notizen  f:fav  s:statistiken  b:sicherung  d:loeschen  r:umbenennen  i:info  c:konfiguration  z:neuladen  %s:abschnitte  q:beenden"
-    br_help_tui        "h:%s  n:neu  t:notizen  f:fav  s:statistiken  b:sicherung  d:loeschen  r:umbenennen  i:info  w:woerter  %s:abschnitte  q:beenden"
+    br_help_tui        "h:%s  n:neu  t:notizen  f:fav  s:statistiken  b:sicherung  d:loeschen  r:umbenennen  i:info  c:konfiguration  w:woerter  %s:abschnitte  q:beenden"
     br_backed_up       "sicherung %s -> %s"
     br_favorites       "Favoriten"
     br_stats_title     "Schreibstatistiken"
@@ -1318,6 +1422,17 @@ dict set ::i18n de {
     help_double_click      "Eingabe / Doppelklick"
     help_key_open_text     "Oeffnen"
     help_k_fullscreen      "Vollbild"
+    config_tab_profile     "Profil"
+    config_tab_timer       "Timer / Chrono"
+    timer_section          "Timer"
+    timer_duration         "Dauer (min):"
+    timer_sound            "Ton am Ende:"
+    timer_alert            "Warnmeldung:"
+    timer_type             "Typ:"
+    timer_type_countdown   "Countdown"
+    timer_type_stopwatch   "Stoppuhr"
+    chrono_section         "Stoppuhr"
+    chrono_show            "In der Statusleiste anzeigen:"
 }
 
 dict set ::i18n es {
@@ -1327,7 +1442,7 @@ dict set ::i18n es {
     toc_headings       "%d encabezado%s"
     br_no_docs         "Sin documentos. Presiona n para crear uno."
     br_help_gui        "h:ayuda  n:nuevo  t:notas  f:fav  s:estadisticas  b:copia  d:eliminar  r:renombrar  i:info  c:configuracion  z:recargar  %s:secciones  q:salir"
-    br_help_tui        "h:%s  n:nuevo  t:notas  f:fav  s:estadisticas  b:copia  d:eliminar  r:renombrar  i:info  w:palabras  %s:secciones  q:salir"
+    br_help_tui        "h:%s  n:nuevo  t:notas  f:fav  s:estadisticas  b:copia  d:eliminar  r:renombrar  i:info  c:configuracion  w:palabras  %s:secciones  q:salir"
     br_backed_up       "copia %s -> %s"
     br_favorites       "Favoritos"
     br_stats_title     "Estadisticas de escritura"
@@ -1445,6 +1560,17 @@ dict set ::i18n es {
     help_double_click      "Intro / Doble clic"
     help_key_open_text     "Abrir"
     help_k_fullscreen      "Pantalla completa"
+    config_tab_profile     "Perfil"
+    config_tab_timer       "Temporizador / Cronometro"
+    timer_section          "Temporizador"
+    timer_duration         "Duracion (min):"
+    timer_sound            "Sonido al final:"
+    timer_alert            "Mensaje de alerta:"
+    timer_type             "Tipo:"
+    timer_type_countdown   "cuenta atras"
+    timer_type_stopwatch   "cronometro"
+    chrono_section         "Cronometro"
+    chrono_show            "Mostrar en la barra de estado:"
 }
 
 dict set ::i18n fr {
@@ -1454,7 +1580,7 @@ dict set ::i18n fr {
     toc_headings       "%d titre%s"
     br_no_docs         "Aucun document. Appuyez sur n pour en créer un."
     br_help_gui        "h:aide  n:nouveau  t:bloc-notes  f:fav  s:stats  b:backup  d:supprimer  r:renommer  i:infos  c:config  z:recharger  %s:sections  q:quitter"
-    br_help_tui        "h:%s  n:nouveau  t:bloc-notes  f:fav  s:stats  b:backup  d:supprimer  r:renommer  i:infos  w:mots  %s:sections  q:quitter"
+    br_help_tui        "h:%s  n:nouveau  t:bloc-notes  f:fav  s:stats  b:backup  d:supprimer  r:renommer  i:infos  c:config  w:mots  %s:sections  q:quitter"
     br_backed_up       "sauvegarde %s -> %s"
     br_favorites       "Favoris"
     br_stats_title     "Statistiques d'écriture"
@@ -1572,6 +1698,17 @@ dict set ::i18n fr {
     help_double_click      "Entrée / double-clic"
     help_key_open_text     "Ouvrir"
     help_k_fullscreen      "Plein écran"
+    config_tab_profile     "Profil"
+    config_tab_timer       "Minuterie / Chrono"
+    timer_section          "Minuterie"
+    timer_duration         "Duree (min) :"
+    timer_sound            "Son a la fin :"
+    timer_alert            "Message d'alerte :"
+    timer_type             "Type :"
+    timer_type_countdown   "compte a rebours"
+    timer_type_stopwatch   "chronometre"
+    chrono_section         "Chronometre"
+    chrono_show            "Afficher dans la barre :"
 }
 
 dict set ::i18n ko {
@@ -1581,7 +1718,7 @@ dict set ::i18n ko {
     toc_headings       "%d개의 제목%s"
     br_no_docs         "문서가 없습니다. n을 눌러서 새 문서를 만드세요."
     br_help_gui        "h:도움말  n:새로운  t:메모장  f:즐겨찾기  s:통계  b:백업  d:삭제  r:이름변경  i:정보  c:설정  z:다시로드  %s:섹션  q:종료"
-    br_help_tui        "h:%s  n:새로운  t:메모장  f:즐겨찾기  s:통계  b:백업  d:삭제  r:이름변경  i:정보  w:단어  %s:섹션  q:종료"
+    br_help_tui        "h:%s  n:새로운  t:메모장  f:즐겨찾기  s:통계  b:백업  d:삭제  r:이름변경  i:정보  c:설정  w:단어  %s:섹션  q:종료"
     br_backed_up       "백업 %s -> %s"
     br_favorites       "즐겨찾기"
     br_stats_title     "작문 통계"
@@ -1699,6 +1836,17 @@ dict set ::i18n ko {
     help_double_click      "Enter / 더블 클릭"
     help_key_open_text     "열기"
     help_k_fullscreen      "전체 화면"
+    config_tab_profile     "프로필"
+    config_tab_timer       "타이머 / 스톱워치"
+    timer_section          "타이머"
+    timer_duration         "기간 (분):"
+    timer_sound            "종료 시 소리:"
+    timer_alert            "경고 메시지:"
+    timer_type             "유형:"
+    timer_type_countdown   "카운트다운"
+    timer_type_stopwatch   "스톱워치"
+    chrono_section         "스톱워치"
+    chrono_show            "상태 표시줄에 표시:"
 }
 
 dict set ::i18n no {
@@ -1708,7 +1856,7 @@ dict set ::i18n no {
     toc_headings       "%d overskrift%s"
     br_no_docs         "Ingen dokumenter ennå. Trykk n for å lage en ny."
     br_help_gui        "h:hjelp  n:ny  t:notisbok  f:favoritt  s:statistikk  b:sikkerhetskopi  d:slett  r:gi nytt navn  i:info  c:innstillinger  z:last på nytt  %s:avsnitt  q:avslutt"
-    br_help_tui        "h:%s  n:ny  t:notisbok  f:favoritt  s:statistikk  b:sikkerhetskopi  d:slett  r:gi nytt navn  i:info  w:ord  %s:avsnitt  q:avslutt"
+    br_help_tui        "h:%s  n:ny  t:notisbok  f:favoritt  s:statistikk  b:sikkerhetskopi  d:slett  r:gi nytt navn  i:info  c:innstillinger  w:ord  %s:avsnitt  q:avslutt"
     br_backed_up       "sikkerhetskopi %s -> %s"
     br_favorites       "Favoritter"
     br_stats_title     "Skrivstatistikk"
@@ -1826,6 +1974,17 @@ dict set ::i18n no {
     help_double_click      "Enter / Dobbeltklipp"
     help_key_open_text     "Apne"
     help_k_fullscreen      "Fullskjerm"
+    config_tab_profile     "Profil"
+    config_tab_timer       "Stoppeklokke / Timer"
+    timer_section          "Timer"
+    timer_duration         "Varighet (min):"
+    timer_sound            "Lyd ved slutt:"
+    timer_alert            "Advarselmelding:"
+    timer_type             "Type:"
+    timer_type_countdown   "nedtelling"
+    timer_type_stopwatch   "stoppeklokke"
+    chrono_section         "Stoppeklokke"
+    chrono_show            "Vis i statuslinje:"
 }
 
 
@@ -2002,6 +2161,7 @@ proc status-build {tokens state} {
     set words [dict get $state words]
     set chars [dict get $state chars]
     set clk   [dict get $state clock]
+    set timer [dict get $state timer]
     set result ""
     foreach tok $tokens {
         switch -- $tok {
@@ -2014,6 +2174,15 @@ proc status-build {tokens state} {
             chars    { append result "  ${chars}c" }
             goal     { if {$::cfg_word_goal > 0} { append result [format "  %d/%d" [daily-today $words] $::cfg_word_goal] } }
             clock    { append result "  $clk" }
+            timer    { if {$::cfg_chrono_show} {
+                set _m [expr {$timer / 60}]
+                set _s [expr {$timer % 60}]
+                if {$::timer_active} {
+                    append result [format " \[%d'%02d\"]" $_m $_s]
+                } else {
+                    append result [format "  %d'%02d\"" $_m $_s]
+                }
+            } }
             space    { append result " " }
             help_bar {}
         }
@@ -2935,8 +3104,13 @@ proc gui-status-state {} {
     set words $::gui_wc
     set chars $::gui_cc
     set clk   [clock format [clock seconds] -format "%H:%M"]
+    set timer_display [expr {$::cfg_timer_duration * 60}]
+    if {$::timer_active} {
+        set timer_display $::timer_remaining
+        timer-tick
+    }
     return [dict create fn $fn dirty $::dirty sel 0 ln $ln total $total \
-                col [expr {$col+1}] words $words chars $chars clock $clk]
+                col [expr {$col+1}] words $words chars $chars clock $clk timer $timer_display]
 }
 
 proc gui-status-update {} {
@@ -3709,6 +3883,11 @@ bind .ed.t <Control-plus>    { font-resize  1; break }
 bind .ed.t <Control-KP_Add>  { font-resize  1; break }
 bind .ed.t <Control-minus>   { font-resize -1; break }
 bind .ed.t <Control-KP_Subtract> { font-resize -1; break }
+bind .ed.t <Alt-t> {
+    if {$::timer_active} { timer-pause } else { timer-start }
+    ed-status
+    break
+}
 
 proc profile-config-update-profile {w} {
     set profile $::profile_config_profile
@@ -3718,32 +3897,32 @@ proc profile-config-update-profile {w} {
     if {[dict exists $::cfg_profiles $profile font_family]} {
         set cur_font [dict get $::cfg_profiles $profile font_family]
     }
-    $w.profile.ffont.entry delete 0 end
-    $w.profile.ffont.entry insert 0 $cur_font
+    $w.tab_profile.profile.ffont.entry delete 0 end
+    $w.tab_profile.profile.ffont.entry insert 0 $cur_font
 
     set cur_size $::cfg_font_size
     if {[dict exists $::cfg_profiles $profile font_size]} {
         set cur_size [dict get $::cfg_profiles $profile font_size]
     }
-    $w.fsize.spin set $cur_size
+    $w.tab_profile.fsize.spin set $cur_size
 
     set cur_mw $::cfg_margin_width
     if {[dict exists $::cfg_profiles $profile margin_width]} {
         set cur_mw [dict get $::cfg_profiles $profile margin_width]
     }
-    $w.fmarginw.spin set $cur_mw
+    $w.tab_profile.fmarginw.spin set $cur_mw
 
     set cur_mh $::cfg_margin_height
     if {[dict exists $::cfg_profiles $profile margin_height]} {
         set cur_mh [dict get $::cfg_profiles $profile margin_height]
     }
-    $w.fmarginh.spin set $cur_mh
+    $w.tab_profile.fmarginh.spin set $cur_mh
 
     set cur_goal $::cfg_word_goal
     if {[dict exists $::cfg_profiles $profile word_goal]} {
         set cur_goal [dict get $::cfg_profiles $profile word_goal]
     }
-    $w.fwordgoal.spin set $cur_goal
+    $w.tab_profile.fwordgoal.spin set $cur_goal
 
     set cur_dark $::cfg_dark_mode
     if {[dict exists $::cfg_profiles $profile dark_mode]} {
@@ -3752,8 +3931,21 @@ proc profile-config-update-profile {w} {
     set ::profile_config_dark_mode $cur_dark
 
     set idx [lsearch -exact [lsort [font families]] $cur_font]
-    $w.profile.fonts selection clear 0 end
-    if {$idx >= 0} { $w.profile.fonts selection set $idx; $w.profile.fonts see $idx }
+    $w.tab_profile.profile.fonts selection clear 0 end
+    if {$idx >= 0} { $w.tab_profile.profile.fonts selection set $idx; $w.tab_profile.profile.fonts see $idx }
+}
+
+proc config-tab-switch {w tab} {
+    pack forget $w.tab_profile $w.tab_timer
+    if {$tab eq "profile"} {
+        pack $w.tab_profile -fill both -expand 1 -padx 8 -pady 8
+        $w.tabs.profile configure -fg $::fg -bg $::bg_sel
+        $w.tabs.timer configure -fg $::fg_bar -bg $::bg
+    } else {
+        pack $w.tab_timer -fill both -expand 1 -padx 8 -pady 8
+        $w.tabs.profile configure -fg $::fg_bar -bg $::bg
+        $w.tabs.timer configure -fg $::fg -bg $::bg_sel
+    }
 }
 
 proc profile-config-dialog {} {
@@ -3781,167 +3973,246 @@ proc profile-config-dialog {} {
         return
     }
 
+    # --- Tab bar ---
+    frame $w.tabs -bg $::bg
+    pack $w.tabs -fill x -padx 8 -pady {8 0}
+    button $w.tabs.profile -text [t config_tab_profile] -font $::font_sm -fg $::fg -bg $::bg_sel \
+        -command "config-tab-switch $w profile" -borderwidth 1 -relief raised -padx 12 -pady 4
+    button $w.tabs.timer -text [t config_tab_timer] -font $::font_sm -fg $::fg_bar -bg $::bg \
+        -command "config-tab-switch $w timer" -borderwidth 1 -relief raised -padx 12 -pady 4
+    pack $w.tabs.profile -side left -padx 2
+    pack $w.tabs.timer -side left -padx 2
+
+    # --- Tab content frames ---
+    frame $w.tab_profile -bg $::bg
+    frame $w.tab_timer -bg $::bg
+    pack $w.tab_profile -fill both -expand 1 -padx 8 -pady 8
+
+    # --- Profile tab content ---
     # --- Global settings frame ---
-    frame $w.global -relief ridge -borderwidth 2 -bg $::bg
-    pack $w.global -fill x -padx 8 -pady 8
+    frame $w.tab_profile.global -relief ridge -borderwidth 2 -bg $::bg
+    pack $w.tab_profile.global -fill x -padx 0 -pady 8
 
-    label $w.global.title -text "Global Settings" -font $::font_sm -fg $::fg_bar -bg $::bg
-    pack $w.global.title -anchor w -padx 8 -pady {4 2}
+    label $w.tab_profile.global.title -text "Global Settings" -font $::font_sm -fg $::fg_bar -bg $::bg
+    pack $w.tab_profile.global.title -anchor w -padx 8 -pady {4 2}
 
-    label $w.global.lbl_defprof -text [t profile_config_default_profile] -font $::font_sm -bg $::bg -fg $::fg
-    pack $w.global.lbl_defprof -anchor w -padx 12 -pady {4 2}
-    frame $w.global.fprof -bg $::bg
-    pack $w.global.fprof -fill x -padx 12 -pady {0 6}
-    tk_optionMenu $w.global.fprof.om ::profile_config_default_prof {*}$profiles
-    $w.global.fprof.om configure -bg $::bg_bar -fg $::fg_bar -activebackground $::bg_sel -activeforeground $::fg -borderwidth 1 -highlightthickness 0
+    label $w.tab_profile.global.lbl_defprof -text [t profile_config_default_profile] -font $::font_sm -bg $::bg -fg $::fg
+    pack $w.tab_profile.global.lbl_defprof -anchor w -padx 12 -pady {4 2}
+    frame $w.tab_profile.global.fprof -bg $::bg
+    pack $w.tab_profile.global.fprof -fill x -padx 12 -pady {0 6}
+    tk_optionMenu $w.tab_profile.global.fprof.om ::profile_config_default_prof {*}$profiles
+    $w.tab_profile.global.fprof.om configure -bg $::bg_bar -fg $::fg_bar -activebackground $::bg_sel -activeforeground $::fg -borderwidth 1 -highlightthickness 0
     set ::profile_config_default_prof $::cfg_profile
-    pack $w.global.fprof.om -anchor w
+    pack $w.tab_profile.global.fprof.om -anchor w
 
-    label $w.global.lbl_scheme -text [t profile_config_default_scheme] -font $::font_sm -bg $::bg -fg $::fg
-    pack $w.global.lbl_scheme -anchor w -padx 12 -pady {4 2}
-    frame $w.global.fscheme -bg $::bg
-    pack $w.global.fscheme -fill x -padx 12 -pady {0 6}
-    tk_optionMenu $w.global.fscheme.om ::profile_config_default_scheme {*}$schemes
-    $w.global.fscheme.om configure -bg $::bg_bar -fg $::fg_bar -activebackground $::bg_sel -activeforeground $::fg -borderwidth 1 -highlightthickness 0
+    label $w.tab_profile.global.lbl_scheme -text [t profile_config_default_scheme] -font $::font_sm -bg $::bg -fg $::fg
+    pack $w.tab_profile.global.lbl_scheme -anchor w -padx 12 -pady {4 2}
+    frame $w.tab_profile.global.fscheme -bg $::bg
+    pack $w.tab_profile.global.fscheme -fill x -padx 12 -pady {0 6}
+    tk_optionMenu $w.tab_profile.global.fscheme.om ::profile_config_default_scheme {*}$schemes
+    $w.tab_profile.global.fscheme.om configure -bg $::bg_bar -fg $::fg_bar -activebackground $::bg_sel -activeforeground $::fg -borderwidth 1 -highlightthickness 0
     set ::profile_config_default_scheme $::cfg_scheme
-    pack $w.global.fscheme.om -anchor w
+    pack $w.tab_profile.global.fscheme.om -anchor w
 
-    label $w.global.lbl_lang -text [t profile_config_language] -font $::font_sm -bg $::bg -fg $::fg
-    pack $w.global.lbl_lang -anchor w -padx 12 -pady {4 2}
-    frame $w.global.flang -bg $::bg
-    pack $w.global.flang -fill x -padx 12 -pady {0 6}
+    label $w.tab_profile.global.lbl_lang -text [t profile_config_language] -font $::font_sm -bg $::bg -fg $::fg
+    pack $w.tab_profile.global.lbl_lang -anchor w -padx 12 -pady {4 2}
+    frame $w.tab_profile.global.flang -bg $::bg
+    pack $w.tab_profile.global.flang -fill x -padx 12 -pady {0 6}
     set langs [lsort [dict keys $::i18n]]
-    tk_optionMenu $w.global.flang.om ::profile_config_language {*}$langs
-    $w.global.flang.om configure -bg $::bg_bar -fg $::fg_bar -activebackground $::bg_sel -activeforeground $::fg -borderwidth 1 -highlightthickness 0
+    tk_optionMenu $w.tab_profile.global.flang.om ::profile_config_language {*}$langs
+    $w.tab_profile.global.flang.om configure -bg $::bg_bar -fg $::fg_bar -activebackground $::bg_sel -activeforeground $::fg -borderwidth 1 -highlightthickness 0
     set ::profile_config_language $::cfg_lang
-    pack $w.global.flang.om -anchor w
+    pack $w.tab_profile.global.flang.om -anchor w
 
     # --- Profile-specific settings frame ---
-    frame $w.profile -relief ridge -borderwidth 2 -bg $::bg
-    pack $w.profile -fill x -padx 8 -pady 8
+    frame $w.tab_profile.profile -relief ridge -borderwidth 2 -bg $::bg
+    pack $w.tab_profile.profile -fill x -padx 0 -pady 8
 
-    label $w.profile.title -text "Profile Settings" -font $::font_sm -fg $::fg_bar -bg $::bg
-    pack $w.profile.title -anchor w -padx 8 -pady {4 2}
+    label $w.tab_profile.profile.title -text "Profile Settings" -font $::font_sm -fg $::fg_bar -bg $::bg
+    pack $w.tab_profile.profile.title -anchor w -padx 8 -pady {4 2}
 
     # Profile selector row
-    frame $w.profile.fprof -bg $::bg
-    pack $w.profile.fprof -fill x -padx 12 -pady {0 6}
-    label $w.profile.fprof.lbl -text [t profile_config_edit_profile] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
-    tk_optionMenu $w.profile.fprof.om ::profile_config_profile {*}$profiles
-    $w.profile.fprof.om configure -bg $::bg_bar -fg $::fg_bar -activebackground $::bg_sel -activeforeground $::fg -borderwidth 1 -highlightthickness 0
+    frame $w.tab_profile.profile.fprof -bg $::bg
+    pack $w.tab_profile.profile.fprof -fill x -padx 12 -pady {0 6}
+    label $w.tab_profile.profile.fprof.lbl -text [t profile_config_edit_profile] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
+    tk_optionMenu $w.tab_profile.profile.fprof.om ::profile_config_profile {*}$profiles
+    $w.tab_profile.profile.fprof.om configure -bg $::bg_bar -fg $::fg_bar -activebackground $::bg_sel -activeforeground $::fg -borderwidth 1 -highlightthickness 0
     if {[lsearch -exact $profiles $::cfg_profile] >= 0} {
         set ::profile_config_profile $::cfg_profile
     } else {
         set ::profile_config_profile [lindex $profiles 0]
     }
-    pack $w.profile.fprof.lbl -side left -padx {0 8}
-    pack $w.profile.fprof.om -side left -fill x -expand 1 -padx {8 0}
+    pack $w.tab_profile.profile.fprof.lbl -side left -padx {0 8}
+    pack $w.tab_profile.profile.fprof.om -side left -fill x -expand 1 -padx {8 0}
 
     # Font family row
-    frame $w.profile.ffont -bg $::bg
-    pack $w.profile.ffont -fill x -padx 12 -pady 4
-    label $w.profile.ffont.lbl -text [t profile_config_font] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
-    entry $w.profile.ffont.entry -width 30 -font $::font_sm -bg $::bg_bar -fg $::fg
-    pack $w.profile.ffont.lbl -side left
-    pack $w.profile.ffont.entry -side left -fill x -expand 1 -padx {8 0}
+    frame $w.tab_profile.profile.ffont -bg $::bg
+    pack $w.tab_profile.profile.ffont -fill x -padx 12 -pady 4
+    label $w.tab_profile.profile.ffont.lbl -text [t profile_config_font] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
+    entry $w.tab_profile.profile.ffont.entry -width 30 -font $::font_sm -bg $::bg_bar -fg $::fg
+    pack $w.tab_profile.profile.ffont.lbl -side left
+    pack $w.tab_profile.profile.ffont.entry -side left -fill x -expand 1 -padx {8 0}
 
     # Available fonts listbox with scrollbar
-    label $w.profile.lbl_fonts -text "Available fonts:" -font $::font_sm -bg $::bg -fg $::fg
-    pack $w.profile.lbl_fonts -anchor w -padx 12 -pady {4 2}
-    frame $w.profile.fonts_frame -bg $::bg
-    pack $w.profile.fonts_frame -fill both -expand 1 -padx 12 -pady 2
-    listbox $w.profile.fonts -height 5 -width 40 -font $::font_sm -selectmode single \
-        -yscrollcommand [list $w.profile.fonts_scroll set] -bg $::bg_bar -fg $::fg
-    scrollbar $w.profile.fonts_scroll -command [list $w.profile.fonts yview] -bg $::bg_bar
+    label $w.tab_profile.profile.lbl_fonts -text "Available fonts:" -font $::font_sm -bg $::bg -fg $::fg
+    pack $w.tab_profile.profile.lbl_fonts -anchor w -padx 12 -pady {4 2}
+    frame $w.tab_profile.profile.fonts_frame -bg $::bg
+    pack $w.tab_profile.profile.fonts_frame -fill both -expand 1 -padx 12 -pady 2
+    listbox $w.tab_profile.profile.fonts -height 5 -width 40 -font $::font_sm -selectmode single \
+        -yscrollcommand [list $w.tab_profile.profile.fonts_scroll set] -bg $::bg_bar -fg $::fg
+    scrollbar $w.tab_profile.profile.fonts_scroll -command [list $w.tab_profile.profile.fonts yview] -bg $::bg_bar
     foreach f [lsort [font families]] {
-        $w.profile.fonts insert end $f
+        $w.tab_profile.profile.fonts insert end $f
     }
-    pack $w.profile.fonts -side left -fill both -expand 1 -in $w.profile.fonts_frame
-    pack $w.profile.fonts_scroll -side left -fill y -in $w.profile.fonts_frame
+    pack $w.tab_profile.profile.fonts -side left -fill both -expand 1 -in $w.tab_profile.profile.fonts_frame
+    pack $w.tab_profile.profile.fonts_scroll -side left -fill y -in $w.tab_profile.profile.fonts_frame
 
     # Font preview (below listbox)
-    label $w.profile.preview -text "Preview" -font $::font_sm -bg $::bg -fg $::fg
-    pack $w.profile.preview -fill x -padx 12 -pady {8 2}
+    label $w.tab_profile.profile.preview -text "Preview" -font $::font_sm -bg $::bg -fg $::fg
+    pack $w.tab_profile.profile.preview -fill x -padx 12 -pady {8 2}
 
     # Font size row (create BEFORE bindings)
-    frame $w.fsize -bg $::bg
-    pack $w.fsize -fill x -padx 12 -pady 4
-    label $w.fsize.lbl -text [t profile_config_size] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
-    spinbox $w.fsize.spin -from 6 -to 72 -width 5 -font $::font_sm -bg $::bg_bar -fg $::fg -command {
-        set font [.profile_config.profile.ffont.entry get]
-        set size [.profile_config.fsize.spin get]
+    frame $w.tab_profile.fsize -bg $::bg
+    pack $w.tab_profile.fsize -fill x -padx 12 -pady 4
+    label $w.tab_profile.fsize.lbl -text [t profile_config_size] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
+    spinbox $w.tab_profile.fsize.spin -from 6 -to 72 -width 5 -font $::font_sm -bg $::bg_bar -fg $::fg -command {
+        set font [.profile_config.tab_profile.profile.ffont.entry get]
+        set size [.profile_config.tab_profile.fsize.spin get]
         if {$font ne "" && $size ne ""} {
-            catch {.profile_config.profile.preview configure -font [list $font $size] -text "Sample Text - $font"}
+            catch {.profile_config.tab_profile.profile.preview configure -font [list $font $size] -text "Sample Text - $font"}
         }
     }
-    pack $w.fsize.lbl -side left
-    pack $w.fsize.spin -side left -padx {8 0}
+    pack $w.tab_profile.fsize.lbl -side left
+    pack $w.tab_profile.fsize.spin -side left -padx {8 0}
 
     # Bind to update preview on font/size change (AFTER all widgets created)
-    bind $w.profile.fonts <<ListboxSelect>> {
+    bind $w.tab_profile.profile.fonts <<ListboxSelect>> {
         set sel [%W curselection]
         if {[llength $sel] > 0} {
             set font_var [%W get [lindex $sel 0]]
-            .profile_config.profile.ffont.entry delete 0 end
-            .profile_config.profile.ffont.entry insert 0 $font_var
-            set size [.profile_config.fsize.spin get]
+            .profile_config.tab_profile.profile.ffont.entry delete 0 end
+            .profile_config.tab_profile.profile.ffont.entry insert 0 $font_var
+            set size [.profile_config.tab_profile.fsize.spin get]
             if {$size ne ""} {
-                .profile_config.profile.preview configure -font [list $font_var $size] -text "Sample Text - $font_var"
+                .profile_config.tab_profile.profile.preview configure -font [list $font_var $size] -text "Sample Text - $font_var"
             }
         }
     }
 
-    bind $w.profile.ffont.entry <KeyRelease> {
-        set font [.profile_config.profile.ffont.entry get]
-        set size [.profile_config.fsize.spin get]
+    bind $w.tab_profile.profile.ffont.entry <KeyRelease> {
+        set font [.profile_config.tab_profile.profile.ffont.entry get]
+        set size [.profile_config.tab_profile.fsize.spin get]
         if {$font ne "" && $size ne ""} {
-            catch {.profile_config.profile.preview configure -font [list $font $size] -text "Sample Text - $font"}
+            catch {.profile_config.tab_profile.profile.preview configure -font [list $font $size] -text "Sample Text - $font"}
         }
     }
 
-    bind $w.fsize.spin <KeyRelease> {
-        set font [.profile_config.profile.ffont.entry get]
-        set size [.profile_config.fsize.spin get]
+    bind $w.tab_profile.fsize.spin <KeyRelease> {
+        set font [.profile_config.tab_profile.profile.ffont.entry get]
+        set size [.profile_config.tab_profile.fsize.spin get]
         if {$font ne "" && $size ne ""} {
-            catch {.profile_config.profile.preview configure -font [list $font $size] -text "Sample Text - $font"}
+            catch {.profile_config.tab_profile.profile.preview configure -font [list $font $size] -text "Sample Text - $font"}
         }
     }
 
     # Margin width row
-    frame $w.fmarginw -bg $::bg
-    pack $w.fmarginw -fill x -padx 12 -pady 4
-    label $w.fmarginw.lbl -text [t profile_config_margin_w] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
-    spinbox $w.fmarginw.spin -from 0 -to 200 -width 5 -font $::font_sm -bg $::bg_bar -fg $::fg
-    pack $w.fmarginw.lbl -side left
-    pack $w.fmarginw.spin -side left -padx {8 0}
+    frame $w.tab_profile.fmarginw -bg $::bg
+    pack $w.tab_profile.fmarginw -fill x -padx 12 -pady 4
+    label $w.tab_profile.fmarginw.lbl -text [t profile_config_margin_w] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
+    spinbox $w.tab_profile.fmarginw.spin -from 0 -to 200 -width 5 -font $::font_sm -bg $::bg_bar -fg $::fg
+    pack $w.tab_profile.fmarginw.lbl -side left
+    pack $w.tab_profile.fmarginw.spin -side left -padx {8 0}
 
     # Margin height row
-    frame $w.fmarginh -bg $::bg
-    pack $w.fmarginh -fill x -padx 12 -pady 4
-    label $w.fmarginh.lbl -text [t profile_config_margin_h] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
-    spinbox $w.fmarginh.spin -from 0 -to 200 -width 5 -font $::font_sm -bg $::bg_bar -fg $::fg
-    pack $w.fmarginh.lbl -side left
-    pack $w.fmarginh.spin -side left -padx {8 0}
+    frame $w.tab_profile.fmarginh -bg $::bg
+    pack $w.tab_profile.fmarginh -fill x -padx 12 -pady 4
+    label $w.tab_profile.fmarginh.lbl -text [t profile_config_margin_h] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
+    spinbox $w.tab_profile.fmarginh.spin -from 0 -to 200 -width 5 -font $::font_sm -bg $::bg_bar -fg $::fg
+    pack $w.tab_profile.fmarginh.lbl -side left
+    pack $w.tab_profile.fmarginh.spin -side left -padx {8 0}
 
     # Word goal row
-    frame $w.fwordgoal -bg $::bg
-    pack $w.fwordgoal -fill x -padx 12 -pady 4
-    label $w.fwordgoal.lbl -text [t profile_config_word_goal] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
-    spinbox $w.fwordgoal.spin -from 0 -to 10000 -width 8 -font $::font_sm -bg $::bg_bar -fg $::fg
-    label $w.fwordgoal.hint -text "(words/day, 0=disabled)" -font $::font_sm -fg $::fg_bar -bg $::bg
-    pack $w.fwordgoal.lbl -side left
-    pack $w.fwordgoal.spin -side left -padx {8 4}
-    pack $w.fwordgoal.hint -side left
+    frame $w.tab_profile.fwordgoal -bg $::bg
+    pack $w.tab_profile.fwordgoal -fill x -padx 12 -pady 4
+    label $w.tab_profile.fwordgoal.lbl -text [t profile_config_word_goal] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
+    spinbox $w.tab_profile.fwordgoal.spin -from 0 -to 10000 -width 8 -font $::font_sm -bg $::bg_bar -fg $::fg
+    label $w.tab_profile.fwordgoal.hint -text "(words/day, 0=disabled)" -font $::font_sm -fg $::fg_bar -bg $::bg
+    pack $w.tab_profile.fwordgoal.lbl -side left
+    pack $w.tab_profile.fwordgoal.spin -side left -padx {8 4}
+    pack $w.tab_profile.fwordgoal.hint -side left
 
     # Dark mode row
-    frame $w.fdarkmode -bg $::bg
-    pack $w.fdarkmode -fill x -padx 12 -pady 4
-    label $w.fdarkmode.lbl -text [t profile_config_dark_mode] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
-    checkbutton $w.fdarkmode.check -variable profile_config_dark_mode -font $::font_sm -bg $::bg -fg $::fg \
+    frame $w.tab_profile.fdarkmode -bg $::bg
+    pack $w.tab_profile.fdarkmode -fill x -padx 12 -pady 4
+    label $w.tab_profile.fdarkmode.lbl -text [t profile_config_dark_mode] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
+    checkbutton $w.tab_profile.fdarkmode.check -variable profile_config_dark_mode -font $::font_sm -bg $::bg -fg $::fg \
         -selectcolor $::bg_sel -activebackground $::bg -activeforeground $::fg \
         -borderwidth 1 -relief raised -highlightthickness 1 -highlightbackground $::fg_bar
-    pack $w.fdarkmode.lbl -side left
-    pack $w.fdarkmode.check -side left -padx {8 2}
+    pack $w.tab_profile.fdarkmode.lbl -side left
+    pack $w.tab_profile.fdarkmode.check -side left -padx {8 2}
+
+    # --- Timer tab content ---
+    # Timer section
+    frame $w.tab_timer.timer_sec -relief ridge -borderwidth 2 -bg $::bg
+    pack $w.tab_timer.timer_sec -fill x -padx 0 -pady 8
+    label $w.tab_timer.timer_sec.title -text [t timer_section] -font $::font_sm -fg $::fg_bar -bg $::bg
+    pack $w.tab_timer.timer_sec.title -anchor w -padx 8 -pady {4 2}
+
+    frame $w.tab_timer.timer_sec.duration -bg $::bg
+    pack $w.tab_timer.timer_sec.duration -fill x -padx 12 -pady 4
+    label $w.tab_timer.timer_sec.duration.lbl -text [t timer_duration] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
+    spinbox $w.tab_timer.timer_sec.duration.spin -from 1 -to 120 -width 5 -font $::font_sm -bg $::bg_bar -fg $::fg
+    pack $w.tab_timer.timer_sec.duration.lbl -side left
+    pack $w.tab_timer.timer_sec.duration.spin -side left -padx {8 0}
+
+    frame $w.tab_timer.timer_sec.sound -bg $::bg
+    pack $w.tab_timer.timer_sec.sound -fill x -padx 12 -pady 4
+    label $w.tab_timer.timer_sec.sound.lbl -text [t timer_sound] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
+    checkbutton $w.tab_timer.timer_sec.sound.check -variable profile_config_timer_sound -font $::font_sm -bg $::bg -fg $::fg \
+        -selectcolor $::bg_sel -activebackground $::bg -activeforeground $::fg \
+        -borderwidth 1 -relief raised -highlightthickness 1 -highlightbackground $::fg_bar
+    pack $w.tab_timer.timer_sec.sound.lbl -side left
+    pack $w.tab_timer.timer_sec.sound.check -side left -padx {8 2}
+
+    frame $w.tab_timer.timer_sec.alert -bg $::bg
+    pack $w.tab_timer.timer_sec.alert -fill x -padx 12 -pady 4
+    label $w.tab_timer.timer_sec.alert.lbl -text [t timer_alert] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
+    checkbutton $w.tab_timer.timer_sec.alert.check -variable profile_config_timer_alert -font $::font_sm -bg $::bg -fg $::fg \
+        -selectcolor $::bg_sel -activebackground $::bg -activeforeground $::fg \
+        -borderwidth 1 -relief raised -highlightthickness 1 -highlightbackground $::fg_bar
+    pack $w.tab_timer.timer_sec.alert.lbl -side left
+    pack $w.tab_timer.timer_sec.alert.check -side left -padx {8 2}
+
+    # Chrono section
+    frame $w.tab_timer.chrono_sec -relief ridge -borderwidth 2 -bg $::bg
+    pack $w.tab_timer.chrono_sec -fill x -padx 0 -pady 8
+    label $w.tab_timer.chrono_sec.title -text [t chrono_section] -font $::font_sm -fg $::fg_bar -bg $::bg
+    pack $w.tab_timer.chrono_sec.title -anchor w -padx 8 -pady {4 2}
+
+    frame $w.tab_timer.chrono_sec.show -bg $::bg
+    pack $w.tab_timer.chrono_sec.show -fill x -padx 12 -pady 4
+    label $w.tab_timer.chrono_sec.show.lbl -text [t chrono_show] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
+    checkbutton $w.tab_timer.chrono_sec.show.check -variable profile_config_chrono_show -font $::font_sm -bg $::bg -fg $::fg \
+        -selectcolor $::bg_sel -activebackground $::bg -activeforeground $::fg \
+        -borderwidth 1 -relief raised -highlightthickness 1 -highlightbackground $::fg_bar
+    pack $w.tab_timer.chrono_sec.show.lbl -side left
+    pack $w.tab_timer.chrono_sec.show.check -side left -padx {8 2}
+
+    frame $w.tab_timer.timer_sec.type -bg $::bg
+    pack $w.tab_timer.timer_sec.type -fill x -padx 12 -pady 4
+    label $w.tab_timer.timer_sec.type.lbl -text [t timer_type] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
+    set timer_types [list [t timer_type_countdown] [t timer_type_stopwatch]]
+    tk_optionMenu $w.tab_timer.timer_sec.type.om ::profile_config_timer_type {*}$timer_types
+    $w.tab_timer.timer_sec.type.om configure -bg $::bg_bar -fg $::fg_bar -activebackground $::bg_sel -activeforeground $::fg -borderwidth 1 -highlightthickness 0
+    pack $w.tab_timer.timer_sec.type.lbl -side left
+    pack $w.tab_timer.timer_sec.type.om -side left -fill x -expand 1 -padx {8 0}
+
+    # Load timer values from config
+    set ::profile_config_timer_sound $::cfg_timer_sound
+    set ::profile_config_timer_alert $::cfg_timer_alert
+    set ::profile_config_chrono_show $::cfg_chrono_show
+    set ::profile_config_timer_type $::cfg_timer_type
+    $w.tab_timer.timer_sec.duration.spin set $::cfg_timer_duration
 
     # Update profile display when changed via trace
     trace add variable ::profile_config_profile write [list apply {{name1 name2 op} {
@@ -3959,15 +4230,20 @@ proc profile-config-dialog {} {
         -bg $::bg_bar -fg $::fg_bar -width 12 \
         -command {
             set profile $::profile_config_profile
-            set font [.profile_config.profile.ffont.entry get]
-            set size [.profile_config.fsize.spin get]
-            set mw [.profile_config.fmarginw.spin get]
-            set mh [.profile_config.fmarginh.spin get]
-            set goal [.profile_config.fwordgoal.spin get]
+            set font [.profile_config.tab_profile.profile.ffont.entry get]
+            set size [.profile_config.tab_profile.fsize.spin get]
+            set mw [.profile_config.tab_profile.fmarginw.spin get]
+            set mh [.profile_config.tab_profile.fmarginh.spin get]
+            set goal [.profile_config.tab_profile.fwordgoal.spin get]
             set dark $::profile_config_dark_mode
             set def_prof $::profile_config_default_prof
             set def_scheme $::profile_config_default_scheme
             set def_lang $::profile_config_language
+            set timer_dur [.profile_config.tab_timer.timer_sec.duration.spin get]
+            set timer_snd $::profile_config_timer_sound
+            set timer_alrt $::profile_config_timer_alert
+            set timer_typ $::profile_config_timer_type
+            set chrono_shw $::profile_config_chrono_show
 
             if {$font eq "" || $size eq "" || $mw eq "" || $mh eq ""} return
 
@@ -3984,6 +4260,11 @@ proc profile-config-dialog {} {
             set ::cfg_profile $def_prof
             set ::cfg_scheme $def_scheme
             set ::cfg_lang $def_lang
+            set ::cfg_timer_duration $timer_dur
+            set ::cfg_timer_sound $timer_snd
+            set ::cfg_timer_alert $timer_alrt
+            set ::cfg_timer_type $timer_typ
+            set ::cfg_chrono_show $chrono_shw
 
             ini-save
 
@@ -4037,7 +4318,7 @@ proc profile-config-dialog {} {
         catch {trace remove variable ::profile_config_profile write}
         destroy .profile_config
     }
-    focus $w.profile.ffont.entry
+    focus $w.tab_profile.profile.ffont.entry
 }
 
 proc help-dialog {} {
@@ -4811,6 +5092,8 @@ proc tui-getch {} {
             "\x1b\[1;3D"  { return CTRL-LEFT  }
             "\x1bb"       { return CTRL-LEFT  }
             "\x1bf"       { return CTRL-RIGHT }
+            "\x1bt"       { return ALT-t }
+            "\x1bT"       { return ALT-T }
         }
         return ESC
     }
@@ -5338,6 +5621,9 @@ proc tui-browser {} {
                     }
                 }
             }
+            c {
+                tui-config-dialog $rows $cols
+            }
         }
         if {$key eq $::cfg_tui_help && $key ne "h"} {
             tui-help-dialog $rows $cols 0 0
@@ -5683,6 +5969,11 @@ proc tui-editor {filepath} {
             if {$wc_dirty && ([status-zone-of words] ne "" || [status-zone-of chars] ne "" || [status-zone-of goal] ne "")} {
                 tui-compute-wc
             }
+            timer-tick
+            set timer_display [expr {$::cfg_timer_duration * 60}]
+            if {$::timer_active} {
+                set timer_display $::timer_remaining
+            }
             set tui_state [dict create \
                 fn    [expr {$filepath eq "" ? "** scratchpad **" : [file tail $filepath]}] \
                 dirty $dirty \
@@ -5691,7 +5982,8 @@ proc tui-editor {filepath} {
                 col   [expr {$cx+1}] \
                 words $wc_cached \
                 chars $cc_cached \
-                clock [clock format [clock seconds] -format "%H:%M"]]
+                clock [clock format [clock seconds] -format "%H:%M"] \
+                timer $timer_display]
             set bar_left   " [status-build $::cfg_status_left   $tui_state]"
             set bar_center [status-build $::cfg_status_center $tui_state]
             set bar_right  "[status-build $::cfg_status_right  $tui_state] "
@@ -6067,6 +6359,12 @@ proc tui-editor {filepath} {
                     }
                     tui-help-dialog $rows $cols $wc_cached $cc_cached $_sel_wc $_sel_cc
                     set clear_sel 0
+                } elseif {$key eq "ALT-t"} {
+                    if {$::timer_active} { timer-pause } else { timer-start }
+                    set clear_sel 0
+                } elseif {$key eq "ALT-T"} {
+                    timer-reset
+                    set clear_sel 0
                 } elseif {[string match "F*" $key]} {                          ;# ignore unknown F-keys
                     set clear_sel 0
                 } elseif {[string length $key] >= 1 && ($c eq "" || $c >= 32)} {
@@ -6135,6 +6433,90 @@ proc tui-word-occurrences {fpath rows cols} {
                 default {
                     if {$_k eq $::cfg_tui_help} { break }
                 }
+            }
+        }
+        puts -nonewline "\033\[2J"
+    }
+}
+
+proc tui-config-dialog {rows cols} {
+    catch {
+        set timer_dur $::cfg_timer_duration
+        set timer_snd $::cfg_timer_sound
+        set timer_alrt $::cfg_timer_alert
+        set timer_typ $::cfg_timer_type
+        set chrono_shw $::cfg_chrono_show
+        set sel 0
+        set max_fields 5
+
+        while 1 {
+            puts -nonewline "\033\[2J"
+
+            set _lines {}
+            lappend _lines "  Config - Timer / Stopwatch"
+            lappend _lines ""
+            lappend _lines "  Timer"
+            set _dur_mark [expr {$sel == 0 ? ">" : " "}]
+            lappend _lines "  $_dur_mark Duration: ${timer_dur}'00\""
+            set _type_mark [expr {$sel == 1 ? ">" : " "}]
+            lappend _lines "  $_type_mark Type: $timer_typ"
+            set _snd_mark [expr {$sel == 2 ? ">" : " "}]
+            set _snd_txt [expr {$timer_snd ? "on" : "off"}]
+            lappend _lines "  $_snd_mark Sound at end: \[$_snd_txt\]"
+            set _alrt_mark [expr {$sel == 3 ? ">" : " "}]
+            set _alrt_txt [expr {$timer_alrt ? "on" : "off"}]
+            lappend _lines "  $_alrt_mark Alert message: \[$_alrt_txt\]"
+            lappend _lines ""
+            lappend _lines "  Stopwatch"
+            set _shw_mark [expr {$sel == 4 ? ">" : " "}]
+            set _shw_txt [expr {$chrono_shw ? "yes" : "no"}]
+            lappend _lines "  $_shw_mark Show in status bar: \[$_shw_txt\]"
+            lappend _lines ""
+
+            for {set _i 0} {$_i < [llength $_lines]} {incr _i} {
+                tui-move $_i 0
+                puts -nonewline [string range [lindex $_lines $_i] 0 [expr {$cols-1}]]
+                puts -nonewline "\033\[K"
+            }
+
+            set hint "UP/DOWN nav  LEFT/RIGHT adjust/toggle  s:save  q:cancel"
+            tui-bar [expr {$rows-1}] $hint "" $cols
+            flush stdout
+
+            set key [tui-getch]
+            switch -- $key {
+                UP - k { if {$sel > 0} { incr sel -1 } }
+                DOWN - j { if {$sel < [expr {$max_fields-1}]} { incr sel 1 } }
+                LEFT {
+                    if {$sel == 0 && $timer_dur > 1} { incr timer_dur -1 }
+                    if {$sel == 1} { set timer_typ [expr {$timer_typ eq "countdown" ? "stopwatch" : "countdown"}] }
+                    if {$sel == 2} { set timer_snd [expr {!$timer_snd}] }
+                    if {$sel == 3} { set timer_alrt [expr {!$timer_alrt}] }
+                    if {$sel == 4} { set chrono_shw [expr {!$chrono_shw}] }
+                }
+                RIGHT {
+                    if {$sel == 0 && $timer_dur < 120} { incr timer_dur }
+                    if {$sel == 1} { set timer_typ [expr {$timer_typ eq "countdown" ? "stopwatch" : "countdown"}] }
+                    if {$sel == 2} { set timer_snd [expr {!$timer_snd}] }
+                    if {$sel == 3} { set timer_alrt [expr {!$timer_alrt}] }
+                    if {$sel == 4} { set chrono_shw [expr {!$chrono_shw}] }
+                }
+                " " {
+                    if {$sel == 1} { set timer_typ [expr {$timer_typ eq "countdown" ? "stopwatch" : "countdown"}] }
+                    if {$sel == 2} { set timer_snd [expr {!$timer_snd}] }
+                    if {$sel == 3} { set timer_alrt [expr {!$timer_alrt}] }
+                    if {$sel == 4} { set chrono_shw [expr {!$chrono_shw}] }
+                }
+                s {
+                    set ::cfg_timer_duration $timer_dur
+                    set ::cfg_timer_type $timer_typ
+                    set ::cfg_timer_sound $timer_snd
+                    set ::cfg_timer_alert $timer_alrt
+                    set ::cfg_chrono_show $chrono_shw
+                    ini-save
+                    break
+                }
+                q - "\x1B" { break }
             }
         }
         puts -nonewline "\033\[2J"
