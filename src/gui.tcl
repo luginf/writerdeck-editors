@@ -2225,7 +2225,7 @@ proc profile-config-dialog {} {
 }
 
 proc timer-alert-gui {} {
-    bell
+    do-beep
     set w .timer_alert
     catch {destroy $w}
     toplevel $w

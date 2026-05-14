@@ -470,7 +470,8 @@ proc timer-alert {} {
     if {!$::no_gui} {
         if {$::cfg_timer_sound} { catch { timer-alert-gui } }
     } else {
-        if {$::cfg_timer_sound} { catch { tui-timer-alert } }
+        if {$::cfg_timer_sound} { do-beep }
+        if {$::cfg_timer_alert} { catch { tui-timer-alert } }
     }
 }
 
@@ -2220,6 +2221,12 @@ proc build-extra-entries {shown} {
         foreach p $vrec { lappend result [list recent [file dirname $p] [file tail $p]] }
     }
     return $result
+}
+
+proc do-beep {} {
+    catch {
+        exec sh -c {ffplay -f lavfi -i "sine=frequency=440:duration=0.3" -nodisp -autoexit -loglevel quiet 2>/dev/null; sleep 0.4; ffplay -f lavfi -i "sine=frequency=440:duration=0.3" -nodisp -autoexit -loglevel quiet 2>/dev/null} &
+    }
 }
 
 proc do-backup {dir name} {
@@ -4503,7 +4510,7 @@ proc profile-config-dialog {} {
 }
 
 proc timer-alert-gui {} {
-    bell
+    do-beep
     set w .timer_alert
     catch {destroy $w}
     toplevel $w
@@ -6766,7 +6773,6 @@ proc tui-word-occurrences {fpath rows cols} {
 }
 
 proc tui-timer-alert {} {
-    bell
     lassign [tui-size] rows cols
     while 1 {
         puts -nonewline "\033\[2J"
@@ -6798,9 +6804,8 @@ proc tui-config-dialog {rows cols} {
         set timer_snd $::cfg_timer_sound
         set timer_alrt $::cfg_timer_alert
         set timer_typ $::cfg_timer_type
-        set chrono_shw $::cfg_chrono_show
         set sel 0
-        set max_fields 5
+        set max_fields 4
 
         puts -nonewline "\033\[2J\033\[H"; flush stdout
 
@@ -6808,7 +6813,7 @@ proc tui-config-dialog {rows cols} {
             puts -nonewline "\033\[H"
 
             set _lines {}
-            lappend _lines "  Config - Timer / Stopwatch"
+            lappend _lines "  Config - Timer"
             lappend _lines ""
             lappend _lines "  Timer"
             set _dur_mark [expr {$sel == 0 ? ">" : " "}]
@@ -6821,11 +6826,6 @@ proc tui-config-dialog {rows cols} {
             set _alrt_mark [expr {$sel == 3 ? ">" : " "}]
             set _alrt_txt [expr {$timer_alrt ? "on" : "off"}]
             lappend _lines "  $_alrt_mark Alert message: \[$_alrt_txt\]"
-            lappend _lines ""
-            lappend _lines "  Stopwatch"
-            set _shw_mark [expr {$sel == 4 ? ">" : " "}]
-            set _shw_txt [expr {$chrono_shw ? "yes" : "no"}]
-            lappend _lines "  $_shw_mark Show in status bar: \[$_shw_txt\]"
             lappend _lines ""
 
             for {set _i 0} {$_i < [llength $_lines]} {incr _i} {
@@ -6847,27 +6847,23 @@ proc tui-config-dialog {rows cols} {
                     if {$sel == 1} { set timer_typ [expr {$timer_typ eq "countdown" ? "stopwatch" : "countdown"}] }
                     if {$sel == 2} { set timer_snd [expr {!$timer_snd}] }
                     if {$sel == 3} { set timer_alrt [expr {!$timer_alrt}] }
-                    if {$sel == 4} { set chrono_shw [expr {!$chrono_shw}] }
                 }
                 RIGHT {
                     if {$sel == 0 && $timer_dur < 120} { incr timer_dur }
                     if {$sel == 1} { set timer_typ [expr {$timer_typ eq "countdown" ? "stopwatch" : "countdown"}] }
                     if {$sel == 2} { set timer_snd [expr {!$timer_snd}] }
                     if {$sel == 3} { set timer_alrt [expr {!$timer_alrt}] }
-                    if {$sel == 4} { set chrono_shw [expr {!$chrono_shw}] }
                 }
                 " " {
                     if {$sel == 1} { set timer_typ [expr {$timer_typ eq "countdown" ? "stopwatch" : "countdown"}] }
                     if {$sel == 2} { set timer_snd [expr {!$timer_snd}] }
                     if {$sel == 3} { set timer_alrt [expr {!$timer_alrt}] }
-                    if {$sel == 4} { set chrono_shw [expr {!$chrono_shw}] }
                 }
                 s {
                     set ::cfg_timer_duration $timer_dur
                     set ::cfg_timer_type $timer_typ
                     set ::cfg_timer_sound $timer_snd
                     set ::cfg_timer_alert $timer_alrt
-                    set ::cfg_chrono_show $chrono_shw
                     ini-save
                     break
                 }

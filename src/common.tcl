@@ -217,6 +217,12 @@ proc build-extra-entries {shown} {
     return $result
 }
 
+proc do-beep {} {
+    catch {
+        exec sh -c {ffplay -f lavfi -i "sine=frequency=440:duration=0.3" -nodisp -autoexit -loglevel quiet 2>/dev/null; sleep 0.4; ffplay -f lavfi -i "sine=frequency=440:duration=0.3" -nodisp -autoexit -loglevel quiet 2>/dev/null} &
+    }
+}
+
 proc do-backup {dir name} {
     set bdir [file join $::DOCS_DIR backups]
     file mkdir $bdir

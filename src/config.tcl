@@ -188,7 +188,8 @@ proc timer-alert {} {
     if {!$::no_gui} {
         if {$::cfg_timer_sound} { catch { timer-alert-gui } }
     } else {
-        if {$::cfg_timer_sound} { catch { tui-timer-alert } }
+        if {$::cfg_timer_sound} { do-beep }
+        if {$::cfg_timer_alert} { catch { tui-timer-alert } }
     }
 }
 
