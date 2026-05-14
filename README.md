@@ -15,6 +15,8 @@ WrithDeck is a distraction-free text editor designed for writers using a dedicat
 - Multi-language support (English, French, German, Spanish, Korean, Norwegian)
 - Clickable toolbar shortcuts
 - Writing statistics and daily progress tracking
+- Configurable timer (countdown) and stopwatch with visual alerts and audio notifications
+- Modal command mode (ESC key) for quick access to timer, stats, and word occurrences
 - ~5,000 lines of Tcl/Tk, generated from modular source files
 
 Whether you're writing on a Raspberry Pi Zero with an E-ink screen, on an Android tablet, over SSH, or on your desktop, WrithDeck stays lightweight and lets you focus on your text.

@@ -71,6 +71,8 @@ When both `--gui` and `--tui`/`--no-gui` are given, TUI takes precedence.
 - **Unified browser behavior**: after closing a file, both GUI and TUI return to the file browser (configurable via `browser`)
 - **Scratchpad**: temporary in-memory buffer, no disk file until explicitly saved
 - **Help dialog**: shows selection word/char count when text is selected (GUI and TUI)
+- **Timer and stopwatch**: countdown timer or stopwatch with configurable duration, visual alerts, and audio notifications (bell sound)
+- **Modal command mode (ESC key)**: quick access to timer control, writing statistics, word occurrences, and file operations without breaking text focus
 
 ## Configuration
 
@@ -111,12 +113,16 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 | `lang`                    | `en`      | Interface language: `en`, `fr`, `de`, `es`, `ko`, `no`; also selectable in config dialog (c key)    |
 | `dark_mode`               | `1`       | Dark theme; `0` = light                                                                             |
 | `word_goal`               | `500`     | Daily word goal shown by the `goal` status token; `0` to disable                                    |
+| `timer_duration`          | `25`      | Timer duration in minutes (countdown mode)                                                          |
+| `timer_sound`             | `1`       | Play bell sound when timer finishes; `0` to disable                                                 |
+| `timer_alert`             | `1`       | Show alert dialog when timer finishes; `0` to disable                                               |
+| `timer_type`              | `countdown` | Timer mode: `countdown` or `stopwatch`                                                              |
 
 ### `[keys]`
 
 All actions are rebindable. Use Tk key names (`Control-s`, `Alt-Return`, `F11`, etc.):
 
-`key_save` `key_close` `key_find` `key_replace` `key_goto` `key_open` `key_undo` `key_redo` `key_help` `key_toc` `key_line_numbers` `key_fullscreen` `key_split` `key_split_focus` `key_typewriter` `key_dark_toggle`
+`key_save` `key_close` `key_find` `key_replace` `key_goto` `key_open` `key_undo` `key_redo` `key_help` `key_toc` `key_line_numbers` `key_fullscreen` `key_split` `key_split_focus` `key_typewriter` `key_dark_toggle` `key_timer` (default: `Alt-t`)
 
 ### `[profiles]`
 
@@ -179,6 +185,53 @@ Example — to use Gruvbox, add to your INI:
 [editor]
 scheme = gruvbox
 ```
+
+---
+
+## Timer and Stopwatch
+
+The editor includes a configurable countdown timer and stopwatch mode, with real-time display in the status bar.
+
+### Timer Control
+
+**Starting/toggling:**
+- **ESC key** (editor mode): Enter modal command mode, then press `t` to toggle timer on/off
+- **Alt+t** (default, configurable via `key_timer`): Toggle timer directly
+
+**Modes:**
+- **Countdown** (default): Counts down from `timer_duration` minutes, shows alert on completion
+- **Stopwatch**: Counts up indefinitely, no alert on completion
+
+**Status bar display:**
+- Format: `m'ss"` (e.g., `4'00"` for 4 minutes)
+- Active timer: `[4'00"]` (in brackets)
+- Inactive timer: ` 4'00"` (space before)
+
+### Alert Behavior
+
+When countdown reaches zero:
+1. **GUI**: Popup dialog with "Timer finished!" message
+2. **TUI**: Full-screen overlay with "TIMER FINISHED!" message
+3. **Sound**: Bell beep (if `timer_sound = 1` in INI)
+
+The alert respects the `timer_alert` setting in INI. If disabled, the timer stops without visual/audio feedback.
+
+### Modal Command Mode (ESC Key)
+
+Press **ESC** while editing to enter a command mode. This provides quick access to common functions without losing text focus:
+
+| Key | Action |
+|-----|--------|
+| **ESC** | Exit modal mode (or toggle on/off) |
+| **t** | Toggle timer (countdown or stopwatch) |
+| **s** | Show daily writing statistics (full-screen) |
+| **w** | Show word occurrences in document (full-screen) |
+| **q** | Quit / close file (with save prompt if unsaved) |
+| **Other keys** | Exit modal, return to normal text entry |
+
+**GUI:** Status bar displays available commands when modal is active.
+
+**TUI:** Message line shows commands and allows navigation with arrow keys (for stats/words screens).
 
 ---
 
@@ -391,6 +444,8 @@ Si `--gui` et `--no-gui` sont tous les deux présents, `--no-gui` a la priorité
 - **Comportement unifié du navigateur** : après la fermeture d'un fichier, GUI et TUI retournent au navigateur (configurable via `browser`)
 - **Bloc-notes** : tampon temporaire en mémoire, pas de fichier disque tant qu'on ne sauvegarde pas explicitement
 - **Dialogue d'aide** : affiche le nombre de mots/caractères de la sélection quand du texte est sélectionné (GUI et TUI)
+- **Minuterie et chronomètre** : compte à rebours ou chronomètre configurable avec affichage en temps réel et alertes visuelles/sonores
+- **Mode commande modal (touche ESC)** : accès rapide à la minuterie, stats, occurrences de mots et opérations fichier sans perdre la focus du texte
 
 ## Configuration
 
@@ -431,12 +486,16 @@ Tous les raccourcis clavier sont configurables via la section `[keys]`.
 | `lang`                    | `en`     | Langue de l'interface : `en`, `fr`, `de`, `es`, `ko`, `no` ; aussi sélectionnable dans le dialogue config (touche c) |
 | `dark_mode`               | `1`      | Thème sombre ; `0` = clair                                                                                           |
 | `word_goal`               | `500`    | Objectif de mots journalier affiché par le jeton `goal` ; `0` pour désactiver                                        |
+| `timer_duration`          | `25`     | Durée de la minuterie en minutes (mode compte à rebours)                                                             |
+| `timer_sound`             | `1`      | Jouer un bip quand la minuterie se termine ; `0` pour désactiver                                                     |
+| `timer_alert`             | `1`      | Afficher une alerte visuelle quand la minuterie se termine ; `0` pour désactiver                                     |
+| `timer_type`              | `countdown` | Mode minuterie : `countdown` ou `stopwatch`                                                                          |
 
 ### `[keys]`
 
 Toutes les actions sont reconfigurables. Utiliser les noms de touches Tk (`Control-s`, `Alt-Return`, `F11`, etc.) :
 
-`key_save` `key_close` `key_find` `key_replace` `key_goto` `key_open` `key_undo` `key_redo` `key_help` `key_toc` `key_line_numbers` `key_fullscreen` `key_split` `key_split_focus` `key_typewriter` `key_dark_toggle`
+`key_save` `key_close` `key_find` `key_replace` `key_goto` `key_open` `key_undo` `key_redo` `key_help` `key_toc` `key_line_numbers` `key_fullscreen` `key_split` `key_split_focus` `key_typewriter` `key_dark_toggle` `key_timer` (défaut : `Alt-t`)
 
 ### `[profiles]`
 
@@ -499,6 +558,53 @@ Exemple — pour utiliser Gruvbox, ajouter dans le INI :
 [editor]
 scheme = gruvbox
 ```
+
+---
+
+## Minuterie et chronomètre
+
+L'éditeur inclut une minuterie compte à rebours et un mode chronomètre configurables, avec affichage en temps réel dans la barre de statut.
+
+### Contrôle de la minuterie
+
+**Démarrage / basculement :**
+- **Touche ESC** (mode édition) : Entrer en mode commande modal, puis appuyer sur `t` pour basculer la minuterie
+- **Alt+t** (défaut, configurable via `key_timer`) : Basculer la minuterie directement
+
+**Modes :**
+- **Compte à rebours** (défaut) : Compte à rebours à partir de `timer_duration` minutes, alerte à la fin
+- **Chronomètre** : Compte progressif indéfini, pas d'alerte
+
+**Affichage dans la barre de statut :**
+- Format : `m'ss"` (ex. `4'00"` pour 4 minutes)
+- Minuterie active : `[4'00"]` (entre crochets)
+- Minuterie inactive : ` 4'00"` (espace avant)
+
+### Comportement de l'alerte
+
+Quand le compte à rebours atteint zéro :
+1. **GUI** : Dialogue popup avec le message "Timer finished!"
+2. **TUI** : Overlay plein écran avec "TIMER FINISHED!"
+3. **Son** : Bip (si `timer_sound = 1` dans le INI)
+
+L'alerte respecte le réglage `timer_alert` du INI. Si désactivée, la minuterie s'arrête sans rétroaction visuelle/sonore.
+
+### Mode commande modal (touche ESC)
+
+Appuyer sur **ESC** pendant l'édition pour entrer en mode commande. Cela donne un accès rapide aux fonctions courantes sans perdre la focus du texte :
+
+| Touche | Action |
+|--------|--------|
+| **ESC** | Quitter le mode modal (ou le basculer) |
+| **t** | Basculer la minuterie (compte à rebours ou chronomètre) |
+| **s** | Afficher les stats d'écriture journalières (plein écran) |
+| **w** | Afficher les occurrences de mots du document (plein écran) |
+| **q** | Quitter / fermer le fichier courant (avec prompt de sauvegarde si non sauvegardé) |
+| **Autres touches** | Quitter le mode modal, revenir à l'édition normale |
+
+**GUI :** La barre de statut affiche les commandes disponibles quand le mode modal est actif.
+
+**TUI :** La ligne de message affiche les commandes et permet la navigation avec les flèches (pour les écrans stats/mots).
 
 ---
 

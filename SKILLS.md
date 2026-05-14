@@ -110,6 +110,51 @@ Touches browser actuelles (12 total) : h (help), n (new), t (scratchpad), f (fav
 6. Section BROWSER de `help-dialog`
 7. Tableaux dans `README.md` et `README.fr.md`
 
+## Timer et chronomètre
+
+Minuterie compte à rebours et chronomètre (stopwatch) configurables, accessibles via le mode modal ESC ou la touche ALT+t.
+
+**Configuration** (`src/config.tcl`):
+- `cfg_timer_duration` — durée par défaut en minutes (25 par défaut)
+- `cfg_timer_sound` — jouer un bip à la fin (booléen, sauvegardé en INI)
+- `cfg_timer_type` — "countdown" ou "stopwatch"
+- `cfg_timer_alert` — afficher une alerte visuelle à la fin (booléen)
+
+**Affichage dans la status bar** :
+- Format `m'ss"` (ex. `4'00"` pour 4 minutes)
+- Timer actif : `[4'00"]`, inactif : ` 4'00"`
+- Géré par `status-build` dans `src/common.tcl` (token : "timer")
+
+**Procs contrôle** (`src/config.tcl`):
+- `timer-start` — démarre compte à rebours/chronomètre
+- `timer-pause` — pause le timer
+- `timer-reset` — réinitialise à la durée configurée
+- `timer-tick` — mise à jour en arrière-plan (appelée par `after` chaque seconde)
+- `timer-alert` — alerte visuelle + bip quand compte à rebours = 0
+
+**Implémentation alerte** :
+- **GUI** (`timer-alert-gui`): Dialog Toplevel avec message "Timer finished!" + commande `bell`
+- **TUI** (`tui-timer-alert`): Overlay plein écran avec message "TIMER FINISHED!" + commande `bell`
+- Son contrôlé par `$::cfg_timer_sound`
+
+## Mode commande modal (touche ESC)
+
+Mode activé en appuyant sur ESC dans l'éditeur (GUI ou TUI). Permet un accès rapide aux fonctions courantes sans perdre la focus du texte.
+
+**Fonctionnalités du mode modal** :
+- **ESC** — basculer modal on/off (double ESC = quitter)
+- **t** — basculer timer on/off
+- **s** — afficher stats d'écriture quotidiennes (overlay plein écran)
+- **w** — afficher occurrences de mots (overlay TUI, dialog GUI)
+- **q** — quitter/fermer fichier courant (avec prompt de sauvegarde si modifié)
+- **Autres touches** — quitter modal, revenir à l'édition normale
+
+**Détails implémentation** :
+- État tracé par `$::gui_cmd_mode` (GUI) et `$::tui_cmd_mode` (TUI)
+- Message modal affiché dans `::ed_bar_center` (GUI) ou ligne de message (TUI)
+- Keybindings vérifient l'état modal avant traiter l'input normal
+- Logique ESC en TUI : vérifier d'abord si déjà EN mode modal (prévient entrée accidentelle)
+
 ## Procs partagées GUI/TUI
 
 - `build-extra-entries {shown}` — construit les entrées favoris+récents, filtre `shown`

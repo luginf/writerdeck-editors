@@ -154,6 +154,51 @@ Section order: `DOCS_DIR_DEFAULT` → `DOCS_DIR` (if custom) → Favorites → R
 
 **Reload (z key)** — closes current editor/scratchpad and returns to browser. Always relaunches the program without arguments, even if a file was open. Uses platform-specific process launching (Windows `start` command, Unix shell background execution). Configuration apply button also triggers reload.
 
+## Timer and stopwatch
+
+Configurable countdown timer and stopwatch accessible via ESC modal mode or ALT+t keybinding:
+
+**Configuration** (`src/config.tcl`):
+- `cfg_timer_duration` — default duration in minutes (25 default)
+- `cfg_timer_sound` — play bell sound on completion (boolean)
+- `cfg_timer_type` — "countdown" or "stopwatch"
+- `cfg_timer_alert` — show alert dialog on completion (boolean)
+
+**Status bar display:**
+- Timer displays as `m'ss"` format (e.g., `4'00"` for 4 minutes)
+- Active timer shows as `[4'00"]`, inactive as ` 4'00"`
+- Handled by `status-build` proc in `src/common.tcl` (token: "timer")
+
+**Timer control procs** (`src/config.tcl`):
+- `timer-start` — start countdown/stopwatch
+- `timer-pause` — pause timer (resume with timer-start)
+- `timer-reset` — reset to configured duration
+- `timer-tick` — background update (called by `after` every second)
+- `timer-alert` — show alert when countdown reaches zero
+
+**Alert implementation:**
+- **GUI** (`timer-alert-gui`): Toplevel dialog with "Timer finished!" message + `bell` command
+- **TUI** (`tui-timer-alert`): Full-screen overlay with "TIMER FINISHED!" message + `bell` command
+- Sound controlled by `$::cfg_timer_sound` setting
+
+## Modal command mode (ESC key)
+
+Editor mode activated by pressing ESC in editor (GUI or TUI). Allows quick access to common functions without breaking focus from text.
+
+**Modal mode features:**
+- **ESC** — toggle modal on/off (double ESC exits)
+- **t** — toggle timer on/off
+- **s** — show daily writing statistics (full-screen overlay)
+- **w** — show word occurrences (full-screen overlay in TUI, dialog in GUI)
+- **q** — quit/close current file (with save prompt if dirty)
+- **Other keys** — exit modal, revert to normal text entry
+
+**Implementation details:**
+- State tracked by `$::gui_cmd_mode` (GUI) and `$::tui_cmd_mode` (TUI)
+- Status message displayed in `::ed_bar_center` (GUI) or message line (TUI)
+- Keybindings check modal state before processing normal input
+- ESC logic in TUI editor: first check if already in modal mode (prevents accidental re-entry)
+
 ## Known limitations
 
 - No emoji support in GUI (Tk 8.6 color font limitation)
