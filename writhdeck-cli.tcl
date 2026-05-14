@@ -29,7 +29,7 @@ _w=$(stty -g 2>/dev/null); trap '[ -n "$_w" ] && stty "$_w" 2>/dev/null' EXIT IN
 #
 # # # # # # # # # # # #
 
-set ::version          "v20260517"
+set ::version          "v20260518"
 
 # bail out immediately when invoked by bash tab-completion
 if {[info exists ::env(COMP_LINE)] || [info exists ::env(COMP_POINT)]} { exit 0 }
@@ -87,6 +87,8 @@ set ::scratchpad      0
 set ::file_mtime_known 0
 set ::watch_after_id  ""
 set ::session_headings {}
+set ::gui_cmd_mode    0
+set ::tui_cmd_mode    0
 
 file mkdir $::DOCS_DIR_DEFAULT
 set ::STATE_FILE        [file join $::DOCS_DIR_DEFAULT ".writhdeck.json"]
@@ -1866,7 +1868,11 @@ proc tui-help-dialog {rows cols wc cc {sel_wc -1} {sel_cc -1}} {
     puts -nonewline "\033\[2J"
 }
 
-proc tui-getch {{timeout 1000}} {
+proc tui-getch {{timeout -1}} {
+    if {$timeout < 0} {
+        set timeout 0
+        if {$::timer_active && $::cfg_chrono_show} { set timeout 50 }
+    }
     chan configure stdin -blocking 0
     set raw [read stdin 1]
     chan configure stdin -blocking 1
@@ -2851,11 +2857,17 @@ proc tui-editor {filepath} {
                 chars $cc_cached \
                 clock [clock format [clock seconds] -format "%H:%M"] \
                 timer $timer_display]
-            set bar_left   " [status-build $::cfg_status_left   $tui_state]"
-            set bar_center [status-build $::cfg_status_center $tui_state]
-            set bar_right  "[status-build $::cfg_status_right  $tui_state] "
-            if {$::cfg_key_error ne "" && $message eq ""} { set message "key conflict: $::cfg_key_error"; set msg_time [clock seconds] }
-            if {$message ne "" && [clock seconds] - $msg_time < 4} { set bar_left " $message" }
+            if {$::tui_cmd_mode} {
+                set bar_left " $message"
+                set bar_center ""
+                set bar_right ""
+            } else {
+                set bar_left   " [status-build $::cfg_status_left   $tui_state]"
+                set bar_center [status-build $::cfg_status_center $tui_state]
+                set bar_right  "[status-build $::cfg_status_right  $tui_state] "
+                if {$::cfg_key_error ne "" && $message eq ""} { set message "key conflict: $::cfg_key_error"; set msg_time [clock seconds] }
+                if {$message ne "" && [clock seconds] - $msg_time < 4} { set bar_left " $message" }
+            }
             tui-bar [expr {$rows-1}] $bar_left $bar_right $cols $bar_center
         }
 
@@ -3062,21 +3074,32 @@ proc tui-editor {filepath} {
                     set clear_sel 0
                 } elseif {$key eq "ESC"} {
                     # Enter command mode with ESC
-                    set tui_cmd_mode 1
-                    set message "ESC: close  t: timer  c: config  (any other key: back)"
+                    set ::tui_cmd_mode 1
+                    set message "ESC: exit mode  t: timer  q: quit  s: stats  (other: back)"
                     set msg_time [clock seconds]
                     set clear_sel 0
-                } elseif {[info exists tui_cmd_mode] && $tui_cmd_mode} {
+                } elseif {$::tui_cmd_mode} {
                     # In command mode
                     if {$key eq "ESC"} {
-                        # Double ESC closes
+                        # Double ESC exits command mode only
+                        set ::tui_cmd_mode 0
+                        set message ""
+                        set msg_time [clock seconds]
+                        set clear_sel 0
+                    } elseif {$key eq "t"} {
+                        # Toggle timer, exit command mode
+                        if {$::timer_active} { timer-pause } else { timer-start }
+                        set ::tui_cmd_mode 0
+                        set message ""
+                        set msg_time [clock seconds]
+                        set clear_sel 0
+                    } elseif {$key eq "q"} {
+                        # Quit/close file, exit command mode first
+                        set ::tui_cmd_mode 0
                         if {$dirty} {
                             lassign [tui-size] rows cols
                             set r [tui-yesnocancel [t ed_save_before_tui] $rows $cols]
                             if {$r eq "cancel"} {
-                                set tui_cmd_mode 0
-                                set message ""
-                                set msg_time [clock seconds]
                                 set clear_sel 0
                             } else {
                                 if {$r eq "yes"} {
@@ -3093,27 +3116,48 @@ proc tui-editor {filepath} {
                             if {$filepath ne ""} { daily-update $wc_cached; cursor-put $filepath $cy $cx }
                             set ::session_file ""; return
                         }
-                    } elseif {$key eq "t"} {
-                        # Toggle timer
-                        if {$::timer_active} { timer-pause } else { timer-start }
-                        set tui_cmd_mode 0
-                        set message ""
-                        set msg_time [clock seconds]
-                        set clear_sel 0
-                    } elseif {$key eq "c"} {
-                        # Open config dialog
+                    } elseif {$key eq "s"} {
+                        # Show statistics, exit command mode
+                        set ::tui_cmd_mode 0
                         lassign [tui-size] rows cols
-                        tui-config-dialog $rows $cols
-                        set tui_cmd_mode 0
+                        if {$filepath ne ""} {
+                            if {![dict exists $::daily_data $filepath] || [dict size [dict get $::daily_data $filepath]] == 0} {
+                                puts -nonewline "\033\[2J"
+                                tui-move 1 2
+                                puts -nonewline [t br_stats_no_data]
+                                puts -nonewline "\033\[K"
+                                tui-bar [expr {$rows-1}] "Press any key to continue" "" $cols
+                                flush stdout
+                                set key [tui-getch]
+                            } else {
+                                set fdata [dict get $::daily_data $filepath]
+                                set stat_lines [list]
+                                lappend stat_lines "[t br_stats_title] - [file tail $filepath]"
+                                lappend stat_lines ""
+                                lappend stat_lines "Date          Words"
+                                lappend stat_lines "----          -----"
+                                dict for {date count} $fdata {
+                                    lappend stat_lines [format "%-14s %5d" $date $count]
+                                }
+                                puts -nonewline "\033\[2J"
+                                set display_lines [expr {min([llength $stat_lines], $rows - 2)}]
+                                for {set _i 0} {$_i < $display_lines} {incr _i} {
+                                    tui-move $_i 2
+                                    set line [lindex $stat_lines $_i]
+                                    puts -nonewline [string range $line 0 [expr {$cols-5}]]
+                                    puts -nonewline "\033\[K"
+                                }
+                                tui-bar [expr {$rows-1}] "Press any key to continue" "" $cols
+                                flush stdout
+                                set key [tui-getch]
+                            }
+                        }
                         set message ""
                         set msg_time [clock seconds]
                         set clear_sel 0
                     } else {
-                        # Any other key exits command mode
-                        set tui_cmd_mode 0
-                        set message ""
-                        set msg_time [clock seconds]
-                        # Don't process this key, just exit command mode
+                        # Any other key does nothing, stay in command mode
+                        set key ""
                         set clear_sel 0
                     }
                 } elseif {$key eq $::cfg_tui_close} {

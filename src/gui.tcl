@@ -848,6 +848,12 @@ proc gui-status-state {} {
 }
 
 proc gui-status-update {} {
+    if {$::gui_cmd_mode} {
+        set ::ed_bar_left ""
+        set ::ed_bar_center "ESC: exit mode  t: timer  q: quit  s: stats"
+        set ::ed_bar_right ""
+        return
+    }
     set state [gui-status-state]
     set ::ed_bar_left   " [status-build $::cfg_status_left   $state]"
     set ::ed_bar_center [status-build $::cfg_status_center $state]
@@ -1618,34 +1624,43 @@ bind .ed.t <Control-KP_Add>  { font-resize  1; break }
 bind .ed.t <Control-minus>   { font-resize -1; break }
 bind .ed.t <Control-KP_Subtract> { font-resize -1; break }
 proc gui-handle-esc {} {
-    global gui_cmd_mode
-    if {![info exists gui_cmd_mode] || !$gui_cmd_mode} {
-        set gui_cmd_mode 1
-        .ed.bar.msg configure -text "ESC: close  t: timer  c: config  (any other key: back)"
+    if {!$::gui_cmd_mode} {
+        set ::gui_cmd_mode 1
+        gui-status-update
     } else {
-        # Close editor (simplified - would need to match GUI close behavior)
-        if {$::dirty} {
-            set r [tk_messageBox -type yesnocancel -title "Save?" -message "Save before closing?"]
-            if {$r eq "yes"} { gui-save; set ::dirty 0 }
-            if {$r eq "cancel"} { set gui_cmd_mode 0; return }
-        }
-        set gui_cmd_mode 0
-        set ::filename ""
-        br-reload
+        # Just exit command mode
+        set ::gui_cmd_mode 0
+        ed-status
     }
 }
 
 proc gui-handle-keypress {key} {
-    global gui_cmd_mode
-    if {[info exists gui_cmd_mode] && $gui_cmd_mode} {
+    if {$::gui_cmd_mode} {
         if {$key eq "t" || $key eq "T"} {
             if {$::timer_active} { timer-pause } else { timer-start }
+            set ::gui_cmd_mode 0
             ed-status
-        } elseif {$key eq "c" || $key eq "C"} {
-            profile-config-dialog
+            return 1
+        } elseif {$key eq "s" || $key eq "S"} {
+            if {$::filename ne ""} {
+                file-stats-dialog $::filename
+            }
+            set ::gui_cmd_mode 0
+            ed-status
+            return 1
+        } elseif {$key eq "q" || $key eq "Q"} {
+            set ::gui_cmd_mode 0
+            ed-status
+            if {$::dirty} {
+                set r [tk_messageBox -type yesnocancel -title "Save?" -message "Save before closing?"]
+                if {$r eq "yes"} { save-file; set ::dirty 0 }
+                if {$r eq "cancel"} { return 1 }
+            }
+            set ::filename ""
+            br-reload
+            return 1
         }
-        set gui_cmd_mode 0
-        .ed.bar.msg configure -text ""
+        # Pour les autres touches non reconnues, reste en mode modal
         return 1
     }
     return 0
@@ -1688,11 +1703,52 @@ bind .ed.t <C> {
     break
 }
 bind .ed.t <Alt-t> {
-    if {![info exists gui_cmd_mode] || !$gui_cmd_mode} {
+    if {!$::gui_cmd_mode} {
         if {$::timer_active} { timer-pause } else { timer-start }
         ed-status
     }
     break
+}
+bind .ed.t <q> {
+    if {![gui-handle-keypress q]} {
+        # Normal 'q' input
+        %W insert insert q
+        ed-status
+    }
+    break
+}
+bind .ed.t <Q> {
+    if {![gui-handle-keypress Q]} {
+        # Normal 'Q' input
+        %W insert insert Q
+        ed-status
+    }
+    break
+}
+bind .ed.t <s> {
+    if {![gui-handle-keypress s]} {
+        # Normal 's' input
+        %W insert insert s
+        ed-status
+    }
+    break
+}
+bind .ed.t <S> {
+    if {![gui-handle-keypress S]} {
+        # Normal 'S' input
+        %W insert insert S
+        ed-status
+    }
+    break
+}
+
+bind .ed.t <Any-KeyPress> {
+    if {$::gui_cmd_mode} {
+        set k %K
+        if {$k ne "Escape"} {
+            break
+        }
+    }
 }
 
 proc profile-config-update-profile {w} {
