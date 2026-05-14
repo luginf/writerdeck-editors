@@ -268,9 +268,20 @@ proc tui-help-dialog {rows cols wc cc {sel_wc -1} {sel_cc -1}} {
     puts -nonewline "\033\[2J"
 }
 
-proc tui-getch {} {
+proc tui-getch {{timeout 1000}} {
+    chan configure stdin -blocking 0
     set raw [read stdin 1]
-    if {$raw eq ""} { return "" }
+    chan configure stdin -blocking 1
+    if {$raw eq ""} {
+        # No immediate input, wait for timeout
+        if {$timeout > 0} {
+            after $timeout
+            chan configure stdin -blocking 0
+            set raw [read stdin 1]
+            chan configure stdin -blocking 1
+        }
+        if {$raw eq ""} { return "" }
+    }
     scan $raw %c b
     if {$b == 27} {
         # Read escape sequence byte by byte
@@ -1451,7 +1462,63 @@ proc tui-editor {filepath} {
                         set dirty 0; set message [t ed_saved]; set msg_time [clock seconds]
                     }
                     set clear_sel 0
-                } elseif {$key eq $::cfg_tui_close || $key eq "ESC"} {
+                } elseif {$key eq "ESC"} {
+                    # Enter command mode with ESC
+                    set tui_cmd_mode 1
+                    set message "ESC: close  t: timer  c: config  (any other key: back)"
+                    set msg_time [clock seconds]
+                    set clear_sel 0
+                } elseif {[info exists tui_cmd_mode] && $tui_cmd_mode} {
+                    # In command mode
+                    if {$key eq "ESC"} {
+                        # Double ESC closes
+                        if {$dirty} {
+                            lassign [tui-size] rows cols
+                            set r [tui-yesnocancel [t ed_save_before_tui] $rows $cols]
+                            if {$r eq "cancel"} {
+                                set tui_cmd_mode 0
+                                set message ""
+                                set msg_time [clock seconds]
+                                set clear_sel 0
+                            } else {
+                                if {$r eq "yes"} {
+                                    if {$filepath eq ""} {
+                                        tui-scratchpad-save $rows $cols lines filepath dirty
+                                    } else {
+                                        tui-save-file $filepath $lines
+                                    }
+                                }
+                                if {$filepath ne ""} { daily-update $wc_cached; cursor-put $filepath $cy $cx }
+                                set ::session_file ""; return
+                            }
+                        } else {
+                            if {$filepath ne ""} { daily-update $wc_cached; cursor-put $filepath $cy $cx }
+                            set ::session_file ""; return
+                        }
+                    } elseif {$key eq "t"} {
+                        # Toggle timer
+                        if {$::timer_active} { timer-pause } else { timer-start }
+                        set tui_cmd_mode 0
+                        set message ""
+                        set msg_time [clock seconds]
+                        set clear_sel 0
+                    } elseif {$key eq "c"} {
+                        # Open config dialog
+                        lassign [tui-size] rows cols
+                        tui-config-dialog $rows $cols
+                        set tui_cmd_mode 0
+                        set message ""
+                        set msg_time [clock seconds]
+                        set clear_sel 0
+                    } else {
+                        # Any other key exits command mode
+                        set tui_cmd_mode 0
+                        set message ""
+                        set msg_time [clock seconds]
+                        # Don't process this key, just exit command mode
+                        set clear_sel 0
+                    }
+                } elseif {$key eq $::cfg_tui_close} {
                     if {$dirty} {
                         lassign [tui-size] rows cols
                         set r [tui-yesnocancel [t ed_save_before_tui] $rows $cols]
@@ -1695,6 +1762,32 @@ proc tui-word-occurrences {fpath rows cols} {
         }
         puts -nonewline "\033\[2J"
     }
+}
+
+proc tui-timer-alert {} {
+    lassign [tui-size] rows cols
+    while 1 {
+        puts -nonewline "\033\[2J"
+        set lines {}
+        set empty_lines [expr {($rows - 3) / 2}]
+        for {set i 0} {$i < $empty_lines} {incr i} { lappend lines "" }
+        lappend lines ""
+        lappend lines [string repeat " " [expr {($cols - 16) / 2}]] "TIMER FINISHED!"
+        lappend lines ""
+        for {set i 0} {$i < $empty_lines} {incr i} { lappend lines "" }
+
+        for {set _i 0} {$_i < [llength $lines]} {incr _i} {
+            tui-move $_i 0
+            puts -nonewline [string range [lindex $lines $_i] 0 [expr {$cols-1}]]
+            puts -nonewline "\033\[K"
+        }
+        tui-bar [expr {$rows-1}] "Press any key to continue" "" $cols
+        flush stdout
+
+        set key [tui-getch]
+        if {$key ne ""} break
+    }
+    puts -nonewline "\033\[2J"
 }
 
 proc tui-config-dialog {rows cols} {

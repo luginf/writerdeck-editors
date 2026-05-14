@@ -29,7 +29,7 @@ _w=$(stty -g 2>/dev/null); trap '[ -n "$_w" ] && stty "$_w" 2>/dev/null' EXIT IN
 #
 # # # # # # # # # # # #
 
-set ::version          "v20260515"
+set ::version          "v20260517"
 
 # bail out immediately when invoked by bash tab-completion
 if {[info exists ::env(COMP_LINE)] || [info exists ::env(COMP_POINT)]} { exit 0 }
@@ -445,6 +445,7 @@ set ::cfg_key_typewriter   "Control-t"
 set ::cfg_key_fullscreen   "Alt-Return"
 set ::cfg_key_split        "F3"
 set ::cfg_key_split_focus  "F4"
+set ::cfg_key_timer        "Alt-t"
 set ::cfg_key_error        ""
 set ::cfg_timer_duration   25
 set ::cfg_timer_sound      1
@@ -455,10 +456,22 @@ set ::timer_active         0
 set ::timer_remaining      0
 set ::timer_last_tick      0
 set ::timer_schedule_id    ""
+set ::timer_alert_shown    0
 set ::fullscreen 0
 set ::split_mode 0
 
 proc marker-val {v} { expr {$v eq "0" ? "" : $v} }
+
+proc timer-alert {} {
+    if {$::timer_alert_shown} return
+    set ::timer_alert_shown 1
+    if {$::cfg_timer_sound} { puts -nonewline "\a"; flush stdout }
+    if {!$::no_gui} {
+        catch { timer-alert-gui }
+    } else {
+        catch { tui-timer-alert }
+    }
+}
 
 proc timer-tick {} {
     if {!$::timer_active} return
@@ -473,7 +486,7 @@ proc timer-tick {} {
             incr ::timer_remaining -[expr {$now - $::timer_last_tick}]
             if {$::timer_remaining < 0} { set ::timer_remaining 0 }
             if {$::timer_remaining == 0 && $::cfg_timer_alert} {
-                if {$::cfg_timer_sound} { puts -nonewline "\a"; flush stdout }
+                timer-alert
             }
         } else {
             incr ::timer_remaining [expr {$now - $::timer_last_tick}]
@@ -506,6 +519,7 @@ proc timer-start {} {
         set ::timer_remaining 0
     }
     set ::timer_active 1
+    set ::timer_alert_shown 0
     set ::timer_last_tick [clock seconds]
     timer-schedule
 }
@@ -715,6 +729,7 @@ proc ini-load {} {
                 key_fullscreen   { set ::cfg_key_fullscreen   $v }
                 key_split        { set ::cfg_key_split        $v }
                 key_split_focus  { set ::cfg_key_split_focus  $v }
+                key_timer        { set ::cfg_key_timer        $v }
                 toc_key          { set ::cfg_key_toc          $v }
                 ln_key           { set ::cfg_key_line_numbers $v }
                 fullscreen_key   { set ::cfg_key_fullscreen   $v }
@@ -805,6 +820,7 @@ proc ini-save {} {
     puts $fh "key_fullscreen   = $::cfg_key_fullscreen"
     puts $fh "key_split        = $::cfg_key_split"
     puts $fh "key_split_focus  = $::cfg_key_split_focus"
+    puts $fh "key_timer        = $::cfg_key_timer"
     puts $fh "key_dark_toggle  = $::cfg_key_dark_toggle"
     puts $fh ""
     puts $fh "\[profiles\]"
@@ -946,6 +962,7 @@ proc keys-init {} {
     set ::cfg_tui_typewriter   [tk-key-to-tui $::cfg_key_typewriter]
     set ::cfg_tui_dark_toggle  [tk-key-to-tui $::cfg_key_dark_toggle]
     set ::cfg_tui_split        [tk-key-to-tui $::cfg_key_split]
+    set ::cfg_tui_timer        [tk-key-to-tui $::cfg_key_timer]
     # labels for UI display
     set ::cfg_lbl_save       [key-label $::cfg_key_save]
     set ::cfg_lbl_close      [key-label $::cfg_key_close]
@@ -1285,15 +1302,14 @@ dict set ::i18n en {
     help_key_open_text     "Open"
     help_k_fullscreen      "Fullscreen"
     config_tab_profile     "Profile"
-    config_tab_timer       "Timer / Chrono"
-    timer_section          "Timer"
+    config_tab_timer       "Timer"
+    timer_section          "Settings"
     timer_duration         "Duration (min):"
     timer_sound            "Sound at end:"
     timer_alert            "Alert message:"
     timer_type             "Type:"
     timer_type_countdown   "countdown"
     timer_type_stopwatch   "stopwatch"
-    chrono_section         "Stopwatch"
     chrono_show            "Show in status bar:"
 }
 
@@ -1423,15 +1439,14 @@ dict set ::i18n de {
     help_key_open_text     "Oeffnen"
     help_k_fullscreen      "Vollbild"
     config_tab_profile     "Profil"
-    config_tab_timer       "Timer / Chrono"
-    timer_section          "Timer"
+    config_tab_timer       "Timer"
+    timer_section          "Einstellungen"
     timer_duration         "Dauer (min):"
     timer_sound            "Ton am Ende:"
     timer_alert            "Warnmeldung:"
     timer_type             "Typ:"
     timer_type_countdown   "Countdown"
     timer_type_stopwatch   "Stoppuhr"
-    chrono_section         "Stoppuhr"
     chrono_show            "In der Statusleiste anzeigen:"
 }
 
@@ -1561,15 +1576,14 @@ dict set ::i18n es {
     help_key_open_text     "Abrir"
     help_k_fullscreen      "Pantalla completa"
     config_tab_profile     "Perfil"
-    config_tab_timer       "Temporizador / Cronometro"
-    timer_section          "Temporizador"
+    config_tab_timer       "Temporizador"
+    timer_section          "Configuracion"
     timer_duration         "Duracion (min):"
     timer_sound            "Sonido al final:"
     timer_alert            "Mensaje de alerta:"
     timer_type             "Tipo:"
     timer_type_countdown   "cuenta atras"
     timer_type_stopwatch   "cronometro"
-    chrono_section         "Cronometro"
     chrono_show            "Mostrar en la barra de estado:"
 }
 
@@ -1699,15 +1713,14 @@ dict set ::i18n fr {
     help_key_open_text     "Ouvrir"
     help_k_fullscreen      "Plein écran"
     config_tab_profile     "Profil"
-    config_tab_timer       "Minuterie / Chrono"
-    timer_section          "Minuterie"
+    config_tab_timer       "Minuterie"
+    timer_section          "Parametres"
     timer_duration         "Duree (min) :"
     timer_sound            "Son a la fin :"
     timer_alert            "Message d'alerte :"
     timer_type             "Type :"
     timer_type_countdown   "compte a rebours"
     timer_type_stopwatch   "chronometre"
-    chrono_section         "Chronometre"
     chrono_show            "Afficher dans la barre :"
 }
 
@@ -1837,15 +1850,14 @@ dict set ::i18n ko {
     help_key_open_text     "열기"
     help_k_fullscreen      "전체 화면"
     config_tab_profile     "프로필"
-    config_tab_timer       "타이머 / 스톱워치"
-    timer_section          "타이머"
+    config_tab_timer       "타이머"
+    timer_section          "설정"
     timer_duration         "기간 (분):"
     timer_sound            "종료 시 소리:"
     timer_alert            "경고 메시지:"
     timer_type             "유형:"
     timer_type_countdown   "카운트다운"
     timer_type_stopwatch   "스톱워치"
-    chrono_section         "스톱워치"
     chrono_show            "상태 표시줄에 표시:"
 }
 
@@ -1975,15 +1987,14 @@ dict set ::i18n no {
     help_key_open_text     "Apne"
     help_k_fullscreen      "Fullskjerm"
     config_tab_profile     "Profil"
-    config_tab_timer       "Stoppeklokke / Timer"
-    timer_section          "Timer"
+    config_tab_timer       "Timer"
+    timer_section          "Innstillinger"
     timer_duration         "Varighet (min):"
     timer_sound            "Lyd ved slutt:"
     timer_alert            "Advarselmelding:"
     timer_type             "Type:"
     timer_type_countdown   "nedtelling"
     timer_type_stopwatch   "stoppeklokke"
-    chrono_section         "Stoppeklokke"
     chrono_show            "Vis i statuslinje:"
 }
 
@@ -3883,9 +3894,81 @@ bind .ed.t <Control-plus>    { font-resize  1; break }
 bind .ed.t <Control-KP_Add>  { font-resize  1; break }
 bind .ed.t <Control-minus>   { font-resize -1; break }
 bind .ed.t <Control-KP_Subtract> { font-resize -1; break }
+proc gui-handle-esc {} {
+    global gui_cmd_mode
+    if {![info exists gui_cmd_mode] || !$gui_cmd_mode} {
+        set gui_cmd_mode 1
+        .ed.bar.msg configure -text "ESC: close  t: timer  c: config  (any other key: back)"
+    } else {
+        # Close editor (simplified - would need to match GUI close behavior)
+        if {$::dirty} {
+            set r [tk_messageBox -type yesnocancel -title "Save?" -message "Save before closing?"]
+            if {$r eq "yes"} { gui-save; set ::dirty 0 }
+            if {$r eq "cancel"} { set gui_cmd_mode 0; return }
+        }
+        set gui_cmd_mode 0
+        set ::filename ""
+        br-reload
+    }
+}
+
+proc gui-handle-keypress {key} {
+    global gui_cmd_mode
+    if {[info exists gui_cmd_mode] && $gui_cmd_mode} {
+        if {$key eq "t" || $key eq "T"} {
+            if {$::timer_active} { timer-pause } else { timer-start }
+            ed-status
+        } elseif {$key eq "c" || $key eq "C"} {
+            profile-config-dialog
+        }
+        set gui_cmd_mode 0
+        .ed.bar.msg configure -text ""
+        return 1
+    }
+    return 0
+}
+
+bind .ed.t <Escape> {
+    gui-handle-esc
+    break
+}
+bind .ed.t <t> {
+    if {![gui-handle-keypress t]} {
+        # Normal 't' input
+        %W insert insert t
+        ed-status
+    }
+    break
+}
+bind .ed.t <T> {
+    if {![gui-handle-keypress T]} {
+        # Normal 'T' input
+        %W insert insert T
+        ed-status
+    }
+    break
+}
+bind .ed.t <c> {
+    if {![gui-handle-keypress c]} {
+        # Normal 'c' input
+        %W insert insert c
+        ed-status
+    }
+    break
+}
+bind .ed.t <C> {
+    if {![gui-handle-keypress C]} {
+        # Normal 'C' input
+        %W insert insert C
+        ed-status
+    }
+    break
+}
 bind .ed.t <Alt-t> {
-    if {$::timer_active} { timer-pause } else { timer-start }
-    ed-status
+    if {![info exists gui_cmd_mode] || !$gui_cmd_mode} {
+        if {$::timer_active} { timer-pause } else { timer-start }
+        ed-status
+    }
     break
 }
 
@@ -4152,18 +4235,38 @@ proc profile-config-dialog {} {
     pack $w.tab_profile.fdarkmode.check -side left -padx {8 2}
 
     # --- Timer tab content ---
-    # Timer section
     frame $w.tab_timer.timer_sec -relief ridge -borderwidth 2 -bg $::bg
     pack $w.tab_timer.timer_sec -fill x -padx 0 -pady 8
     label $w.tab_timer.timer_sec.title -text [t timer_section] -font $::font_sm -fg $::fg_bar -bg $::bg
     pack $w.tab_timer.timer_sec.title -anchor w -padx 8 -pady {4 2}
 
+    frame $w.tab_timer.timer_sec.type -bg $::bg
+    pack $w.tab_timer.timer_sec.type -fill x -padx 12 -pady 4
+    label $w.tab_timer.timer_sec.type.lbl -text [t timer_type] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
+    set timer_types [list [t timer_type_countdown] [t timer_type_stopwatch]]
+    tk_optionMenu $w.tab_timer.timer_sec.type.om ::profile_config_timer_type {*}$timer_types
+    $w.tab_timer.timer_sec.type.om configure -bg $::bg_bar -fg $::fg_bar -activebackground $::bg_sel -activeforeground $::fg -borderwidth 1 -highlightthickness 0
+    pack $w.tab_timer.timer_sec.type.lbl -side left
+    pack $w.tab_timer.timer_sec.type.om -side left -fill x -expand 1 -padx {8 0}
+
     frame $w.tab_timer.timer_sec.duration -bg $::bg
     pack $w.tab_timer.timer_sec.duration -fill x -padx 12 -pady 4
     label $w.tab_timer.timer_sec.duration.lbl -text [t timer_duration] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
     spinbox $w.tab_timer.timer_sec.duration.spin -from 1 -to 120 -width 5 -font $::font_sm -bg $::bg_bar -fg $::fg
+    label $w.tab_timer.timer_sec.duration.display -text "0'00\"" -font $::font_sm -bg $::bg_bar -fg $::fg -width 5 -anchor e
     pack $w.tab_timer.timer_sec.duration.lbl -side left
     pack $w.tab_timer.timer_sec.duration.spin -side left -padx {8 0}
+    pack $w.tab_timer.timer_sec.duration.display -side left -padx {8 0}
+
+    trace add variable ::profile_config_timer_type write [list apply {{name1 name2 op} {
+        if {$::profile_config_timer_type eq "stopwatch"} {
+            pack forget .profile_config.tab_timer.timer_sec.duration.spin
+            pack .profile_config.tab_timer.timer_sec.duration.display -side left -padx {8 0}
+        } else {
+            pack forget .profile_config.tab_timer.timer_sec.duration.display
+            pack .profile_config.tab_timer.timer_sec.duration.spin -side left -padx {8 0}
+        }
+    }}]
 
     frame $w.tab_timer.timer_sec.sound -bg $::bg
     pack $w.tab_timer.timer_sec.sound -fill x -padx 12 -pady 4
@@ -4183,29 +4286,14 @@ proc profile-config-dialog {} {
     pack $w.tab_timer.timer_sec.alert.lbl -side left
     pack $w.tab_timer.timer_sec.alert.check -side left -padx {8 2}
 
-    # Chrono section
-    frame $w.tab_timer.chrono_sec -relief ridge -borderwidth 2 -bg $::bg
-    pack $w.tab_timer.chrono_sec -fill x -padx 0 -pady 8
-    label $w.tab_timer.chrono_sec.title -text [t chrono_section] -font $::font_sm -fg $::fg_bar -bg $::bg
-    pack $w.tab_timer.chrono_sec.title -anchor w -padx 8 -pady {4 2}
-
-    frame $w.tab_timer.chrono_sec.show -bg $::bg
-    pack $w.tab_timer.chrono_sec.show -fill x -padx 12 -pady 4
-    label $w.tab_timer.chrono_sec.show.lbl -text [t chrono_show] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
-    checkbutton $w.tab_timer.chrono_sec.show.check -variable profile_config_chrono_show -font $::font_sm -bg $::bg -fg $::fg \
+    frame $w.tab_timer.timer_sec.show -bg $::bg
+    pack $w.tab_timer.timer_sec.show -fill x -padx 12 -pady 4
+    label $w.tab_timer.timer_sec.show.lbl -text [t chrono_show] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
+    checkbutton $w.tab_timer.timer_sec.show.check -variable profile_config_chrono_show -font $::font_sm -bg $::bg -fg $::fg \
         -selectcolor $::bg_sel -activebackground $::bg -activeforeground $::fg \
         -borderwidth 1 -relief raised -highlightthickness 1 -highlightbackground $::fg_bar
-    pack $w.tab_timer.chrono_sec.show.lbl -side left
-    pack $w.tab_timer.chrono_sec.show.check -side left -padx {8 2}
-
-    frame $w.tab_timer.timer_sec.type -bg $::bg
-    pack $w.tab_timer.timer_sec.type -fill x -padx 12 -pady 4
-    label $w.tab_timer.timer_sec.type.lbl -text [t timer_type] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
-    set timer_types [list [t timer_type_countdown] [t timer_type_stopwatch]]
-    tk_optionMenu $w.tab_timer.timer_sec.type.om ::profile_config_timer_type {*}$timer_types
-    $w.tab_timer.timer_sec.type.om configure -bg $::bg_bar -fg $::fg_bar -activebackground $::bg_sel -activeforeground $::fg -borderwidth 1 -highlightthickness 0
-    pack $w.tab_timer.timer_sec.type.lbl -side left
-    pack $w.tab_timer.timer_sec.type.om -side left -fill x -expand 1 -padx {8 0}
+    pack $w.tab_timer.timer_sec.show.lbl -side left
+    pack $w.tab_timer.timer_sec.show.check -side left -padx {8 2}
 
     # Load timer values from config
     set ::profile_config_timer_sound $::cfg_timer_sound
@@ -4319,6 +4407,22 @@ proc profile-config-dialog {} {
         destroy .profile_config
     }
     focus $w.tab_profile.profile.ffont.entry
+}
+
+proc timer-alert-gui {} {
+    set w .timer_alert
+    catch {destroy $w}
+    toplevel $w
+    wm title $w "Timer Alert"
+    wm transient $w .
+    wm resizable $w 0 0
+    label  $w.l -text "Timer finished!" -font [list [lindex $::font 0] 16 bold] -padx 20 -pady 20 -anchor c -bg $::bg -fg $::fg
+    button $w.b -text "OK" -font $::font_sm -command [list destroy $w] -bg $::bg_bar -fg $::fg_bar
+    pack $w.l -fill both -expand 1
+    pack $w.b -pady 8
+    update
+    grab $w
+    focus $w.b
 }
 
 proc help-dialog {} {
@@ -5010,9 +5114,20 @@ proc tui-help-dialog {rows cols wc cc {sel_wc -1} {sel_cc -1}} {
     puts -nonewline "\033\[2J"
 }
 
-proc tui-getch {} {
+proc tui-getch {{timeout 1000}} {
+    chan configure stdin -blocking 0
     set raw [read stdin 1]
-    if {$raw eq ""} { return "" }
+    chan configure stdin -blocking 1
+    if {$raw eq ""} {
+        # No immediate input, wait for timeout
+        if {$timeout > 0} {
+            after $timeout
+            chan configure stdin -blocking 0
+            set raw [read stdin 1]
+            chan configure stdin -blocking 1
+        }
+        if {$raw eq ""} { return "" }
+    }
     scan $raw %c b
     if {$b == 27} {
         # Read escape sequence byte by byte
@@ -6193,7 +6308,63 @@ proc tui-editor {filepath} {
                         set dirty 0; set message [t ed_saved]; set msg_time [clock seconds]
                     }
                     set clear_sel 0
-                } elseif {$key eq $::cfg_tui_close || $key eq "ESC"} {
+                } elseif {$key eq "ESC"} {
+                    # Enter command mode with ESC
+                    set tui_cmd_mode 1
+                    set message "ESC: close  t: timer  c: config  (any other key: back)"
+                    set msg_time [clock seconds]
+                    set clear_sel 0
+                } elseif {[info exists tui_cmd_mode] && $tui_cmd_mode} {
+                    # In command mode
+                    if {$key eq "ESC"} {
+                        # Double ESC closes
+                        if {$dirty} {
+                            lassign [tui-size] rows cols
+                            set r [tui-yesnocancel [t ed_save_before_tui] $rows $cols]
+                            if {$r eq "cancel"} {
+                                set tui_cmd_mode 0
+                                set message ""
+                                set msg_time [clock seconds]
+                                set clear_sel 0
+                            } else {
+                                if {$r eq "yes"} {
+                                    if {$filepath eq ""} {
+                                        tui-scratchpad-save $rows $cols lines filepath dirty
+                                    } else {
+                                        tui-save-file $filepath $lines
+                                    }
+                                }
+                                if {$filepath ne ""} { daily-update $wc_cached; cursor-put $filepath $cy $cx }
+                                set ::session_file ""; return
+                            }
+                        } else {
+                            if {$filepath ne ""} { daily-update $wc_cached; cursor-put $filepath $cy $cx }
+                            set ::session_file ""; return
+                        }
+                    } elseif {$key eq "t"} {
+                        # Toggle timer
+                        if {$::timer_active} { timer-pause } else { timer-start }
+                        set tui_cmd_mode 0
+                        set message ""
+                        set msg_time [clock seconds]
+                        set clear_sel 0
+                    } elseif {$key eq "c"} {
+                        # Open config dialog
+                        lassign [tui-size] rows cols
+                        tui-config-dialog $rows $cols
+                        set tui_cmd_mode 0
+                        set message ""
+                        set msg_time [clock seconds]
+                        set clear_sel 0
+                    } else {
+                        # Any other key exits command mode
+                        set tui_cmd_mode 0
+                        set message ""
+                        set msg_time [clock seconds]
+                        # Don't process this key, just exit command mode
+                        set clear_sel 0
+                    }
+                } elseif {$key eq $::cfg_tui_close} {
                     if {$dirty} {
                         lassign [tui-size] rows cols
                         set r [tui-yesnocancel [t ed_save_before_tui] $rows $cols]
@@ -6437,6 +6608,32 @@ proc tui-word-occurrences {fpath rows cols} {
         }
         puts -nonewline "\033\[2J"
     }
+}
+
+proc tui-timer-alert {} {
+    lassign [tui-size] rows cols
+    while 1 {
+        puts -nonewline "\033\[2J"
+        set lines {}
+        set empty_lines [expr {($rows - 3) / 2}]
+        for {set i 0} {$i < $empty_lines} {incr i} { lappend lines "" }
+        lappend lines ""
+        lappend lines [string repeat " " [expr {($cols - 16) / 2}]] "TIMER FINISHED!"
+        lappend lines ""
+        for {set i 0} {$i < $empty_lines} {incr i} { lappend lines "" }
+
+        for {set _i 0} {$_i < [llength $lines]} {incr _i} {
+            tui-move $_i 0
+            puts -nonewline [string range [lindex $lines $_i] 0 [expr {$cols-1}]]
+            puts -nonewline "\033\[K"
+        }
+        tui-bar [expr {$rows-1}] "Press any key to continue" "" $cols
+        flush stdout
+
+        set key [tui-getch]
+        if {$key ne ""} break
+    }
+    puts -nonewline "\033\[2J"
 }
 
 proc tui-config-dialog {rows cols} {

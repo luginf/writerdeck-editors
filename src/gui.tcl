@@ -1617,9 +1617,81 @@ bind .ed.t <Control-plus>    { font-resize  1; break }
 bind .ed.t <Control-KP_Add>  { font-resize  1; break }
 bind .ed.t <Control-minus>   { font-resize -1; break }
 bind .ed.t <Control-KP_Subtract> { font-resize -1; break }
+proc gui-handle-esc {} {
+    global gui_cmd_mode
+    if {![info exists gui_cmd_mode] || !$gui_cmd_mode} {
+        set gui_cmd_mode 1
+        .ed.bar.msg configure -text "ESC: close  t: timer  c: config  (any other key: back)"
+    } else {
+        # Close editor (simplified - would need to match GUI close behavior)
+        if {$::dirty} {
+            set r [tk_messageBox -type yesnocancel -title "Save?" -message "Save before closing?"]
+            if {$r eq "yes"} { gui-save; set ::dirty 0 }
+            if {$r eq "cancel"} { set gui_cmd_mode 0; return }
+        }
+        set gui_cmd_mode 0
+        set ::filename ""
+        br-reload
+    }
+}
+
+proc gui-handle-keypress {key} {
+    global gui_cmd_mode
+    if {[info exists gui_cmd_mode] && $gui_cmd_mode} {
+        if {$key eq "t" || $key eq "T"} {
+            if {$::timer_active} { timer-pause } else { timer-start }
+            ed-status
+        } elseif {$key eq "c" || $key eq "C"} {
+            profile-config-dialog
+        }
+        set gui_cmd_mode 0
+        .ed.bar.msg configure -text ""
+        return 1
+    }
+    return 0
+}
+
+bind .ed.t <Escape> {
+    gui-handle-esc
+    break
+}
+bind .ed.t <t> {
+    if {![gui-handle-keypress t]} {
+        # Normal 't' input
+        %W insert insert t
+        ed-status
+    }
+    break
+}
+bind .ed.t <T> {
+    if {![gui-handle-keypress T]} {
+        # Normal 'T' input
+        %W insert insert T
+        ed-status
+    }
+    break
+}
+bind .ed.t <c> {
+    if {![gui-handle-keypress c]} {
+        # Normal 'c' input
+        %W insert insert c
+        ed-status
+    }
+    break
+}
+bind .ed.t <C> {
+    if {![gui-handle-keypress C]} {
+        # Normal 'C' input
+        %W insert insert C
+        ed-status
+    }
+    break
+}
 bind .ed.t <Alt-t> {
-    if {$::timer_active} { timer-pause } else { timer-start }
-    ed-status
+    if {![info exists gui_cmd_mode] || !$gui_cmd_mode} {
+        if {$::timer_active} { timer-pause } else { timer-start }
+        ed-status
+    }
     break
 }
 
@@ -1886,18 +1958,38 @@ proc profile-config-dialog {} {
     pack $w.tab_profile.fdarkmode.check -side left -padx {8 2}
 
     # --- Timer tab content ---
-    # Timer section
     frame $w.tab_timer.timer_sec -relief ridge -borderwidth 2 -bg $::bg
     pack $w.tab_timer.timer_sec -fill x -padx 0 -pady 8
     label $w.tab_timer.timer_sec.title -text [t timer_section] -font $::font_sm -fg $::fg_bar -bg $::bg
     pack $w.tab_timer.timer_sec.title -anchor w -padx 8 -pady {4 2}
 
+    frame $w.tab_timer.timer_sec.type -bg $::bg
+    pack $w.tab_timer.timer_sec.type -fill x -padx 12 -pady 4
+    label $w.tab_timer.timer_sec.type.lbl -text [t timer_type] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
+    set timer_types [list [t timer_type_countdown] [t timer_type_stopwatch]]
+    tk_optionMenu $w.tab_timer.timer_sec.type.om ::profile_config_timer_type {*}$timer_types
+    $w.tab_timer.timer_sec.type.om configure -bg $::bg_bar -fg $::fg_bar -activebackground $::bg_sel -activeforeground $::fg -borderwidth 1 -highlightthickness 0
+    pack $w.tab_timer.timer_sec.type.lbl -side left
+    pack $w.tab_timer.timer_sec.type.om -side left -fill x -expand 1 -padx {8 0}
+
     frame $w.tab_timer.timer_sec.duration -bg $::bg
     pack $w.tab_timer.timer_sec.duration -fill x -padx 12 -pady 4
     label $w.tab_timer.timer_sec.duration.lbl -text [t timer_duration] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
     spinbox $w.tab_timer.timer_sec.duration.spin -from 1 -to 120 -width 5 -font $::font_sm -bg $::bg_bar -fg $::fg
+    label $w.tab_timer.timer_sec.duration.display -text "0'00\"" -font $::font_sm -bg $::bg_bar -fg $::fg -width 5 -anchor e
     pack $w.tab_timer.timer_sec.duration.lbl -side left
     pack $w.tab_timer.timer_sec.duration.spin -side left -padx {8 0}
+    pack $w.tab_timer.timer_sec.duration.display -side left -padx {8 0}
+
+    trace add variable ::profile_config_timer_type write [list apply {{name1 name2 op} {
+        if {$::profile_config_timer_type eq "stopwatch"} {
+            pack forget .profile_config.tab_timer.timer_sec.duration.spin
+            pack .profile_config.tab_timer.timer_sec.duration.display -side left -padx {8 0}
+        } else {
+            pack forget .profile_config.tab_timer.timer_sec.duration.display
+            pack .profile_config.tab_timer.timer_sec.duration.spin -side left -padx {8 0}
+        }
+    }}]
 
     frame $w.tab_timer.timer_sec.sound -bg $::bg
     pack $w.tab_timer.timer_sec.sound -fill x -padx 12 -pady 4
@@ -1917,29 +2009,14 @@ proc profile-config-dialog {} {
     pack $w.tab_timer.timer_sec.alert.lbl -side left
     pack $w.tab_timer.timer_sec.alert.check -side left -padx {8 2}
 
-    # Chrono section
-    frame $w.tab_timer.chrono_sec -relief ridge -borderwidth 2 -bg $::bg
-    pack $w.tab_timer.chrono_sec -fill x -padx 0 -pady 8
-    label $w.tab_timer.chrono_sec.title -text [t chrono_section] -font $::font_sm -fg $::fg_bar -bg $::bg
-    pack $w.tab_timer.chrono_sec.title -anchor w -padx 8 -pady {4 2}
-
-    frame $w.tab_timer.chrono_sec.show -bg $::bg
-    pack $w.tab_timer.chrono_sec.show -fill x -padx 12 -pady 4
-    label $w.tab_timer.chrono_sec.show.lbl -text [t chrono_show] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
-    checkbutton $w.tab_timer.chrono_sec.show.check -variable profile_config_chrono_show -font $::font_sm -bg $::bg -fg $::fg \
+    frame $w.tab_timer.timer_sec.show -bg $::bg
+    pack $w.tab_timer.timer_sec.show -fill x -padx 12 -pady 4
+    label $w.tab_timer.timer_sec.show.lbl -text [t chrono_show] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
+    checkbutton $w.tab_timer.timer_sec.show.check -variable profile_config_chrono_show -font $::font_sm -bg $::bg -fg $::fg \
         -selectcolor $::bg_sel -activebackground $::bg -activeforeground $::fg \
         -borderwidth 1 -relief raised -highlightthickness 1 -highlightbackground $::fg_bar
-    pack $w.tab_timer.chrono_sec.show.lbl -side left
-    pack $w.tab_timer.chrono_sec.show.check -side left -padx {8 2}
-
-    frame $w.tab_timer.timer_sec.type -bg $::bg
-    pack $w.tab_timer.timer_sec.type -fill x -padx 12 -pady 4
-    label $w.tab_timer.timer_sec.type.lbl -text [t timer_type] -font $::font_sm -width 20 -anchor w -bg $::bg -fg $::fg
-    set timer_types [list [t timer_type_countdown] [t timer_type_stopwatch]]
-    tk_optionMenu $w.tab_timer.timer_sec.type.om ::profile_config_timer_type {*}$timer_types
-    $w.tab_timer.timer_sec.type.om configure -bg $::bg_bar -fg $::fg_bar -activebackground $::bg_sel -activeforeground $::fg -borderwidth 1 -highlightthickness 0
-    pack $w.tab_timer.timer_sec.type.lbl -side left
-    pack $w.tab_timer.timer_sec.type.om -side left -fill x -expand 1 -padx {8 0}
+    pack $w.tab_timer.timer_sec.show.lbl -side left
+    pack $w.tab_timer.timer_sec.show.check -side left -padx {8 2}
 
     # Load timer values from config
     set ::profile_config_timer_sound $::cfg_timer_sound
@@ -2053,6 +2130,22 @@ proc profile-config-dialog {} {
         destroy .profile_config
     }
     focus $w.tab_profile.profile.ffont.entry
+}
+
+proc timer-alert-gui {} {
+    set w .timer_alert
+    catch {destroy $w}
+    toplevel $w
+    wm title $w "Timer Alert"
+    wm transient $w .
+    wm resizable $w 0 0
+    label  $w.l -text "Timer finished!" -font [list [lindex $::font 0] 16 bold] -padx 20 -pady 20 -anchor c -bg $::bg -fg $::fg
+    button $w.b -text "OK" -font $::font_sm -command [list destroy $w] -bg $::bg_bar -fg $::fg_bar
+    pack $w.l -fill both -expand 1
+    pack $w.b -pady 8
+    update
+    grab $w
+    focus $w.b
 }
 
 proc help-dialog {} {

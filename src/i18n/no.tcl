@@ -124,15 +124,14 @@ dict set ::i18n no {
     help_key_open_text     "Apne"
     help_k_fullscreen      "Fullskjerm"
     config_tab_profile     "Profil"
-    config_tab_timer       "Stoppeklokke / Timer"
-    timer_section          "Timer"
+    config_tab_timer       "Timer"
+    timer_section          "Innstillinger"
     timer_duration         "Varighet (min):"
     timer_sound            "Lyd ved slutt:"
     timer_alert            "Advarselmelding:"
     timer_type             "Type:"
     timer_type_countdown   "nedtelling"
     timer_type_stopwatch   "stoppeklokke"
-    chrono_section         "Stoppeklokke"
     chrono_show            "Vis i statuslinje:"
 }
 

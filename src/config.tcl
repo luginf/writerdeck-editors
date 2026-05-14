@@ -165,6 +165,7 @@ set ::cfg_key_typewriter   "Control-t"
 set ::cfg_key_fullscreen   "Alt-Return"
 set ::cfg_key_split        "F3"
 set ::cfg_key_split_focus  "F4"
+set ::cfg_key_timer        "Alt-t"
 set ::cfg_key_error        ""
 set ::cfg_timer_duration   25
 set ::cfg_timer_sound      1
@@ -175,10 +176,22 @@ set ::timer_active         0
 set ::timer_remaining      0
 set ::timer_last_tick      0
 set ::timer_schedule_id    ""
+set ::timer_alert_shown    0
 set ::fullscreen 0
 set ::split_mode 0
 
 proc marker-val {v} { expr {$v eq "0" ? "" : $v} }
+
+proc timer-alert {} {
+    if {$::timer_alert_shown} return
+    set ::timer_alert_shown 1
+    if {$::cfg_timer_sound} { puts -nonewline "\a"; flush stdout }
+    if {!$::no_gui} {
+        catch { timer-alert-gui }
+    } else {
+        catch { tui-timer-alert }
+    }
+}
 
 proc timer-tick {} {
     if {!$::timer_active} return
@@ -193,7 +206,7 @@ proc timer-tick {} {
             incr ::timer_remaining -[expr {$now - $::timer_last_tick}]
             if {$::timer_remaining < 0} { set ::timer_remaining 0 }
             if {$::timer_remaining == 0 && $::cfg_timer_alert} {
-                if {$::cfg_timer_sound} { puts -nonewline "\a"; flush stdout }
+                timer-alert
             }
         } else {
             incr ::timer_remaining [expr {$now - $::timer_last_tick}]
@@ -226,6 +239,7 @@ proc timer-start {} {
         set ::timer_remaining 0
     }
     set ::timer_active 1
+    set ::timer_alert_shown 0
     set ::timer_last_tick [clock seconds]
     timer-schedule
 }
@@ -435,6 +449,7 @@ proc ini-load {} {
                 key_fullscreen   { set ::cfg_key_fullscreen   $v }
                 key_split        { set ::cfg_key_split        $v }
                 key_split_focus  { set ::cfg_key_split_focus  $v }
+                key_timer        { set ::cfg_key_timer        $v }
                 toc_key          { set ::cfg_key_toc          $v }
                 ln_key           { set ::cfg_key_line_numbers $v }
                 fullscreen_key   { set ::cfg_key_fullscreen   $v }
@@ -525,6 +540,7 @@ proc ini-save {} {
     puts $fh "key_fullscreen   = $::cfg_key_fullscreen"
     puts $fh "key_split        = $::cfg_key_split"
     puts $fh "key_split_focus  = $::cfg_key_split_focus"
+    puts $fh "key_timer        = $::cfg_key_timer"
     puts $fh "key_dark_toggle  = $::cfg_key_dark_toggle"
     puts $fh ""
     puts $fh "\[profiles\]"
@@ -666,6 +682,7 @@ proc keys-init {} {
     set ::cfg_tui_typewriter   [tk-key-to-tui $::cfg_key_typewriter]
     set ::cfg_tui_dark_toggle  [tk-key-to-tui $::cfg_key_dark_toggle]
     set ::cfg_tui_split        [tk-key-to-tui $::cfg_key_split]
+    set ::cfg_tui_timer        [tk-key-to-tui $::cfg_key_timer]
     # labels for UI display
     set ::cfg_lbl_save       [key-label $::cfg_key_save]
     set ::cfg_lbl_close      [key-label $::cfg_key_close]

@@ -124,15 +124,14 @@ dict set ::i18n ko {
     help_key_open_text     "열기"
     help_k_fullscreen      "전체 화면"
     config_tab_profile     "프로필"
-    config_tab_timer       "타이머 / 스톱워치"
-    timer_section          "타이머"
+    config_tab_timer       "타이머"
+    timer_section          "설정"
     timer_duration         "기간 (분):"
     timer_sound            "종료 시 소리:"
     timer_alert            "경고 메시지:"
     timer_type             "유형:"
     timer_type_countdown   "카운트다운"
     timer_type_stopwatch   "스톱워치"
-    chrono_section         "스톱워치"
     chrono_show            "상태 표시줄에 표시:"
 }
 

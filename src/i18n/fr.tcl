@@ -124,15 +124,14 @@ dict set ::i18n fr {
     help_key_open_text     "Ouvrir"
     help_k_fullscreen      "Plein écran"
     config_tab_profile     "Profil"
-    config_tab_timer       "Minuterie / Chrono"
-    timer_section          "Minuterie"
+    config_tab_timer       "Minuterie"
+    timer_section          "Parametres"
     timer_duration         "Duree (min) :"
     timer_sound            "Son a la fin :"
     timer_alert            "Message d'alerte :"
     timer_type             "Type :"
     timer_type_countdown   "compte a rebours"
     timer_type_stopwatch   "chronometre"
-    chrono_section         "Chronometre"
     chrono_show            "Afficher dans la barre :"
 }
 
