@@ -55,6 +55,7 @@ dict set ::i18n no {
     help_shift_arrows  "Shift+Piler  Utvid valg"
     help_k_split       "Delvis visning (veksle)"
     help_k_split_focus "Delvis visning - syklus fokus"
+    help_k_workspace   "Andre arbeidsomrade (veksle ES1/ES2)"
     br_toc_title       "Nettleseravsnitt"
     br_toc_empty       "ingen avsnitt"
     br_toc_bar         "Opp/Ned navigering  Enter hopp  esc avbryt"

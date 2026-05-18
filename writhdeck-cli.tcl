@@ -378,7 +378,7 @@ set ::cfg_lang           "en"
 set ::cfg_help_bar       "^S save   ^Q close   ^H help"
 set ::cfg_word_goal      500
 # status bar zones - tokens: filename dirty sel ln col words chars goal clock help_bar space
-set ::cfg_status_left   "filename dirty sel ln col words chars"
+set ::cfg_status_left   "workspace filename dirty sel ln col words chars"
 set ::cfg_status_center ""
 set ::cfg_status_right  "help_bar clock"
 # shortcuts (Tk key names)
@@ -403,6 +403,7 @@ set ::cfg_key_typewriter   "Control-t"
 set ::cfg_key_fullscreen   "Alt-Return"
 set ::cfg_key_split        "F3"
 set ::cfg_key_split_focus  "F4"
+set ::cfg_key_workspace    "F10"
 set ::cfg_key_timer        "Alt-t"
 set ::cfg_key_cmd_mode     "Escape"
 set ::cfg_key_error        ""
@@ -418,6 +419,22 @@ set ::timer_schedule_id    ""
 set ::timer_alert_shown    0
 set ::fullscreen 0
 set ::split_mode 0
+# workspace state (WS1 = primary, WS2 = secondary toggled via cfg_key_workspace)
+set ::ws_n           1
+set ::ws_dual_mode   0
+set ::ws1_filename   ""
+set ::ws1_scratchpad 0
+set ::ws1_dirty      0
+set ::ws1_content    ""
+set ::ws1_cursor     "1.0"
+set ::ws1_file_mtime 0
+set ::ws2_filename   ""
+set ::ws2_scratchpad 1
+set ::ws2_dirty      0
+set ::ws2_content    ""
+set ::ws2_cursor     "1.0"
+set ::ws2_file_mtime 0
+set ::split_ws2_mode 0
 
 proc marker-val {v} { expr {$v eq "0" ? "" : $v} }
 
@@ -694,6 +711,7 @@ proc ini-load {} {
                 key_fullscreen   { set ::cfg_key_fullscreen   $v }
                 key_split        { set ::cfg_key_split        $v }
                 key_split_focus  { set ::cfg_key_split_focus  $v }
+                key_workspace    { set ::cfg_key_workspace    $v }
                 key_timer        { set ::cfg_key_timer        $v }
                 key_cmd_mode     { set ::cfg_key_cmd_mode     $v }
                 toc_key          { set ::cfg_key_toc          $v }
@@ -786,6 +804,7 @@ proc ini-save {} {
     puts $fh "key_fullscreen   = $::cfg_key_fullscreen"
     puts $fh "key_split        = $::cfg_key_split"
     puts $fh "key_split_focus  = $::cfg_key_split_focus"
+    puts $fh "key_workspace    = $::cfg_key_workspace"
     puts $fh "key_timer        = $::cfg_key_timer"
     puts $fh "key_dark_toggle  = $::cfg_key_dark_toggle"
     puts $fh "key_cmd_mode     = $::cfg_key_cmd_mode"
@@ -935,6 +954,7 @@ proc keys-init {} {
     set ::cfg_tui_typewriter   [tk-key-to-tui $::cfg_key_typewriter]
     set ::cfg_tui_dark_toggle  [tk-key-to-tui $::cfg_key_dark_toggle]
     set ::cfg_tui_split        [tk-key-to-tui $::cfg_key_split]
+    set ::cfg_tui_workspace    [tk-key-to-tui $::cfg_key_workspace]
     set ::cfg_tui_timer        [tk-key-to-tui $::cfg_key_timer]
     set ::cfg_tui_cmd_mode     [tk-key-to-tui $::cfg_key_cmd_mode]
     # labels for UI display
@@ -956,6 +976,7 @@ proc keys-init {} {
     set ::cfg_lbl_typewriter [key-label $::cfg_key_typewriter]
     set ::cfg_lbl_split      [key-label $::cfg_key_split]
     set ::cfg_lbl_split_focus [key-label $::cfg_key_split_focus]
+    set ::cfg_lbl_workspace  [key-label $::cfg_key_workspace]
     set ::cfg_lbl_cmd_mode    [key-label $::cfg_key_cmd_mode]
     # conflict detection
     set pairs [list \
@@ -1129,6 +1150,7 @@ dict set ::i18n en {
     help_shift_arrows  "Shift+Arrows  Extend selection"
     help_k_split       "Split view (toggle)"
     help_k_split_focus "Split view - cycle focus"
+    help_k_workspace   "Second workspace (toggle WS1/WS2)"
     br_toc_title       "Browser sections"
     br_toc_empty       "no sections"
     br_toc_bar         "Up/Dn nav  Enter jump  esc cancel"
@@ -1266,6 +1288,7 @@ dict set ::i18n fr {
     help_shift_arrows  "Maj+Flèches   Étendre la sélection"
     help_k_split       "Vue partagée (bascule)"
     help_k_split_focus "Vue partagée - changer de fenêtre"
+    help_k_workspace   "Second espace de travail (bascule ES1/ES2)"
     br_toc_title       "Sections du navigateur"
     br_toc_empty       "aucune section"
     br_toc_bar         "Up/Dn nav  Enter aller  esc annuler"
@@ -1526,6 +1549,7 @@ proc status-build {tokens state} {
     set result ""
     foreach tok $tokens {
         switch -- $tok {
+            workspace { if {$::ws_dual_mode} { append result "\[$::ws_n\] " } }
             filename { append result $fn }
             dirty    { if {$dirty}      { append result " \[+\]" } }
             sel      { if {$sel}        { append result " \[sel\]" } }
@@ -1851,6 +1875,7 @@ proc tui-help-dialog {rows cols wc cc {sel_wc -1} {sel_cc -1}} {
         [list "" 0] \
         [list [format "  %-16s %s" [t help_k_ctrl_arrows] ""] 0] \
         [list [format "  %-16s %s" $lbl_toc  [t help_k_toc]]  0] \
+        [list [format "  %-16s %s" $::cfg_lbl_workspace [t help_k_workspace]] 0] \
         [list [format "  %-16s %s" $lbl_help [t help_k_help]] 0] \
         [list "" 0] \
         [list "  BROWSER" 1] \
@@ -2642,25 +2667,34 @@ proc tui-scratchpad-save {rows cols linesVar filepathVar dirtyVar} {
     set dirty 0
 }
 
-proc tui-editor {filepath} {
+proc tui-editor {filepath {init_state {}}} {
     # -- load ------------------------------------------------------------------
     set lines {}
-    if {$filepath ne "" && [file exists $filepath] && [file size $filepath] > 0} {
-        set fh [open $filepath r]; chan configure $fh -encoding utf-8
-        set content [read $fh]; close $fh
-        foreach line [split $content "\n"] { lappend lines $line }
-        if {[llength $lines] > 1 && [lindex $lines end] eq ""} {
-            set lines [lrange $lines 0 end-1]
+    if {[dict size $init_state] > 0} {
+        set lines [dict get $init_state lines]
+        set cy    [dict get $init_state cy]
+        set cx    [dict get $init_state cx]
+        set dirty [dict get $init_state dirty]
+    } else {
+        if {$filepath ne "" && [file exists $filepath] && [file size $filepath] > 0} {
+            set fh [open $filepath r]; chan configure $fh -encoding utf-8
+            set content [read $fh]; close $fh
+            foreach line [split $content "\n"] { lappend lines $line }
+            if {[llength $lines] > 1 && [lindex $lines end] eq ""} {
+                set lines [lrange $lines 0 end-1]
+            }
         }
-    }
-    if {[llength $lines] == 0} { set lines [list ""] }
-    if {$filepath ne ""} {
-        recent-push $filepath
-        set _wc [llength [regexp -all -inline {\S+} [join $lines "\n"]]]
-        daily-open $filepath $_wc
+        if {[llength $lines] == 0} { set lines [list ""] }
+        if {$filepath ne ""} {
+            recent-push $filepath
+            set _wc [llength [regexp -all -inline {\S+} [join $lines "\n"]]]
+            daily-open $filepath $_wc
+        }
+        set dirty 0
     }
 
     # -- cursor restore --------------------------------------------------------
+    if {[dict size $init_state] == 0} {
     if {$filepath eq ""} { set cy 1; set cx 0 } else { lassign [cursor-get $filepath] cy cx }
     if {[dict exists $::session_headings $filepath]} {
         set hidx [dict get $::session_headings $filepath]
@@ -2673,12 +2707,14 @@ proc tui-editor {filepath} {
             incr ln
         }
     }
+    }
     set cy [expr {max(1, min($cy, [llength $lines]))}]
     set cx [expr {max(0, min($cx, [string length [lindex $lines [expr {$cy-1}]]]))}]
 
     set scroll_y 0
     set toc_jumped 0
-    set dirty 0; set message ""; set msg_time 0; set sticky -1
+    if {[dict size $init_state] == 0} { set dirty 0 }
+    set message ""; set msg_time 0; set sticky -1
     set undo_stack {}
     set redo_stack {}
     set file_mtime_known [expr {$filepath ne "" && [file exists $filepath] \
@@ -3317,6 +3353,11 @@ proc tui-editor {filepath} {
                 } elseif {$key eq "ALT-T"} {
                     timer-reset
                     set clear_sel 0
+                } elseif {$key eq $::cfg_tui_workspace} {
+                    if {$filepath ne ""} { cursor-put $filepath $cy $cx }
+                    set ::tui_ws_save [dict create \
+                        filepath $filepath lines $lines cy $cy cx $cx dirty $dirty]
+                    set ::session_file ""; return "__ws_toggle__"
                 } elseif {[string match "F*" $key]} {                          ;# ignore unknown F-keys
                     set clear_sel 0
                 } elseif {[string length $key] >= 1 && ($c eq "" || $c >= 32)} {
@@ -3561,6 +3602,22 @@ proc tui-config-dialog {rows cols} {
     }
 }
 
+proc tui-ws-run {fp} {
+    set ::tui_ws_bg [dict create filepath "" lines [list ""] cy 1 cx 0 dirty 0]
+    set ::ws_n 1
+    set ret [tui-editor $fp]
+    while {$ret eq "__ws_toggle__"} {
+        set saved $::tui_ws_save
+        set next  $::tui_ws_bg
+        set ::tui_ws_bg $saved
+        set ::ws_n [expr {$::ws_n == 1 ? 2 : 1}]
+        puts -nonewline "\033\[2J"; flush stdout
+        set next_fp [dict get $next filepath]
+        set ret [tui-editor $next_fp $next]
+    }
+    set ::ws_n 1
+}
+
 proc tui-main {} {
     if {$::tcl_platform(platform) eq "windows"} {
         puts stderr "writhdeck: TUI mode is not supported on Windows"
@@ -3575,14 +3632,14 @@ proc tui-main {} {
         if {$::argc > 0} {
             set fp [lindex $::argv 0]
             if {![file exists $fp]} { close [open $fp w] }
-            tui-editor $fp
+            tui-ws-run $fp
         }
         if {$::cfg_browser || $::argc == 0} {
             while 1 {
                 set fp [tui-browser]
                 if {$fp eq ""} break
                 puts -nonewline "\033\[2J"; flush stdout
-                if {$fp eq "__scratchpad__"} { tui-editor "" } else { tui-editor $fp }
+                if {$fp eq "__scratchpad__"} { tui-ws-run "" } else { tui-ws-run $fp }
             }
         }
     } err info]

@@ -55,6 +55,7 @@ dict set ::i18n fr {
     help_shift_arrows  "Maj+Flèches   Étendre la sélection"
     help_k_split       "Vue partagée (bascule)"
     help_k_split_focus "Vue partagée - changer de fenêtre"
+    help_k_workspace   "Second espace de travail (bascule ES1/ES2)"
     br_toc_title       "Sections du navigateur"
     br_toc_empty       "aucune section"
     br_toc_bar         "Up/Dn nav  Enter aller  esc annuler"

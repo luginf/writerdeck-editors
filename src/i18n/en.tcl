@@ -55,6 +55,7 @@ dict set ::i18n en {
     help_shift_arrows  "Shift+Arrows  Extend selection"
     help_k_split       "Split view (toggle)"
     help_k_split_focus "Split view - cycle focus"
+    help_k_workspace   "Second workspace (toggle WS1/WS2)"
     br_toc_title       "Browser sections"
     br_toc_empty       "no sections"
     br_toc_bar         "Up/Dn nav  Enter jump  esc cancel"

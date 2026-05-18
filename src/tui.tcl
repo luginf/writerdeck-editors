@@ -218,6 +218,7 @@ proc tui-help-dialog {rows cols wc cc {sel_wc -1} {sel_cc -1}} {
         [list "" 0] \
         [list [format "  %-16s %s" [t help_k_ctrl_arrows] ""] 0] \
         [list [format "  %-16s %s" $lbl_toc  [t help_k_toc]]  0] \
+        [list [format "  %-16s %s" $::cfg_lbl_workspace [t help_k_workspace]] 0] \
         [list [format "  %-16s %s" $lbl_help [t help_k_help]] 0] \
         [list "" 0] \
         [list "  BROWSER" 1] \
@@ -1009,25 +1010,34 @@ proc tui-scratchpad-save {rows cols linesVar filepathVar dirtyVar} {
     set dirty 0
 }
 
-proc tui-editor {filepath} {
+proc tui-editor {filepath {init_state {}}} {
     # -- load ------------------------------------------------------------------
     set lines {}
-    if {$filepath ne "" && [file exists $filepath] && [file size $filepath] > 0} {
-        set fh [open $filepath r]; chan configure $fh -encoding utf-8
-        set content [read $fh]; close $fh
-        foreach line [split $content "\n"] { lappend lines $line }
-        if {[llength $lines] > 1 && [lindex $lines end] eq ""} {
-            set lines [lrange $lines 0 end-1]
+    if {[dict size $init_state] > 0} {
+        set lines [dict get $init_state lines]
+        set cy    [dict get $init_state cy]
+        set cx    [dict get $init_state cx]
+        set dirty [dict get $init_state dirty]
+    } else {
+        if {$filepath ne "" && [file exists $filepath] && [file size $filepath] > 0} {
+            set fh [open $filepath r]; chan configure $fh -encoding utf-8
+            set content [read $fh]; close $fh
+            foreach line [split $content "\n"] { lappend lines $line }
+            if {[llength $lines] > 1 && [lindex $lines end] eq ""} {
+                set lines [lrange $lines 0 end-1]
+            }
         }
-    }
-    if {[llength $lines] == 0} { set lines [list ""] }
-    if {$filepath ne ""} {
-        recent-push $filepath
-        set _wc [llength [regexp -all -inline {\S+} [join $lines "\n"]]]
-        daily-open $filepath $_wc
+        if {[llength $lines] == 0} { set lines [list ""] }
+        if {$filepath ne ""} {
+            recent-push $filepath
+            set _wc [llength [regexp -all -inline {\S+} [join $lines "\n"]]]
+            daily-open $filepath $_wc
+        }
+        set dirty 0
     }
 
     # -- cursor restore --------------------------------------------------------
+    if {[dict size $init_state] == 0} {
     if {$filepath eq ""} { set cy 1; set cx 0 } else { lassign [cursor-get $filepath] cy cx }
     if {[dict exists $::session_headings $filepath]} {
         set hidx [dict get $::session_headings $filepath]
@@ -1040,12 +1050,14 @@ proc tui-editor {filepath} {
             incr ln
         }
     }
+    }
     set cy [expr {max(1, min($cy, [llength $lines]))}]
     set cx [expr {max(0, min($cx, [string length [lindex $lines [expr {$cy-1}]]]))}]
 
     set scroll_y 0
     set toc_jumped 0
-    set dirty 0; set message ""; set msg_time 0; set sticky -1
+    if {[dict size $init_state] == 0} { set dirty 0 }
+    set message ""; set msg_time 0; set sticky -1
     set undo_stack {}
     set redo_stack {}
     set file_mtime_known [expr {$filepath ne "" && [file exists $filepath] \
@@ -1684,6 +1696,11 @@ proc tui-editor {filepath} {
                 } elseif {$key eq "ALT-T"} {
                     timer-reset
                     set clear_sel 0
+                } elseif {$key eq $::cfg_tui_workspace} {
+                    if {$filepath ne ""} { cursor-put $filepath $cy $cx }
+                    set ::tui_ws_save [dict create \
+                        filepath $filepath lines $lines cy $cy cx $cx dirty $dirty]
+                    set ::session_file ""; return "__ws_toggle__"
                 } elseif {[string match "F*" $key]} {                          ;# ignore unknown F-keys
                     set clear_sel 0
                 } elseif {[string length $key] >= 1 && ($c eq "" || $c >= 32)} {
@@ -1928,6 +1945,22 @@ proc tui-config-dialog {rows cols} {
     }
 }
 
+proc tui-ws-run {fp} {
+    set ::tui_ws_bg [dict create filepath "" lines [list ""] cy 1 cx 0 dirty 0]
+    set ::ws_n 1
+    set ret [tui-editor $fp]
+    while {$ret eq "__ws_toggle__"} {
+        set saved $::tui_ws_save
+        set next  $::tui_ws_bg
+        set ::tui_ws_bg $saved
+        set ::ws_n [expr {$::ws_n == 1 ? 2 : 1}]
+        puts -nonewline "\033\[2J"; flush stdout
+        set next_fp [dict get $next filepath]
+        set ret [tui-editor $next_fp $next]
+    }
+    set ::ws_n 1
+}
+
 proc tui-main {} {
     if {$::tcl_platform(platform) eq "windows"} {
         puts stderr "writhdeck: TUI mode is not supported on Windows"
@@ -1942,14 +1975,14 @@ proc tui-main {} {
         if {$::argc > 0} {
             set fp [lindex $::argv 0]
             if {![file exists $fp]} { close [open $fp w] }
-            tui-editor $fp
+            tui-ws-run $fp
         }
         if {$::cfg_browser || $::argc == 0} {
             while 1 {
                 set fp [tui-browser]
                 if {$fp eq ""} break
                 puts -nonewline "\033\[2J"; flush stdout
-                if {$fp eq "__scratchpad__"} { tui-editor "" } else { tui-editor $fp }
+                if {$fp eq "__scratchpad__"} { tui-ws-run "" } else { tui-ws-run $fp }
             }
         }
     } err info]

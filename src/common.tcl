@@ -174,6 +174,7 @@ proc status-build {tokens state} {
     set result ""
     foreach tok $tokens {
         switch -- $tok {
+            workspace { if {$::ws_dual_mode} { append result "\[$::ws_n\] " } }
             filename { append result $fn }
             dirty    { if {$dirty}      { append result " \[+\]" } }
             sel      { if {$sel}        { append result " \[sel\]" } }

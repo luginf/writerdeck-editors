@@ -142,7 +142,7 @@ set ::cfg_lang           "en"
 set ::cfg_help_bar       "^S save   ^Q close   ^H help"
 set ::cfg_word_goal      500
 # status bar zones - tokens: filename dirty sel ln col words chars goal clock help_bar space
-set ::cfg_status_left   "filename dirty sel ln col words chars"
+set ::cfg_status_left   "workspace filename dirty sel ln col words chars"
 set ::cfg_status_center ""
 set ::cfg_status_right  "help_bar clock"
 # shortcuts (Tk key names)
@@ -167,6 +167,7 @@ set ::cfg_key_typewriter   "Control-t"
 set ::cfg_key_fullscreen   "Alt-Return"
 set ::cfg_key_split        "F3"
 set ::cfg_key_split_focus  "F4"
+set ::cfg_key_workspace    "F10"
 set ::cfg_key_timer        "Alt-t"
 set ::cfg_key_cmd_mode     "Escape"
 set ::cfg_key_error        ""
@@ -182,6 +183,22 @@ set ::timer_schedule_id    ""
 set ::timer_alert_shown    0
 set ::fullscreen 0
 set ::split_mode 0
+# workspace state (WS1 = primary, WS2 = secondary toggled via cfg_key_workspace)
+set ::ws_n           1
+set ::ws_dual_mode   0
+set ::ws1_filename   ""
+set ::ws1_scratchpad 0
+set ::ws1_dirty      0
+set ::ws1_content    ""
+set ::ws1_cursor     "1.0"
+set ::ws1_file_mtime 0
+set ::ws2_filename   ""
+set ::ws2_scratchpad 1
+set ::ws2_dirty      0
+set ::ws2_content    ""
+set ::ws2_cursor     "1.0"
+set ::ws2_file_mtime 0
+set ::split_ws2_mode 0
 
 proc marker-val {v} { expr {$v eq "0" ? "" : $v} }
 
@@ -458,6 +475,7 @@ proc ini-load {} {
                 key_fullscreen   { set ::cfg_key_fullscreen   $v }
                 key_split        { set ::cfg_key_split        $v }
                 key_split_focus  { set ::cfg_key_split_focus  $v }
+                key_workspace    { set ::cfg_key_workspace    $v }
                 key_timer        { set ::cfg_key_timer        $v }
                 key_cmd_mode     { set ::cfg_key_cmd_mode     $v }
                 toc_key          { set ::cfg_key_toc          $v }
@@ -550,6 +568,7 @@ proc ini-save {} {
     puts $fh "key_fullscreen   = $::cfg_key_fullscreen"
     puts $fh "key_split        = $::cfg_key_split"
     puts $fh "key_split_focus  = $::cfg_key_split_focus"
+    puts $fh "key_workspace    = $::cfg_key_workspace"
     puts $fh "key_timer        = $::cfg_key_timer"
     puts $fh "key_dark_toggle  = $::cfg_key_dark_toggle"
     puts $fh "key_cmd_mode     = $::cfg_key_cmd_mode"
@@ -699,6 +718,7 @@ proc keys-init {} {
     set ::cfg_tui_typewriter   [tk-key-to-tui $::cfg_key_typewriter]
     set ::cfg_tui_dark_toggle  [tk-key-to-tui $::cfg_key_dark_toggle]
     set ::cfg_tui_split        [tk-key-to-tui $::cfg_key_split]
+    set ::cfg_tui_workspace    [tk-key-to-tui $::cfg_key_workspace]
     set ::cfg_tui_timer        [tk-key-to-tui $::cfg_key_timer]
     set ::cfg_tui_cmd_mode     [tk-key-to-tui $::cfg_key_cmd_mode]
     # labels for UI display
@@ -720,6 +740,7 @@ proc keys-init {} {
     set ::cfg_lbl_typewriter [key-label $::cfg_key_typewriter]
     set ::cfg_lbl_split      [key-label $::cfg_key_split]
     set ::cfg_lbl_split_focus [key-label $::cfg_key_split_focus]
+    set ::cfg_lbl_workspace  [key-label $::cfg_key_workspace]
     set ::cfg_lbl_cmd_mode    [key-label $::cfg_key_cmd_mode]
     # conflict detection
     set pairs [list \

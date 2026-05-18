@@ -55,6 +55,7 @@ dict set ::i18n es {
     help_shift_arrows  "Mayus+Flechas  Extender seleccion"
     help_k_split       "Vista dividida (activar)"
     help_k_split_focus "Vista dividida - cambiar enfoque"
+    help_k_workspace   "Segundo espacio de trabajo (alternar ET1/ET2)"
     br_toc_title       "Secciones del navegador"
     br_toc_empty       "sin secciones"
     br_toc_bar         "Arriba/Abajo nav  Enter saltar  esc cancelar"

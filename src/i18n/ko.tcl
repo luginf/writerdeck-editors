@@ -55,6 +55,7 @@ dict set ::i18n ko {
     help_shift_arrows  "Shift+화살표  선택 확장"
     help_k_split       "분할 보기 (토글)"
     help_k_split_focus "분할 보기 - 포커스 순환"
+    help_k_workspace   "두 번째 작업공간 (WS1/WS2 전환)"
     br_toc_title       "브라우저 섹션"
     br_toc_empty       "섹션 없음"
     br_toc_bar         "위/아래 이동  Enter 이동  esc 취소"

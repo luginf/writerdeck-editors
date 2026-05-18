@@ -425,7 +425,7 @@ set ::cfg_lang           "en"
 set ::cfg_help_bar       "^S save   ^Q close   ^H help"
 set ::cfg_word_goal      500
 # status bar zones - tokens: filename dirty sel ln col words chars goal clock help_bar space
-set ::cfg_status_left   "filename dirty sel ln col words chars"
+set ::cfg_status_left   "workspace filename dirty sel ln col words chars"
 set ::cfg_status_center ""
 set ::cfg_status_right  "help_bar clock"
 # shortcuts (Tk key names)
@@ -450,6 +450,7 @@ set ::cfg_key_typewriter   "Control-t"
 set ::cfg_key_fullscreen   "Alt-Return"
 set ::cfg_key_split        "F3"
 set ::cfg_key_split_focus  "F4"
+set ::cfg_key_workspace    "F10"
 set ::cfg_key_timer        "Alt-t"
 set ::cfg_key_cmd_mode     "Escape"
 set ::cfg_key_error        ""
@@ -465,6 +466,22 @@ set ::timer_schedule_id    ""
 set ::timer_alert_shown    0
 set ::fullscreen 0
 set ::split_mode 0
+# workspace state (WS1 = primary, WS2 = secondary toggled via cfg_key_workspace)
+set ::ws_n           1
+set ::ws_dual_mode   0
+set ::ws1_filename   ""
+set ::ws1_scratchpad 0
+set ::ws1_dirty      0
+set ::ws1_content    ""
+set ::ws1_cursor     "1.0"
+set ::ws1_file_mtime 0
+set ::ws2_filename   ""
+set ::ws2_scratchpad 1
+set ::ws2_dirty      0
+set ::ws2_content    ""
+set ::ws2_cursor     "1.0"
+set ::ws2_file_mtime 0
+set ::split_ws2_mode 0
 
 proc marker-val {v} { expr {$v eq "0" ? "" : $v} }
 
@@ -741,6 +758,7 @@ proc ini-load {} {
                 key_fullscreen   { set ::cfg_key_fullscreen   $v }
                 key_split        { set ::cfg_key_split        $v }
                 key_split_focus  { set ::cfg_key_split_focus  $v }
+                key_workspace    { set ::cfg_key_workspace    $v }
                 key_timer        { set ::cfg_key_timer        $v }
                 key_cmd_mode     { set ::cfg_key_cmd_mode     $v }
                 toc_key          { set ::cfg_key_toc          $v }
@@ -833,6 +851,7 @@ proc ini-save {} {
     puts $fh "key_fullscreen   = $::cfg_key_fullscreen"
     puts $fh "key_split        = $::cfg_key_split"
     puts $fh "key_split_focus  = $::cfg_key_split_focus"
+    puts $fh "key_workspace    = $::cfg_key_workspace"
     puts $fh "key_timer        = $::cfg_key_timer"
     puts $fh "key_dark_toggle  = $::cfg_key_dark_toggle"
     puts $fh "key_cmd_mode     = $::cfg_key_cmd_mode"
@@ -982,6 +1001,7 @@ proc keys-init {} {
     set ::cfg_tui_typewriter   [tk-key-to-tui $::cfg_key_typewriter]
     set ::cfg_tui_dark_toggle  [tk-key-to-tui $::cfg_key_dark_toggle]
     set ::cfg_tui_split        [tk-key-to-tui $::cfg_key_split]
+    set ::cfg_tui_workspace    [tk-key-to-tui $::cfg_key_workspace]
     set ::cfg_tui_timer        [tk-key-to-tui $::cfg_key_timer]
     set ::cfg_tui_cmd_mode     [tk-key-to-tui $::cfg_key_cmd_mode]
     # labels for UI display
@@ -1003,6 +1023,7 @@ proc keys-init {} {
     set ::cfg_lbl_typewriter [key-label $::cfg_key_typewriter]
     set ::cfg_lbl_split      [key-label $::cfg_key_split]
     set ::cfg_lbl_split_focus [key-label $::cfg_key_split_focus]
+    set ::cfg_lbl_workspace  [key-label $::cfg_key_workspace]
     set ::cfg_lbl_cmd_mode    [key-label $::cfg_key_cmd_mode]
     # conflict detection
     set pairs [list \
@@ -1069,7 +1090,7 @@ set ::typewriter_mode 0
 
 
 # ===========================================================================
-# schemes (alt01 alt02 default everforest gruvbox nord solarized)
+# schemes (alt01 default everforest gruvbox nord solarized)
 # ===========================================================================
 # Alt01 - Dark red/bordeaux color scheme
 
@@ -1092,28 +1113,6 @@ dict set ::scheme_defs alt01 {
     color_markup_alt "#7e1c3e"
     color_bg2         "#150f10"
     color_bg2_alt     "#fffde9"
-}
-# Alt02 - Warm, muted color scheme
-
-dict set ::scheme_defs alt02 {
-    color_bg       "#2a2520"
-    color_fg       "#d4c4b0"
-    color_bg_bar   "#2a2520"
-    color_fg_bar   "#c4b4a0"
-    color_bg_sel   "#4a4035"
-    color_heading  "#e8a87c"
-    color_comment  "#6a5a50"
-    color_markup   "#c49070"
-    color_bg2      "#1d1917"
-    color_bg_alt   "#f5f0eb"
-    color_fg_alt   "#3a2a20"
-    color_bg_bar_alt "#e8e0d8"
-    color_fg_bar_alt "#3a2a20"
-    color_bg_sel_alt "#e0d4c8"
-    color_heading_alt "#a65d2b"
-    color_comment_alt "#a89080"
-    color_markup_alt "#8b5a3c"
-    color_bg2_alt     "#e8e0d8"
 }
 # Default color scheme - dark and light variants
 
@@ -1290,6 +1289,7 @@ dict set ::i18n en {
     help_shift_arrows  "Shift+Arrows  Extend selection"
     help_k_split       "Split view (toggle)"
     help_k_split_focus "Split view - cycle focus"
+    help_k_workspace   "Second workspace (toggle WS1/WS2)"
     br_toc_title       "Browser sections"
     br_toc_empty       "no sections"
     br_toc_bar         "Up/Dn nav  Enter jump  esc cancel"
@@ -1427,6 +1427,7 @@ dict set ::i18n de {
     help_shift_arrows  "Umschalt+Pfeile  Auswahl erweitern"
     help_k_split       "Geteilte Ansicht (umschalten)"
     help_k_split_focus "Geteilte Ansicht - Fokus wechseln"
+    help_k_workspace   "Zweiter Arbeitsbereich (WS1/WS2 umschalten)"
     br_toc_title       "Browser-Abschnitte"
     br_toc_empty       "keine Abschnitte"
     br_toc_bar         "Auf/Ab nav  Enter springen  esc abbrechen"
@@ -1564,6 +1565,7 @@ dict set ::i18n es {
     help_shift_arrows  "Mayus+Flechas  Extender seleccion"
     help_k_split       "Vista dividida (activar)"
     help_k_split_focus "Vista dividida - cambiar enfoque"
+    help_k_workspace   "Segundo espacio de trabajo (alternar ET1/ET2)"
     br_toc_title       "Secciones del navegador"
     br_toc_empty       "sin secciones"
     br_toc_bar         "Arriba/Abajo nav  Enter saltar  esc cancelar"
@@ -1701,6 +1703,7 @@ dict set ::i18n fr {
     help_shift_arrows  "Maj+Flèches   Étendre la sélection"
     help_k_split       "Vue partagée (bascule)"
     help_k_split_focus "Vue partagée - changer de fenêtre"
+    help_k_workspace   "Second espace de travail (bascule ES1/ES2)"
     br_toc_title       "Sections du navigateur"
     br_toc_empty       "aucune section"
     br_toc_bar         "Up/Dn nav  Enter aller  esc annuler"
@@ -1838,6 +1841,7 @@ dict set ::i18n ko {
     help_shift_arrows  "Shift+화살표  선택 확장"
     help_k_split       "분할 보기 (토글)"
     help_k_split_focus "분할 보기 - 포커스 순환"
+    help_k_workspace   "두 번째 작업공간 (WS1/WS2 전환)"
     br_toc_title       "브라우저 섹션"
     br_toc_empty       "섹션 없음"
     br_toc_bar         "위/아래 이동  Enter 이동  esc 취소"
@@ -1975,6 +1979,7 @@ dict set ::i18n no {
     help_shift_arrows  "Shift+Piler  Utvid valg"
     help_k_split       "Delvis visning (veksle)"
     help_k_split_focus "Delvis visning - syklus fokus"
+    help_k_workspace   "Andre arbeidsomrade (veksle ES1/ES2)"
     br_toc_title       "Nettleseravsnitt"
     br_toc_empty       "ingen avsnitt"
     br_toc_bar         "Opp/Ned navigering  Enter hopp  esc avbryt"
@@ -2235,6 +2240,7 @@ proc status-build {tokens state} {
     set result ""
     foreach tok $tokens {
         switch -- $tok {
+            workspace { if {$::ws_dual_mode} { append result "\[$::ws_n\] " } }
             filename { append result $fn }
             dirty    { if {$dirty}      { append result " \[+\]" } }
             sel      { if {$sel}        { append result " \[sel\]" } }
@@ -3193,20 +3199,25 @@ set ::ln_last_count 0
 
 proc gui-status-state {} {
     set t [active-ed]
-    set fn    [expr {$::scratchpad ? "** scratchpad **" : \
-                    ($::filename eq "" ? "\[new\]" : [file tail $::filename])}]
+    set clk [clock format [clock seconds] -format "%H:%M"]
+    set timer_display [expr {$::cfg_timer_duration * 60}]
+    if {$::timer_active} { set timer_display $::timer_remaining; timer-tick }
+    if {$::split_ws2_mode && $t eq ".ed.pw.r.t"} {
+        set fn [expr {$::ws2_scratchpad ? "** scratchpad **" : \
+                     ($::ws2_filename eq "" ? "\[new\]" : [file tail $::ws2_filename])}]
+        lassign [split [$t index insert] .] ln col
+        set total [expr {[lindex [split [$t index end] .] 0] - 1}]
+        return [dict create fn $fn dirty $::ws2_dirty sel 0 ln $ln total $total \
+                    col [expr {$col+1}] words $::gui_wc chars $::gui_cc \
+                    clock $clk timer $timer_display]
+    }
+    set fn [expr {$::scratchpad ? "** scratchpad **" : \
+                 ($::filename eq "" ? "\[new\]" : [file tail $::filename])}]
     lassign [split [$t index insert] .] ln col
     set total [expr {[lindex [split [$t index end] .] 0] - 1}]
-    set words $::gui_wc
-    set chars $::gui_cc
-    set clk   [clock format [clock seconds] -format "%H:%M"]
-    set timer_display [expr {$::cfg_timer_duration * 60}]
-    if {$::timer_active} {
-        set timer_display $::timer_remaining
-        timer-tick
-    }
     return [dict create fn $fn dirty $::dirty sel 0 ln $ln total $total \
-                col [expr {$col+1}] words $words chars $chars clock $clk timer $timer_display]
+                col [expr {$col+1}] words $::gui_wc chars $::gui_cc \
+                clock $clk timer $timer_display]
 }
 
 proc gui-status-update {} {
@@ -3416,9 +3427,20 @@ proc ln-toggle {} {
 }
 
 # --- file I/O -----------------------------------------------------------------
+proc ed-update-title {} {
+    set ws [expr {$::ws_dual_mode ? " \[$::ws_n\]" : ""}]
+    if {$::scratchpad} {
+        wm title . "Writhdeck - ** scratchpad **$ws"
+    } elseif {$::filename ne ""} {
+        wm title . "Writhdeck - [file tail $::filename]$ws"
+    } else {
+        wm title . "Writhdeck$ws"
+    }
+}
+
 proc load-file {path} {
     set ::filename $path
-    wm title . "Writhdeck - [file tail $path]"
+    ed-update-title
     .ed.t configure -undo 0
 
     .ed.t delete 1.0 end
@@ -3487,7 +3509,7 @@ proc save-as {} {
     }
     set ::filename $new_path
     set ::scratchpad 0
-    wm title . "Writhdeck - [file tail $new_path]"
+    ed-update-title
     save-file
 }
 
@@ -3609,6 +3631,14 @@ proc close-editor {} {
     set ::session_file ""
     if {$::watch_after_id ne ""} { after cancel $::watch_after_id; set ::watch_after_id "" }
     split-close
+    if {$::ws_n == 2} {
+        set ::ws2_filename   $::filename
+        set ::ws2_scratchpad $::scratchpad
+        set ::ws2_dirty      $::dirty
+        set ::ws2_content    [.ed.t get 1.0 end-1c]
+        set ::ws2_cursor     [.ed.t index insert]
+    }
+    set ::ws_n 1
     set ::filename   ""
     set ::scratchpad 0
     set ::file_mtime_known 0
@@ -3755,6 +3785,13 @@ bind .br.mid.lst <h>                  { help-dialog }
 bind .br.mid.lst <$::cfg_key_help>   { help-dialog }
 
 proc open-file-dialog {{initialdir ""}} {
+    if {$::split_ws2_mode && [focus] eq ".ed.pw.r.t"} {
+        set dir [expr {$::ws2_filename ne "" ? [file dirname $::ws2_filename] : $::DOCS_DIR_DEFAULT}]
+        set path [tk_getOpenFile -initialdir $dir \
+            -filetypes {{"Text files" {.txt}} {"All files" *}}]
+        if {$path ne ""} { split-ws2-load-file $path }
+        return
+    }
     if {$initialdir eq ""} {
         set initialdir [expr {$::filename ne "" ? [file dirname $::filename] : $::DOCS_DIR_DEFAULT}]
     }
@@ -3778,6 +3815,7 @@ bind .ed.t          <$::cfg_key_fullscreen> { toggle-fullscreen; break }
 bind .br.mid.lst    <$::cfg_key_fullscreen> { toggle-fullscreen }
 bind .ed.t          <$::cfg_key_split>       { split-toggle; break }
 bind .ed.t          <$::cfg_key_split_focus> { split-cycle-focus; break }
+bind .ed.t          <$::cfg_key_workspace>   { workspace-toggle; break }
 
 # --- headings & TOC -----------------------------------------------------------
 proc highlight-headings {} {
@@ -4655,6 +4693,7 @@ proc help-dialog {} {
             [key-label $::cfg_key_fullscreen]   [t help_k_fullscreen] \
             [key-label $::cfg_key_split]        [t help_k_split] \
             [key-label $::cfg_key_split_focus]  [t help_k_split_focus] \
+            [key-label $::cfg_key_workspace]    [t help_k_workspace] \
             [key-label $::cfg_key_help]         [t help_k_help] \
         ] \
         [t help_browser_sect] [list \
@@ -4859,6 +4898,7 @@ proc split-make-pane {side bg fg bg_bar bg_sel sp1 sp2 bg2} {
     bind $t <$::cfg_key_fullscreen>     { toggle-fullscreen; break }
     bind $t <$::cfg_key_split>          { split-toggle; break }
     bind $t <$::cfg_key_split_focus>    { split-cycle-focus; break }
+    bind $t <$::cfg_key_workspace>      { workspace-toggle; break }
     bind $t <Control-equal>             { font-resize  1; break }
     bind $t <Control-plus>              { font-resize  1; break }
     bind $t <Control-KP_Add>            { font-resize  1; break }
@@ -4897,6 +4937,10 @@ proc split-open {} {
 
 proc split-close {} {
     if {!$::split_mode} return
+    if {$::split_ws2_mode} {
+        split-ws2-save-state
+        set ::split_ws2_mode 0
+    }
     catch { .ed.t mark set insert [.ed.pw.l.t index insert] }
     pack forget .ed.pw
     destroy .ed.pw
@@ -4923,6 +4967,180 @@ proc split-cycle-focus {} {
     } else {
         focus .ed.pw.r.t
     }
+}
+
+proc split-ws2-open {} {
+    lassign [theme-colors] bg fg bg_bar fg_bar bg_sel _ _ _ bg2
+    set sp1 [.ed.t cget -spacing1]
+    set sp2 [.ed.t cget -spacing2]
+    set _padx [expr {$::cfg_split_shrink_margin ? max(1,$::cfg_margin_width/2) : $::cfg_margin_width}]
+    set _padx_in  [expr {$_padx/3}]
+    set _padx_out [expr {$_padx - $_padx_in}]
+    set _pady_in  [expr {$::cfg_margin_height/3}]
+    set _pady_out [expr {$::cfg_margin_height - $_pady_in}]
+    catch { pack forget .ed.pw.r.sb .ed.pw.r.t }
+    catch { destroy .ed.pw.r.t }
+    text .ed.pw.r.t \
+        -wrap word -font [.ed.t cget -font] -width 1 \
+        -bg $bg -fg $fg -insertbackground $fg \
+        -selectbackground $bg_sel -selectforeground $fg \
+        -blockcursor 0 -insertwidth 2 -insertofftime 0 \
+        -borderwidth 0 -padx $_padx_in -pady $_pady_in \
+        -highlightthickness 2 -highlightbackground $bg -highlightcolor $fg \
+        -yscrollcommand ".ed.pw.r.sb set" -spacing1 $sp1 -spacing2 $sp2 -spacing3 0
+    .ed.pw.r.sb configure -command ".ed.pw.r.t yview"
+    pack .ed.pw.r.sb -side right -fill y
+    pack .ed.pw.r.t  -fill both  -expand 1 -padx $_padx_out -pady $_pady_out
+    .ed.pw.r.t configure -undo 0
+    .ed.pw.r.t delete 1.0 end
+    if {$::ws2_content ne ""} { .ed.pw.r.t insert 1.0 $::ws2_content }
+    .ed.pw.r.t edit reset
+    .ed.pw.r.t edit modified false
+    .ed.pw.r.t configure -undo 1
+    if {$::ws2_dirty} { .ed.pw.r.t edit modified true }
+    catch { .ed.pw.r.t mark set insert $::ws2_cursor }
+    .ed.pw.r.t see insert
+    bind .ed.pw.r.t <<Modified>>             { split-ws2-track-dirty }
+    bind .ed.pw.r.t <KeyRelease>             { ed-status }
+    bind .ed.pw.r.t <ButtonRelease>          { ed-status }
+    bind .ed.pw.r.t <$::cfg_key_save>        { split-ws2-save; break }
+    bind .ed.pw.r.t <$::cfg_key_save_as>     { split-ws2-save-as; break }
+    bind .ed.pw.r.t <$::cfg_key_close>       { split-toggle; break }
+    bind .ed.pw.r.t <$::cfg_key_paste>       { ed-paste; break }
+    bind .ed.pw.r.t <$::cfg_key_select_all>  { .ed.pw.r.t tag add sel 1.0 end; break }
+    bind .ed.pw.r.t <$::cfg_key_dark_toggle> { toggle-dark-mode; break }
+    bind .ed.pw.r.t <Tab>                    { .ed.pw.r.t insert insert "\t"; break }
+    bind .ed.pw.r.t <$::cfg_key_goto>        { goto-dialog; break }
+    bind .ed.pw.r.t <$::cfg_key_help>        { help-dialog; break }
+    bind .ed.pw.r.t <$::cfg_key_undo>        { catch {.ed.pw.r.t edit undo}; ed-status; break }
+    bind .ed.pw.r.t <$::cfg_key_redo>        { catch {.ed.pw.r.t edit redo}; ed-status; break }
+    bind .ed.pw.r.t <$::cfg_key_find>        { search-open; break }
+    bind .ed.pw.r.t <$::cfg_key_open>        { open-file-dialog; break }
+    bind .ed.pw.r.t <$::cfg_key_split>       { split-toggle; break }
+    bind .ed.pw.r.t <$::cfg_key_split_focus> { split-cycle-focus; break }
+    bind .ed.pw.r.t <$::cfg_key_workspace>   { workspace-toggle; break }
+    bind .ed.pw.r.t <Control-equal>          { font-resize  1; break }
+    bind .ed.pw.r.t <Control-plus>           { font-resize  1; break }
+    bind .ed.pw.r.t <Control-KP_Add>         { font-resize  1; break }
+    bind .ed.pw.r.t <Control-minus>          { font-resize -1; break }
+    bind .ed.pw.r.t <Control-KP_Subtract>    { font-resize -1; break }
+    set ::ws_dual_mode 1
+    set ::split_ws2_mode 1
+    focus .ed.pw.r.t
+}
+
+proc split-ws2-track-dirty {} {
+    if {[.ed.pw.r.t edit modified]} { set ::ws2_dirty 1; .ed.pw.r.t edit modified false }
+    ed-status
+}
+
+proc split-ws2-save {} {
+    if {$::ws2_filename eq ""} { split-ws2-save-as; return }
+    set fh [open $::ws2_filename w]; chan configure $fh -encoding utf-8
+    puts -nonewline $fh [.ed.pw.r.t get 1.0 {end - 1 chars}]; close $fh
+    set ::ws2_dirty 0
+    .ed.pw.r.t edit modified false
+    set ::ws2_file_mtime [file mtime $::ws2_filename]
+    ed-status
+}
+
+proc split-ws2-save-as {} {
+    set dir [expr {$::ws2_filename ne "" ? [file dirname $::ws2_filename] : $::DOCS_DIR_DEFAULT}]
+    set name [string trim [input-dialog "Save as" "Save as:"]]
+    if {$name eq ""} return
+    if {[file extension $name] eq ""} { append name $::FILE_EXT }
+    set new_path [file join $dir $name]
+    if {[file exists $new_path] && $new_path ne $::ws2_filename} {
+        if {[confirm-dialog "\"$name\" already exists. Overwrite?"] ne "yes"} return
+    }
+    set ::ws2_filename $new_path
+    set ::ws2_scratchpad 0
+    split-ws2-save
+}
+
+proc split-ws2-load-file {path} {
+    .ed.pw.r.t configure -undo 0
+    .ed.pw.r.t delete 1.0 end
+    if {[file exists $path] && [file size $path] > 0} {
+        set fh [open $path r]; chan configure $fh -encoding utf-8
+        .ed.pw.r.t insert 1.0 [read $fh]; close $fh
+    }
+    .ed.pw.r.t edit reset; .ed.pw.r.t edit modified false
+    .ed.pw.r.t configure -undo 1
+    set ::ws2_filename $path; set ::ws2_scratchpad 0; set ::ws2_dirty 0
+    set ::ws2_file_mtime [expr {[file exists $path] ? [file mtime $path] : 0}]
+    recent-push $path
+    .ed.pw.r.t mark set insert 1.0; .ed.pw.r.t see insert
+    ed-status
+}
+
+proc split-ws2-save-state {} {
+    if {![winfo exists .ed.pw.r.t]} return
+    set ::ws2_content [.ed.pw.r.t get 1.0 end-1c]
+    set ::ws2_cursor  [.ed.pw.r.t index insert]
+}
+
+proc workspace-toggle {} {
+    if {$::split_mode} {
+        if {$::split_ws2_mode} { split-cycle-focus } else { split-ws2-open }
+        return
+    }
+    set ::ws_dual_mode 1
+    set cur_content [.ed.t get 1.0 end-1c]
+    set cur_cursor  [.ed.t index insert]
+    if {$::ws_n == 1} {
+        set ::ws1_filename   $::filename
+        set ::ws1_scratchpad $::scratchpad
+        set ::ws1_dirty      $::dirty
+        set ::ws1_content    $cur_content
+        set ::ws1_cursor     $cur_cursor
+        set ::ws1_file_mtime $::file_mtime_known
+        set new_fn    $::ws2_filename
+        set new_sp    $::ws2_scratchpad
+        set new_d     $::ws2_dirty
+        set new_c     $::ws2_content
+        set new_pos   $::ws2_cursor
+        set new_mtime $::ws2_file_mtime
+        set ::ws_n 2
+    } else {
+        set ::ws2_filename   $::filename
+        set ::ws2_scratchpad $::scratchpad
+        set ::ws2_dirty      $::dirty
+        set ::ws2_content    $cur_content
+        set ::ws2_cursor     $cur_cursor
+        set ::ws2_file_mtime $::file_mtime_known
+        set new_fn    $::ws1_filename
+        set new_sp    $::ws1_scratchpad
+        set new_d     $::ws1_dirty
+        set new_c     $::ws1_content
+        set new_pos   $::ws1_cursor
+        set new_mtime $::ws1_file_mtime
+        set ::ws_n 1
+    }
+    .ed.t configure -undo 0
+    .ed.t delete 1.0 end
+    if {$new_c ne ""} { .ed.t insert 1.0 $new_c }
+    .ed.t edit reset
+    .ed.t edit modified false
+    .ed.t configure -undo 1
+    set ::filename   $new_fn
+    set ::scratchpad $new_sp
+    set ::dirty      $new_d
+    if {$new_d} { .ed.t edit modified true }
+    set ::file_mtime_known $new_mtime
+    if {$::watch_after_id ne ""} { after cancel $::watch_after_id; set ::watch_after_id "" }
+    if {$::filename ne "" && !$::scratchpad} {
+        set ::watch_after_id [after 2000 watch-file]
+    }
+    set ::ln_last_count 0
+    set ::gui_wc_line_cache {}
+    set ::gui_wc_last_nlines 0
+    catch { .ed.t mark set insert $new_pos }
+    .ed.t see insert
+    ed-update-title
+    highlight-headings
+    ed-status
+    focus .ed.t
 }
 
 # --- frame switching ----------------------------------------------------------
@@ -4989,6 +5207,7 @@ proc ini-reload {} {
 }
 
 proc open-scratchpad {} {
+    set ::ws_n 1
     pack forget .br
     pack .ed -fill both -expand 1
     ini-reload
@@ -5003,13 +5222,14 @@ proc open-scratchpad {} {
     set ::ln_last_count 0
     set ::gui_wc_line_cache {}
     set ::gui_wc_last_nlines 0
-    wm title . "Writhdeck - ** scratchpad **"
+    ed-update-title
     highlight-headings
     ed-status
     focus .ed.t
 }
 
 proc show-editor {path} {
+    if {[winfo ismapped .br]} { set ::ws_n 1 }
     set ::scratchpad 0
     pack forget .br
     pack .ed -fill both -expand 1
@@ -5246,6 +5466,7 @@ proc tui-help-dialog {rows cols wc cc {sel_wc -1} {sel_cc -1}} {
         [list "" 0] \
         [list [format "  %-16s %s" [t help_k_ctrl_arrows] ""] 0] \
         [list [format "  %-16s %s" $lbl_toc  [t help_k_toc]]  0] \
+        [list [format "  %-16s %s" $::cfg_lbl_workspace [t help_k_workspace]] 0] \
         [list [format "  %-16s %s" $lbl_help [t help_k_help]] 0] \
         [list "" 0] \
         [list "  BROWSER" 1] \
@@ -6037,25 +6258,34 @@ proc tui-scratchpad-save {rows cols linesVar filepathVar dirtyVar} {
     set dirty 0
 }
 
-proc tui-editor {filepath} {
+proc tui-editor {filepath {init_state {}}} {
     # -- load ------------------------------------------------------------------
     set lines {}
-    if {$filepath ne "" && [file exists $filepath] && [file size $filepath] > 0} {
-        set fh [open $filepath r]; chan configure $fh -encoding utf-8
-        set content [read $fh]; close $fh
-        foreach line [split $content "\n"] { lappend lines $line }
-        if {[llength $lines] > 1 && [lindex $lines end] eq ""} {
-            set lines [lrange $lines 0 end-1]
+    if {[dict size $init_state] > 0} {
+        set lines [dict get $init_state lines]
+        set cy    [dict get $init_state cy]
+        set cx    [dict get $init_state cx]
+        set dirty [dict get $init_state dirty]
+    } else {
+        if {$filepath ne "" && [file exists $filepath] && [file size $filepath] > 0} {
+            set fh [open $filepath r]; chan configure $fh -encoding utf-8
+            set content [read $fh]; close $fh
+            foreach line [split $content "\n"] { lappend lines $line }
+            if {[llength $lines] > 1 && [lindex $lines end] eq ""} {
+                set lines [lrange $lines 0 end-1]
+            }
         }
-    }
-    if {[llength $lines] == 0} { set lines [list ""] }
-    if {$filepath ne ""} {
-        recent-push $filepath
-        set _wc [llength [regexp -all -inline {\S+} [join $lines "\n"]]]
-        daily-open $filepath $_wc
+        if {[llength $lines] == 0} { set lines [list ""] }
+        if {$filepath ne ""} {
+            recent-push $filepath
+            set _wc [llength [regexp -all -inline {\S+} [join $lines "\n"]]]
+            daily-open $filepath $_wc
+        }
+        set dirty 0
     }
 
     # -- cursor restore --------------------------------------------------------
+    if {[dict size $init_state] == 0} {
     if {$filepath eq ""} { set cy 1; set cx 0 } else { lassign [cursor-get $filepath] cy cx }
     if {[dict exists $::session_headings $filepath]} {
         set hidx [dict get $::session_headings $filepath]
@@ -6068,12 +6298,14 @@ proc tui-editor {filepath} {
             incr ln
         }
     }
+    }
     set cy [expr {max(1, min($cy, [llength $lines]))}]
     set cx [expr {max(0, min($cx, [string length [lindex $lines [expr {$cy-1}]]]))}]
 
     set scroll_y 0
     set toc_jumped 0
-    set dirty 0; set message ""; set msg_time 0; set sticky -1
+    if {[dict size $init_state] == 0} { set dirty 0 }
+    set message ""; set msg_time 0; set sticky -1
     set undo_stack {}
     set redo_stack {}
     set file_mtime_known [expr {$filepath ne "" && [file exists $filepath] \
@@ -6712,6 +6944,11 @@ proc tui-editor {filepath} {
                 } elseif {$key eq "ALT-T"} {
                     timer-reset
                     set clear_sel 0
+                } elseif {$key eq $::cfg_tui_workspace} {
+                    if {$filepath ne ""} { cursor-put $filepath $cy $cx }
+                    set ::tui_ws_save [dict create \
+                        filepath $filepath lines $lines cy $cy cx $cx dirty $dirty]
+                    set ::session_file ""; return "__ws_toggle__"
                 } elseif {[string match "F*" $key]} {                          ;# ignore unknown F-keys
                     set clear_sel 0
                 } elseif {[string length $key] >= 1 && ($c eq "" || $c >= 32)} {
@@ -6956,6 +7193,22 @@ proc tui-config-dialog {rows cols} {
     }
 }
 
+proc tui-ws-run {fp} {
+    set ::tui_ws_bg [dict create filepath "" lines [list ""] cy 1 cx 0 dirty 0]
+    set ::ws_n 1
+    set ret [tui-editor $fp]
+    while {$ret eq "__ws_toggle__"} {
+        set saved $::tui_ws_save
+        set next  $::tui_ws_bg
+        set ::tui_ws_bg $saved
+        set ::ws_n [expr {$::ws_n == 1 ? 2 : 1}]
+        puts -nonewline "\033\[2J"; flush stdout
+        set next_fp [dict get $next filepath]
+        set ret [tui-editor $next_fp $next]
+    }
+    set ::ws_n 1
+}
+
 proc tui-main {} {
     if {$::tcl_platform(platform) eq "windows"} {
         puts stderr "writhdeck: TUI mode is not supported on Windows"
@@ -6970,14 +7223,14 @@ proc tui-main {} {
         if {$::argc > 0} {
             set fp [lindex $::argv 0]
             if {![file exists $fp]} { close [open $fp w] }
-            tui-editor $fp
+            tui-ws-run $fp
         }
         if {$::cfg_browser || $::argc == 0} {
             while 1 {
                 set fp [tui-browser]
                 if {$fp eq ""} break
                 puts -nonewline "\033\[2J"; flush stdout
-                if {$fp eq "__scratchpad__"} { tui-editor "" } else { tui-editor $fp }
+                if {$fp eq "__scratchpad__"} { tui-ws-run "" } else { tui-ws-run $fp }
             }
         }
     } err info]

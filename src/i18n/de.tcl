@@ -55,6 +55,7 @@ dict set ::i18n de {
     help_shift_arrows  "Umschalt+Pfeile  Auswahl erweitern"
     help_k_split       "Geteilte Ansicht (umschalten)"
     help_k_split_focus "Geteilte Ansicht - Fokus wechseln"
+    help_k_workspace   "Zweiter Arbeitsbereich (WS1/WS2 umschalten)"
     br_toc_title       "Browser-Abschnitte"
     br_toc_empty       "keine Abschnitte"
     br_toc_bar         "Auf/Ab nav  Enter springen  esc abbrechen"
