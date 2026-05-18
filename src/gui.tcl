@@ -68,7 +68,7 @@ foreach {char cmd key} {
     w word-occurrences-dialog br_key_words
     c profile-config-dialog br_key_config
     z br-reload br_key_reload
-    q exit br_key_quit
+    q quit-app br_key_quit
 } {
     set label "$char:[t $key]"
     lappend _shortcuts [list $label $cmd]
@@ -646,7 +646,7 @@ bind .br.mid.lst <r>           { br-rename }
 bind .br.mid.lst <i>           { set e [br-selected]; if {[llength $e]} { file-info-dialog [file join [lindex $e 1] [lindex $e 2]] } }
 bind .br.mid.lst <w>           { set e [br-selected]; if {[llength $e]} { word-occurrences-dialog [file join [lindex $e 1] [lindex $e 2]] } }
 bind .br.mid.lst <c>           { profile-config-dialog }
-bind .br.mid.lst <q>           { exit }
+bind .br.mid.lst <q>           { quit-app }
 bind .br.mid.lst <z>           { br-reload }
 
 proc br-select-line {line_offset} {
@@ -1290,7 +1290,6 @@ proc close-editor {} {
         set ::ws2_content    [.ed.t get 1.0 end-1c]
         set ::ws2_cursor     [.ed.t index insert]
     }
-    set ::ws_n 1
     set ::filename   ""
     set ::scratchpad 0
     set ::file_mtime_known 0
@@ -1365,6 +1364,27 @@ proc apply-theme {} {
     catch { .ed.t tag configure focus_dim -foreground $c_comment }
 }
 
+proc ws-check-inactive-dirty {} {
+    if {!$::ws_dual_mode} { return 1 }
+    if {$::ws_n == 1} {
+        set iws 2;  set ifn $::ws2_filename;  set isp $::ws2_scratchpad
+        set idirty $::ws2_dirty;  set icontent $::ws2_content
+    } else {
+        set iws 1;  set ifn $::ws1_filename;  set isp $::ws1_scratchpad
+        set idirty $::ws1_dirty;  set icontent $::ws1_content
+    }
+    if {!$idirty || ($ifn eq "" && !$isp)} { return 1 }
+    set _lbl [expr {$isp ? "scratchpad \[$iws\]" : "[file tail $ifn] \[$iws\]"}]
+    set r [yesnocancel-dialog [t ed_save_before $_lbl]]
+    if {$r eq "cancel"} { return 0 }
+    if {$r eq "yes" && $ifn ne ""} {
+        set fh [open $ifn w];  chan configure $fh -encoding utf-8
+        puts -nonewline $fh $icontent;  close $fh
+        if {$iws == 1} { set ::ws1_dirty 0 } else { set ::ws2_dirty 0 }
+    }
+    return 1
+}
+
 proc quit-app {} {
     if {$::dirty && ($::filename ne "" || $::scratchpad)} {
         set _label [expr {$::scratchpad ? "scratchpad" : [file tail $::filename]}]
@@ -1372,6 +1392,7 @@ proc quit-app {} {
         if {$r eq "cancel"} return
         if {$r eq "yes"} save-file
     }
+    if {![ws-check-inactive-dirty]} return
     if {$::filename ne ""} {
         daily-update [llength [regexp -all -inline {\S+} [[primary-ed] get 1.0 end-1c]]]
         lassign [split [[primary-ed] index insert] .] cy cx
@@ -1713,13 +1734,7 @@ proc gui-handle-keypress {key} {
         } elseif {$key eq "q" || $key eq "Q"} {
             set ::gui_cmd_mode 0
             ed-status
-            if {$::dirty} {
-                set r [tk_messageBox -type yesnocancel -title "Save?" -message "Save before closing?"]
-                if {$r eq "yes"} { save-file; set ::dirty 0 }
-                if {$r eq "cancel"} { return 1 }
-            }
-            set ::filename ""
-            br-reload
+            close-editor
             return 1
         }
         # Pour les autres touches non reconnues, reste en mode modal

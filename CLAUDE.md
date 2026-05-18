@@ -222,6 +222,44 @@ Editor mode activated by pressing the command-mode key (default: ESC) in the edi
 - TUI: `$key eq $::cfg_tui_cmd_mode` in editor key handler
 - After closing `s`/`w` overlay: `set wrap_dirty 1` forces editor redraw (TUI)
 
+## Second workspace (F10)
+
+Two independent editor workspaces accessible via `key_workspace` (default F10). Only one workspace is visible at a time in the editor; the other is preserved in memory.
+
+**State variables** (`src/config.tcl`):
+- `::ws_n` — active workspace number (1 or 2)
+- `::ws_dual_mode` — set to 1 the first time F10 is pressed; controls `[1]`/`[2]` display in status bar and title
+- `::ws1_filename`, `::ws1_scratchpad`, `::ws1_dirty`, `::ws1_content`, `::ws1_cursor`, `::ws1_file_mtime` — saved state of WS1 when WS2 is active
+- `::ws2_*` — same set for WS2 (initialized with `ws2_scratchpad=1` so WS2 starts as empty scratchpad)
+- `::split_ws2_mode` — 1 when right split pane shows WS2 independently
+
+**GUI — key procs** (`src/gui.tcl`):
+- `workspace-toggle` — saves active workspace to ws{n}_*, loads other workspace into `.ed.t`; in split mode redirects to `split-ws2-open`/`split-cycle-focus`; sets `ws_dual_mode=1`; cancels/restarts watch-file timer with correct `file_mtime_known`
+- `ed-update-title` — shows `[1]`/`[2]` in window title when `ws_dual_mode==1`
+- `split-ws2-open` — replaces the right peer pane with an independent `text` widget loaded with WS2 content; sets `split_ws2_mode=1`; has own save/open/close bindings
+- `split-ws2-save`, `split-ws2-save-as`, `split-ws2-load-file`, `split-ws2-save-state` — WS2 pane operations
+- `ws-check-inactive-dirty` — called by `quit-app`; prompts to save the inactive workspace if dirty; writes directly from `ws{n}_content`
+- `open-file-dialog` — detects `split_ws2_mode && focus eq .ed.pw.r.t` and routes Ctrl+O to WS2
+
+**Status bar token** `workspace` (`src/common.tcl`): appends `[ws_n] ` when `ws_dual_mode==1`; added at front of `cfg_status_left` default.
+
+**Quit handling:**
+- `quit-app` calls `ws-check-inactive-dirty` after the active-workspace prompt
+- Browser `q` and status bar `q` button call `quit-app` (not `exit` directly)
+- ESC+q modal calls `close-editor` (returns to browser in same process); quit-app is called when user quits from browser
+- `br-reload` uses `after 200 exit` for app restart — never call it for close-editor flow
+
+**Rules:**
+- `show-editor` resets `ws_n=1` only when `.br` is mapped (`winfo ismapped .br`)
+- `close-editor` saves WS2 state if `ws_n==2` but does NOT reset `ws_n` (preserves context for quit-app to check inactive workspace)
+- `open-scratchpad` always resets `ws_n=1`
+
+**TUI — key procs** (`src/tui.tcl`):
+- `tui-ws-run {fp}` — wrapper loop; handles `__ws_toggle__` (F10) and `__ws2_open__` (Ctrl+O in WS2); sets `ws_dual_mode=1` on first toggle
+- `tui-editor` returns `"__ws_toggle__"` on F10, `"__ws2_open__"` on Ctrl+O when `ws_n==2`
+- On `__ws2_open__`: `tui-ws-run` shows browser, user picks file, re-enters `tui-editor` with `ws_n` still 2
+- `tui-ws-check-inactive-dirty {rows cols}` — TUI counterpart of `ws-check-inactive-dirty`; called in browser `q`, editor Ctrl+W, and editor ESC+q
+
 ## Color schemes
 
 Scheme files live in `src/schemes/` — one `.tcl` file per scheme, auto-detected by the Makefile (`AVAILABLE_SCHEMES`). Each file calls `dict set ::scheme_defs NAME { ... }` with 18 color keys:
@@ -302,7 +340,7 @@ Both generated files are:
 
 Modular language system with 6 supported languages. Store translations in `src/i18n/`:
 
-**Language files** (122 keys each):
+**Language files** (135 keys each):
 - `src/i18n/en.tcl` — English (always included, fallback language)
 - `src/i18n/fr.tcl` — Français
 - `src/i18n/de.tcl` — Deutsch
@@ -310,7 +348,7 @@ Modular language system with 6 supported languages. Store translations in `src/i
 - `src/i18n/ko.tcl` — 한국어 (Korean)
 - `src/i18n/no.tcl` — Norsk (Norwegian)
 
-Each file defines `dict set ::i18n LANG { key "value" ... }` with all 122 keys required for completeness.
+Each file defines `dict set ::i18n LANG { key "value" ... }` with all 135 keys required for completeness.
 
 **Build with specific languages:**
 ```bash

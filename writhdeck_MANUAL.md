@@ -59,7 +59,7 @@ When both `--gui` and `--tui`/`--no-gui` are given, TUI takes precedence.
   - Bold `**text**`, italic `//text//`, underline `__text__`, strikethrough `--text--` — all markers configurable
   - Marker characters greyed out; styled text in a configurable `color_markup`
 - Table of contents overlay: jump to any heading (last selection remembered per session)
-- Status bar: fully configurable zones (left / center / right) with tokens: `filename dirty sel ln col words chars goal clock help_bar space`
+- Status bar: fully configurable zones (left / center / right) with tokens: `workspace filename dirty sel ln col words chars goal clock help_bar space`
 - **Daily writing stats**: tracks words written per file per day (high-water mark — deletions don't reduce the count); favorites keep full history, other files keep only today's data
 - **Word goal** (`goal` status token): shows daily progress vs target, e.g. `47/500`; configurable via `word_goal` in INI or per profile
 - Go to line
@@ -73,6 +73,7 @@ When both `--gui` and `--tui`/`--no-gui` are given, TUI takes precedence.
 - **Help dialog**: shows selection word/char count when text is selected (GUI and TUI)
 - **Timer and stopwatch**: countdown timer or stopwatch with configurable duration, visual alerts, and audio notifications (bell sound)
 - **Modal command mode (ESC key)**: quick access to timer control, writing statistics, word occurrences, and file operations without breaking text focus
+- **Second workspace** (F10): switch between two independent editors; each preserves its own file, content, and dirty state; `[1]`/`[2]` indicator in status bar and title bar; in split view (F3), F10 loads the second workspace into the right pane (GUI and TUI)
 
 ## Configuration
 
@@ -122,7 +123,7 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 
 All actions are rebindable. Use Tk key names (`Control-s`, `Alt-Return`, `F11`, etc.):
 
-`key_save` `key_close` `key_find` `key_replace` `key_goto` `key_open` `key_undo` `key_redo` `key_help` `key_toc` `key_line_numbers` `key_fullscreen` `key_split` `key_split_focus` `key_typewriter` `key_dark_toggle` `key_timer` (default: `Alt-t`)
+`key_save` `key_close` `key_find` `key_replace` `key_goto` `key_open` `key_undo` `key_redo` `key_help` `key_toc` `key_line_numbers` `key_fullscreen` `key_split` `key_split_focus` `key_workspace` (default: `F10`) `key_typewriter` `key_dark_toggle` `key_timer` (default: `Alt-t`)
 
 ### `[profiles]`
 
@@ -274,9 +275,19 @@ Default mode, requires Tk.
 | F11                        | Table of contents                                                       |
 | F3                         | Toggle split view                                                       |
 | F4                         | Split view — cycle focus between panes                                  |
+| F10                        | Switch to second workspace (WS1/WS2); in split view: load WS2 into right pane |
 | Alt+Enter                  | Fullscreen toggle                                                       |
 | Tab                        | Insert literal tab character                                            |
 | Shift+Up/Down/Left/Right   | Extend selection                                                        |
+
+### Second workspace notes (GUI)
+
+- **F10** switches between two independent editors (WS1 and WS2); WS2 starts as an empty scratchpad
+- The status bar shows `[1]` or `[2]` once both workspaces are active; the window title also shows the indicator
+- **Ctrl+O** in WS2 opens a file into WS2 (does not affect WS1)
+- **In split view (F3)**: pressing F10 loads WS2 into the right pane as an independent editor; pressing F10 again cycles focus; pressing F3 closes the split and saves WS2 state
+- On quit, both workspaces are checked for unsaved changes (prompted separately if dirty)
+- `key_workspace = F10` is configurable in the `[keys]` section of the INI
 
 ### Shortcuts — Browser
 
@@ -306,6 +317,7 @@ Default mode, requires Tk.
 - Cursor, scroll position, and undo history are independent per pane
 - Find, Replace, Go to line, and TOC operate on the pane that had focus when opened
 - Line numbers are hidden while split is active
+- **F10 in split view**: replaces the right pane with an independent WS2 editor (different file); F10 again cycles focus between panes; Ctrl+S and Ctrl+O in the right pane operate on WS2
 
 ---
 
@@ -333,13 +345,14 @@ Activated via `--no-gui` / `--tui` / `--ng`, or when no windowing system is avai
 | Ctrl+Z                                  | Undo (100-state stack)                                       |
 | Ctrl+Y                                  | Redo                                                         |
 | Ctrl+T                                  | Typewriter / focus mode (toggle)                             |
-| Ctrl+O                                  | Save and return to browser                                   |
+| Ctrl+O                                  | Save and return to browser (in WS2: opens browser to pick a new file for WS2) |
 | Ctrl+G                                  | Go to line                                                   |
 | Ctrl+H                                  | Help                                                         |
 | Ctrl+L                                  | Show/hide line numbers                                       |
 | Ctrl+D                                  | Toggle dark/light theme (reverse video)                      |
 | Ctrl+Up / Ctrl+Down                     | Jump to previous / next paragraph (terminal emulator only)   |
 | Ctrl+Left / Ctrl+Right or Alt+B / Alt+F | Jump to previous / next word                                 |
+| F10                                     | Switch to second workspace (WS1/WS2)                         |
 | F11                                     | Table of contents (Esc / Ctrl+Q to close, Enter to jump)     |
 | Ctrl+A                                  | Select all                                                   |
 | Ctrl+K                                  | Toggle sticky selection (first: anchor; second: cancel)      |
@@ -348,6 +361,13 @@ Activated via `--no-gui` / `--tui` / `--ng`, or when no windowing system is avai
 | Ctrl+X                                  | Cut                                                          |
 | Ctrl+V                                  | Paste (multi-line supported)                                 |
 | Tab                                     | Insert literal tab character                                 |
+
+### Second workspace notes (TUI)
+
+- **F10** switches between WS1 and WS2; WS2 starts as an empty scratchpad
+- The status bar shows `[1]` or `[2]` once both workspaces are active
+- **Ctrl+O in WS2**: saves the current WS2 file, opens the browser to select a new file; the chosen file loads into WS2 (WS1 is unaffected)
+- On quit (`q` in browser), both workspaces are prompted for unsaved changes
 
 ### Shortcuts — Browser
 
@@ -432,7 +452,7 @@ Si `--gui` et `--no-gui` sont tous les deux présents, `--no-gui` a la priorité
   - Gras `**texte**`, italique `//texte//`, souligné `__texte__`, barré `--texte--` — tous les marqueurs configurables
   - Caractères de marquage grisés ; texte mis en forme dans une `color_markup` configurable
 - Overlay table des matières : saut vers n'importe quel titre (dernière sélection mémorisée par session)
-- Barre de statut : zones entièrement configurables (gauche / centre / droite) avec les jetons : `filename dirty sel ln col words chars goal clock help_bar space`
+- Barre de statut : zones entièrement configurables (gauche / centre / droite) avec les jetons : `workspace filename dirty sel ln col words chars goal clock help_bar space`
 - **Stats d'écriture journalières** : comptage par fichier par jour (high-water mark — les suppressions ne réduisent pas le compteur) ; les favoris conservent l'historique complet, les autres fichiers gardent seulement les données du jour
 - **Objectif de mots** (jeton `goal`) : affiche la progression du jour, ex. `47/500` ; configurable via `word_goal` dans le INI ou par profil
 - Aller à la ligne
@@ -446,6 +466,7 @@ Si `--gui` et `--no-gui` sont tous les deux présents, `--no-gui` a la priorité
 - **Dialogue d'aide** : affiche le nombre de mots/caractères de la sélection quand du texte est sélectionné (GUI et TUI)
 - **Minuterie et chronomètre** : compte à rebours ou chronomètre configurable avec affichage en temps réel et alertes visuelles/sonores
 - **Mode commande modal (touche ESC)** : accès rapide à la minuterie, stats, occurrences de mots et opérations fichier sans perdre la focus du texte
+- **Second espace de travail** (F10) : bascule entre deux éditeurs indépendants ; chacun préserve son fichier, son contenu et son état de modification ; indicateur `[1]`/`[2]` dans la barre de statut et la barre de titre ; en vue fractionnée (F3), F10 charge le second espace dans le volet droit (GUI et TUI)
 
 ## Configuration
 
@@ -495,7 +516,7 @@ Tous les raccourcis clavier sont configurables via la section `[keys]`.
 
 Toutes les actions sont reconfigurables. Utiliser les noms de touches Tk (`Control-s`, `Alt-Return`, `F11`, etc.) :
 
-`key_save` `key_close` `key_find` `key_replace` `key_goto` `key_open` `key_undo` `key_redo` `key_help` `key_toc` `key_line_numbers` `key_fullscreen` `key_split` `key_split_focus` `key_typewriter` `key_dark_toggle` `key_timer` (défaut : `Alt-t`)
+`key_save` `key_close` `key_find` `key_replace` `key_goto` `key_open` `key_undo` `key_redo` `key_help` `key_toc` `key_line_numbers` `key_fullscreen` `key_split` `key_split_focus` `key_workspace` (défaut : `F10`) `key_typewriter` `key_dark_toggle` `key_timer` (défaut : `Alt-t`)
 
 ### `[profiles]`
 
@@ -647,9 +668,19 @@ Mode par défaut, nécessite Tk.
 | F11                        | Table des matières                                                              |
 | F3                         | Basculer la vue fractionnée                                                     |
 | F4                         | Vue fractionnée — cycle du focus entre les volets                               |
+| F10                        | Basculer le second espace de travail (ES1/ES2) ; en vue fractionnée : charge ES2 dans le volet droit |
 | Alt+Entrée                 | Basculer le plein écran                                                         |
-| Tab                        | Insérer 4 espaces                                                               |
+| Tab                        | Insérer une tabulation littérale                                                |
 | Shift+Up/Down/Left/Right   | Étendre la sélection                                                            |
+
+### Notes sur le second espace de travail (GUI)
+
+- **F10** bascule entre deux éditeurs indépendants (ES1 et ES2) ; ES2 démarre comme un bloc-notes vide
+- La barre de statut affiche `[1]` ou `[2]` dès que les deux espaces sont actifs ; la barre de titre aussi
+- **Ctrl+O** dans ES2 ouvre un fichier dans ES2 (n'affecte pas ES1)
+- **En vue fractionnée (F3)** : F10 charge ES2 dans le volet droit comme éditeur indépendant ; F10 à nouveau cycle le focus ; F3 ferme le split en sauvegardant l'état ES2
+- À la fermeture, les deux espaces sont vérifiés pour des modifications non sauvegardées
+- `key_workspace = F10` est configurable dans la section `[keys]` du INI
 
 ### Raccourcis — Navigateur
 
@@ -679,6 +710,7 @@ Mode par défaut, nécessite Tk.
 - Le curseur, la position de défilement et l'historique d'annulation sont indépendants par volet
 - Recherche, Remplacement, Aller à la ligne et la table des matières opèrent sur le volet actif
 - Les numéros de ligne sont masqués quand la vue fractionnée est active
+- **F10 en vue fractionnée** : remplace le volet droit par un éditeur ES2 indépendant (fichier différent) ; F10 à nouveau cycle le focus ; Ctrl+S et Ctrl+O dans le volet droit opèrent sur ES2
 
 ---
 
@@ -706,13 +738,14 @@ Activé via `--no-gui` / `--tui` / `--ng`, ou si aucun système de fenêtrage n'
 | Ctrl+Z                                  | Annuler (pile de 100 états)                                         |
 | Ctrl+Y                                  | Rétablir                                                            |
 | Ctrl+T                                  | Mode machine à écrire / focus (bascule)                             |
-| Ctrl+O                                  | Enregistrer et retourner au navigateur                              |
+| Ctrl+O                                  | Enregistrer et retourner au navigateur (en ES2 : ouvre le navigateur pour choisir un nouveau fichier pour ES2) |
 | Ctrl+G                                  | Aller à la ligne                                                    |
 | Ctrl+H                                  | Aide                                                                |
 | Ctrl+L                                  | Afficher/masquer les numéros de ligne                               |
 | Ctrl+D                                  | Basculer thème sombre/clair (vidéo inverse)                         |
 | Ctrl+Up / Ctrl+Down                     | Sauter au paragraphe précédent / suivant (émulateur uniquement)     |
 | Ctrl+Left / Ctrl+Right ou Alt+B / Alt+F | Sauter au mot précédent / suivant                                   |
+| F10                                     | Basculer le second espace de travail (ES1/ES2)                      |
 | F11                                     | Table des matières (Échap / Ctrl+Q pour fermer, Entrée pour sauter) |
 | Ctrl+A                                  | Tout sélectionner                                                   |
 | Ctrl+K                                  | Sélection collante (1er appui : ancre ; 2e appui : annuler)         |
@@ -721,6 +754,13 @@ Activé via `--no-gui` / `--tui` / `--ng`, ou si aucun système de fenêtrage n'
 | Ctrl+X                                  | Couper                                                              |
 | Ctrl+V                                  | Coller (multiligne supporté)                                        |
 | Tab                                     | Insérer tabulation littérale                                        |
+
+### Notes sur le second espace de travail (TUI)
+
+- **F10** bascule entre ES1 et ES2 ; ES2 démarre comme un bloc-notes vide
+- La barre de statut affiche `[1]` ou `[2]` dès que les deux espaces sont actifs
+- **Ctrl+O dans ES2** : enregistre le fichier ES2 courant, ouvre le navigateur pour en choisir un nouveau ; le fichier choisi se charge dans ES2 (ES1 n'est pas affecté)
+- À la fermeture (`q` dans le navigateur), les deux espaces sont vérifiés pour des modifications non sauvegardées
 
 ### Raccourcis — Navigateur
 

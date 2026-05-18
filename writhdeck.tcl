@@ -2416,7 +2416,7 @@ foreach {char cmd key} {
     w word-occurrences-dialog br_key_words
     c profile-config-dialog br_key_config
     z br-reload br_key_reload
-    q exit br_key_quit
+    q quit-app br_key_quit
 } {
     set label "$char:[t $key]"
     lappend _shortcuts [list $label $cmd]
@@ -2994,7 +2994,7 @@ bind .br.mid.lst <r>           { br-rename }
 bind .br.mid.lst <i>           { set e [br-selected]; if {[llength $e]} { file-info-dialog [file join [lindex $e 1] [lindex $e 2]] } }
 bind .br.mid.lst <w>           { set e [br-selected]; if {[llength $e]} { word-occurrences-dialog [file join [lindex $e 1] [lindex $e 2]] } }
 bind .br.mid.lst <c>           { profile-config-dialog }
-bind .br.mid.lst <q>           { exit }
+bind .br.mid.lst <q>           { quit-app }
 bind .br.mid.lst <z>           { br-reload }
 
 proc br-select-line {line_offset} {
@@ -3638,7 +3638,6 @@ proc close-editor {} {
         set ::ws2_content    [.ed.t get 1.0 end-1c]
         set ::ws2_cursor     [.ed.t index insert]
     }
-    set ::ws_n 1
     set ::filename   ""
     set ::scratchpad 0
     set ::file_mtime_known 0
@@ -3713,6 +3712,27 @@ proc apply-theme {} {
     catch { .ed.t tag configure focus_dim -foreground $c_comment }
 }
 
+proc ws-check-inactive-dirty {} {
+    if {!$::ws_dual_mode} { return 1 }
+    if {$::ws_n == 1} {
+        set iws 2;  set ifn $::ws2_filename;  set isp $::ws2_scratchpad
+        set idirty $::ws2_dirty;  set icontent $::ws2_content
+    } else {
+        set iws 1;  set ifn $::ws1_filename;  set isp $::ws1_scratchpad
+        set idirty $::ws1_dirty;  set icontent $::ws1_content
+    }
+    if {!$idirty || ($ifn eq "" && !$isp)} { return 1 }
+    set _lbl [expr {$isp ? "scratchpad \[$iws\]" : "[file tail $ifn] \[$iws\]"}]
+    set r [yesnocancel-dialog [t ed_save_before $_lbl]]
+    if {$r eq "cancel"} { return 0 }
+    if {$r eq "yes" && $ifn ne ""} {
+        set fh [open $ifn w];  chan configure $fh -encoding utf-8
+        puts -nonewline $fh $icontent;  close $fh
+        if {$iws == 1} { set ::ws1_dirty 0 } else { set ::ws2_dirty 0 }
+    }
+    return 1
+}
+
 proc quit-app {} {
     if {$::dirty && ($::filename ne "" || $::scratchpad)} {
         set _label [expr {$::scratchpad ? "scratchpad" : [file tail $::filename]}]
@@ -3720,6 +3740,7 @@ proc quit-app {} {
         if {$r eq "cancel"} return
         if {$r eq "yes"} save-file
     }
+    if {![ws-check-inactive-dirty]} return
     if {$::filename ne ""} {
         daily-update [llength [regexp -all -inline {\S+} [[primary-ed] get 1.0 end-1c]]]
         lassign [split [[primary-ed] index insert] .] cy cx
@@ -4061,13 +4082,7 @@ proc gui-handle-keypress {key} {
         } elseif {$key eq "q" || $key eq "Q"} {
             set ::gui_cmd_mode 0
             ed-status
-            if {$::dirty} {
-                set r [tk_messageBox -type yesnocancel -title "Save?" -message "Save before closing?"]
-                if {$r eq "yes"} { save-file; set ::dirty 0 }
-                if {$r eq "cancel"} { return 1 }
-            }
-            set ::filename ""
-            br-reload
+            close-editor
             return 1
         }
         # Pour les autres touches non reconnues, reste en mode modal
@@ -6020,7 +6035,10 @@ proc tui-browser {} {
         set key [tui-getch]
         set cfi [expr {$nf > 0 ? [lindex $fidx $sel] : -1}]
         switch -- $key {
-            q - "\x11" { return "" }
+            q - "\x11" {
+                lassign [tui-size] rows cols
+                if {[tui-ws-check-inactive-dirty $rows $cols]} { return "" }
+            }
             UP - k  { if {$sel > 0} { incr sel -1 } }
             DOWN - j { if {$sel < $nf-1} { incr sel 1 } }
             HOME    { set sel 0 }
@@ -6717,8 +6735,8 @@ proc tui-editor {filepath {init_state {}}} {
                     } elseif {$key eq "q"} {
                         # Quit/close file, exit command mode first
                         set ::tui_cmd_mode 0
+                        lassign [tui-size] rows cols
                         if {$dirty} {
-                            lassign [tui-size] rows cols
                             set r [tui-yesnocancel [t ed_save_before_tui] $rows $cols]
                             if {$r eq "cancel"} {
                                 set clear_sel 0
@@ -6731,11 +6749,15 @@ proc tui-editor {filepath {init_state {}}} {
                                     }
                                 }
                                 if {$filepath ne ""} { daily-update $wc_cached; cursor-put $filepath $cy $cx }
-                                set ::session_file ""; return
+                                if {![tui-ws-check-inactive-dirty $rows $cols]} { set clear_sel 0 } else {
+                                    set ::session_file ""; return
+                                }
                             }
                         } else {
                             if {$filepath ne ""} { daily-update $wc_cached; cursor-put $filepath $cy $cx }
-                            set ::session_file ""; return
+                            if {![tui-ws-check-inactive-dirty $rows $cols]} { set clear_sel 0 } else {
+                                set ::session_file ""; return
+                            }
                         }
                     } elseif {$key eq "s"} {
                         lassign [tui-size] rows cols
@@ -6771,8 +6793,8 @@ proc tui-editor {filepath {init_state {}}} {
                     set msg_time [clock seconds]
                     set clear_sel 0
                 } elseif {$key eq $::cfg_tui_close} {
+                    lassign [tui-size] rows cols
                     if {$dirty} {
-                        lassign [tui-size] rows cols
                         set r [tui-yesnocancel [t ed_save_before_tui] $rows $cols]
                         if {$r eq "cancel"} {
                             set clear_sel 0
@@ -6785,15 +6807,21 @@ proc tui-editor {filepath {init_state {}}} {
                                 }
                             }
                             if {$filepath ne ""} { daily-update $wc_cached; cursor-put $filepath $cy $cx }
-                            set ::session_file ""; return
+                            if {![tui-ws-check-inactive-dirty $rows $cols]} { set clear_sel 0 } else {
+                                set ::session_file ""; return
+                            }
                         }
                     } else {
                         if {$filepath ne ""} { daily-update $wc_cached; cursor-put $filepath $cy $cx }
-                        set ::session_file ""; return
+                        if {![tui-ws-check-inactive-dirty $rows $cols]} { set clear_sel 0 } else {
+                            set ::session_file ""; return
+                        }
                     }
                 } elseif {$key eq $::cfg_tui_open} {
                     if {$filepath ne ""} { tui-save-file $filepath $lines; daily-update $wc_cached; cursor-put $filepath $cy $cx }
-                    set ::session_file ""; set dirty 0; return
+                    set ::session_file ""; set dirty 0
+                    if {$::ws_n == 2} { return "__ws2_open__" }
+                    return
                 } elseif {$key eq $::cfg_tui_undo} {
                     if {!($::typewriter_mode && $::cfg_hemingway_mode) && [llength $undo_stack] > 0} {
                         lappend redo_stack [list $lines $cy $cx]
@@ -7193,18 +7221,49 @@ proc tui-config-dialog {rows cols} {
     }
 }
 
+proc tui-ws-check-inactive-dirty {rows cols} {
+    if {!$::ws_dual_mode} { return 1 }
+    if {$::ws_n == 1} {
+        set iws 2;  set ifn $::ws2_filename;  set isp $::ws2_scratchpad
+        set idirty $::ws2_dirty;  set icontent $::ws2_content
+    } else {
+        set iws 1;  set ifn $::ws1_filename;  set isp $::ws1_scratchpad
+        set idirty $::ws1_dirty;  set icontent $::ws1_content
+    }
+    if {!$idirty || ($ifn eq "" && !$isp)} { return 1 }
+    set _name [expr {$isp ? "scratchpad \[$iws\]" : "[file tail $ifn] \[$iws\]"}]
+    set r [tui-yesnocancel "$_name: [t ed_save_before_tui]" $rows $cols]
+    if {$r eq "cancel"} { return 0 }
+    if {$r eq "yes" && $ifn ne ""} {
+        set fh [open $ifn w];  chan configure $fh -encoding utf-8
+        puts -nonewline $fh $icontent;  close $fh
+        if {$iws == 1} { set ::ws1_dirty 0 } else { set ::ws2_dirty 0 }
+    }
+    return 1
+}
+
 proc tui-ws-run {fp} {
     set ::tui_ws_bg [dict create filepath "" lines [list ""] cy 1 cx 0 dirty 0]
     set ::ws_n 1
     set ret [tui-editor $fp]
-    while {$ret eq "__ws_toggle__"} {
-        set saved $::tui_ws_save
-        set next  $::tui_ws_bg
-        set ::tui_ws_bg $saved
-        set ::ws_n [expr {$::ws_n == 1 ? 2 : 1}]
-        puts -nonewline "\033\[2J"; flush stdout
-        set next_fp [dict get $next filepath]
-        set ret [tui-editor $next_fp $next]
+    while {$ret eq "__ws_toggle__" || $ret eq "__ws2_open__"} {
+        if {$ret eq "__ws_toggle__"} {
+            set ::ws_dual_mode 1
+            set saved $::tui_ws_save
+            set next  $::tui_ws_bg
+            set ::tui_ws_bg $saved
+            set ::ws_n [expr {$::ws_n == 1 ? 2 : 1}]
+            puts -nonewline "\033\[2J"; flush stdout
+            set next_fp [dict get $next filepath]
+            set ret [tui-editor $next_fp $next]
+        } else {
+            puts -nonewline "\033\[2J"; flush stdout
+            set new_fp [tui-browser]
+            if {$new_fp eq ""} { set ::ws_n 1; break }
+            puts -nonewline "\033\[2J"; flush stdout
+            if {$new_fp eq "__scratchpad__"} { set new_fp "" }
+            set ret [tui-editor $new_fp]
+        }
     }
     set ::ws_n 1
 }

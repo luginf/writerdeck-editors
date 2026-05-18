@@ -10,6 +10,7 @@ WrithDeck is a distraction-free text editor designed for writers using a dedicat
 - Inline syntax highlighting with support for markdown markers
 - File browser with favorites and recent files
 - Split view editing (GUI only)
+- Second workspace (F10) for side-by-side editing of two independent files (GUI and TUI)
 - Table of contents with heading navigation
 - Fully themeable interface (dark/light mode, 6 built-in color schemes)
 - Multi-language support (English, French, German, Spanish, Korean, Norwegian)
