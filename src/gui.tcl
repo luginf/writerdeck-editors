@@ -855,13 +855,21 @@ proc gui-status-state {} {
     set timer_display [expr {$::cfg_timer_duration * 60}]
     if {$::timer_active} { set timer_display $::timer_remaining; timer-tick }
     if {$::split_ws2_mode && $t eq ".ed.pw.r.t"} {
-        set fn [expr {$::ws2_scratchpad ? "** scratchpad **" : \
-                     ($::ws2_filename eq "" ? "\[new\]" : [file tail $::ws2_filename])}]
+        if {$::ws_n == 1} {
+            set fn [expr {$::ws2_scratchpad ? "** scratchpad **" : \
+                         ($::ws2_filename eq "" ? "\[new\]" : [file tail $::ws2_filename])}]
+            set _r_dirty $::ws2_dirty
+        } else {
+            set fn [expr {$::ws1_scratchpad ? "** scratchpad **" : \
+                         ($::ws1_filename eq "" ? "\[new\]" : [file tail $::ws1_filename])}]
+            set _r_dirty $::ws1_dirty
+        }
         lassign [split [$t index insert] .] ln col
         set total [expr {[lindex [split [$t index end] .] 0] - 1}]
-        return [dict create fn $fn dirty $::ws2_dirty sel 0 ln $ln total $total \
+        set _r_ws [expr {$::ws_n == 1 ? 2 : 1}]
+        return [dict create fn $fn dirty $_r_dirty sel 0 ln $ln total $total \
                     col [expr {$col+1}] words $::gui_wc chars $::gui_cc \
-                    clock $clk timer $timer_display]
+                    clock $clk timer $timer_display ws $_r_ws]
     }
     set fn [expr {$::scratchpad ? "** scratchpad **" : \
                  ($::filename eq "" ? "\[new\]" : [file tail $::filename])}]
@@ -869,7 +877,7 @@ proc gui-status-state {} {
     set total [expr {[lindex [split [$t index end] .] 0] - 1}]
     return [dict create fn $fn dirty $::dirty sel 0 ln $ln total $total \
                 col [expr {$col+1}] words $::gui_wc chars $::gui_cc \
-                clock $clk timer $timer_display]
+                clock $clk timer $timer_display ws $::ws_n]
 }
 
 proc gui-status-update {} {
@@ -1080,6 +1088,20 @@ proc ln-toggle {} {
 
 # --- file I/O -----------------------------------------------------------------
 proc ed-update-title {} {
+    if {$::split_ws2_mode && [focus] eq ".ed.pw.r.t"} {
+        set eff_ws [expr {$::ws_n == 1 ? 2 : 1}]
+        if {$::ws_n == 1} { set eff_sp $::ws2_scratchpad; set eff_fn $::ws2_filename
+        } else             { set eff_sp $::ws1_scratchpad; set eff_fn $::ws1_filename }
+        set ws " \[$eff_ws\]"
+        if {$eff_sp} {
+            wm title . "Writhdeck - ** scratchpad **$ws"
+        } elseif {$eff_fn ne ""} {
+            wm title . "Writhdeck - [file tail $eff_fn]$ws"
+        } else {
+            wm title . "Writhdeck$ws"
+        }
+        return
+    }
     set ws [expr {$::ws_dual_mode ? " \[$::ws_n\]" : ""}]
     if {$::scratchpad} {
         wm title . "Writhdeck - ** scratchpad **$ws"
@@ -1528,8 +1550,17 @@ proc highlight-headings {} {
 }
 
 proc toc-collect {} {
+    set t [active-ed]
     set result {}
-    if {$::hl_line_cache ne {}} {
+    if {$t eq ".ed.pw.r.t"} {
+        # WS2 right pane — independent widget, no cache, scan directly
+        set last [lindex [split [$t index end] .] 0]
+        for {set ln 1} {$ln < $last} {incr ln} {
+            set line [$t get $ln.0 "$ln.0 lineend"]
+            set hl [heading-level $line]
+            if {$hl ne ""} { lassign $hl title level; lappend result [list $ln $title $level] }
+        }
+    } elseif {$::hl_line_cache ne {}} {
         dict for {ln line} $::hl_line_cache {
             set hl [heading-level $line]
             if {$hl ne ""} { lassign $hl title level; lappend result [list $ln $title $level] }
@@ -1547,6 +1578,11 @@ proc toc-collect {} {
 
 proc toc-show {} {
     set ::toc_ed [active-ed]
+    if {$::split_ws2_mode && $::toc_ed eq ".ed.pw.r.t"} {
+        set ::toc_fn [expr {$::ws_n == 1 ? $::ws2_filename : $::ws1_filename}]
+    } else {
+        set ::toc_fn $::filename
+    }
     set headings [toc-collect]
     if {![llength $headings]} { set-msg [t toc_no_headings]; return }
 
@@ -1566,18 +1602,18 @@ proc toc-show {} {
     pack $w.lst -fill both -expand 1 -padx 2 -pady 2
 
     set presel 0
-    if {[dict exists $::session_headings $::filename]} {
-        set presel [dict get $::session_headings $::filename]
+    if {[dict exists $::session_headings $::toc_fn]} {
+        set presel [dict get $::session_headings $::toc_fn]
         if {$presel >= [llength $headings]} { set presel 0 }
     } else {
-        set curline [lindex [split [.ed.t index insert] .] 0]
+        set curline [lindex [split [$::toc_ed index insert] .] 0]
         set idx 0
         foreach item $headings {
             if {[lindex $item 0] <= $curline} { set presel $idx }
             incr idx
         }
     }
-    set lnw [string length [expr {[lindex [split [.ed.t index end] .] 0] - 1}]]
+    set lnw [string length [expr {[lindex [split [$::toc_ed index end] .] 0] - 1}]]
     foreach item $headings {
         lassign $item ln title level
         set indent [string repeat "- " [expr {$level - 1}]]
@@ -1603,7 +1639,7 @@ proc toc-jump {w headings} {
     if {![llength $sel]} return
     set selIdx [lindex $sel 0]
     lassign [lindex $headings $selIdx] ln title
-    dict set ::session_headings $::filename $selIdx
+    dict set ::session_headings $::toc_fn $selIdx
     destroy $w
     set t $::toc_ed
     $t mark set insert $ln.0
@@ -2600,6 +2636,7 @@ proc split-open {} {
 
     set ::split_mode 1
     focus .ed.pw.l.t
+    if {$::ws_dual_mode} { split-ws2-open; focus .ed.pw.l.t }
 }
 
 proc split-close {} {
@@ -2634,6 +2671,7 @@ proc split-cycle-focus {} {
     } else {
         focus .ed.pw.r.t
     }
+    if {$::split_ws2_mode} { ed-update-title }
 }
 
 proc split-ws2-open {} {
@@ -2658,16 +2696,23 @@ proc split-ws2-open {} {
     .ed.pw.r.sb configure -command ".ed.pw.r.t yview"
     pack .ed.pw.r.sb -side right -fill y
     pack .ed.pw.r.t  -fill both  -expand 1 -padx $_padx_out -pady $_pady_out
+    if {$::ws_n == 1} {
+        set _r_content $::ws2_content;  set _r_dirty $::ws2_dirty;  set _r_cursor $::ws2_cursor
+    } else {
+        set _r_content $::ws1_content;  set _r_dirty $::ws1_dirty;  set _r_cursor $::ws1_cursor
+    }
     .ed.pw.r.t configure -undo 0
     .ed.pw.r.t delete 1.0 end
-    if {$::ws2_content ne ""} { .ed.pw.r.t insert 1.0 $::ws2_content }
+    if {$_r_content ne ""} { .ed.pw.r.t insert 1.0 $_r_content }
     .ed.pw.r.t edit reset
     .ed.pw.r.t edit modified false
     .ed.pw.r.t configure -undo 1
-    if {$::ws2_dirty} { .ed.pw.r.t edit modified true }
-    catch { .ed.pw.r.t mark set insert $::ws2_cursor }
+    if {$_r_dirty} { .ed.pw.r.t edit modified true }
+    catch { .ed.pw.r.t mark set insert $_r_cursor }
     .ed.pw.r.t see insert
+    bind .ed.pw.l.t <FocusIn>               { if {$::split_ws2_mode} { ed-update-title } }
     bind .ed.pw.r.t <<Modified>>             { split-ws2-track-dirty }
+    bind .ed.pw.r.t <FocusIn>               { ed-update-title }
     bind .ed.pw.r.t <KeyRelease>             { ed-status }
     bind .ed.pw.r.t <ButtonRelease>          { ed-status }
     bind .ed.pw.r.t <$::cfg_key_save>        { split-ws2-save; break }
@@ -2682,7 +2727,17 @@ proc split-ws2-open {} {
     bind .ed.pw.r.t <$::cfg_key_undo>        { catch {.ed.pw.r.t edit undo}; ed-status; break }
     bind .ed.pw.r.t <$::cfg_key_redo>        { catch {.ed.pw.r.t edit redo}; ed-status; break }
     bind .ed.pw.r.t <$::cfg_key_find>        { search-open; break }
+    bind .ed.pw.r.t <$::cfg_key_replace>     { replace-open; break }
     bind .ed.pw.r.t <$::cfg_key_open>        { open-file-dialog; break }
+    bind .ed.pw.r.t <$::cfg_key_toc>         { toc-show; break }
+    bind .ed.pw.r.t <$::cfg_key_line_numbers> { ln-toggle; break }
+    bind .ed.pw.r.t <$::cfg_key_fullscreen>  { toggle-fullscreen; break }
+    bind .ed.pw.r.t <$::cfg_key_typewriter>  { typewriter-toggle; break }
+    bind .ed.pw.r.t <KeyRelease>            +[list typewriter-tick .ed.pw.r.t]
+    bind .ed.pw.r.t <ButtonRelease>         +[list typewriter-tick .ed.pw.r.t]
+    foreach _k {Left Right Up Down BackSpace Delete} {
+        bind .ed.pw.r.t <$_k> "if {\$::typewriter_mode && \$::cfg_hemingway_mode} break"
+    }
     bind .ed.pw.r.t <$::cfg_key_split>       { split-toggle; break }
     bind .ed.pw.r.t <$::cfg_key_split_focus> { split-cycle-focus; break }
     bind .ed.pw.r.t <$::cfg_key_workspace>   { workspace-toggle; break }
@@ -2697,31 +2752,39 @@ proc split-ws2-open {} {
 }
 
 proc split-ws2-track-dirty {} {
-    if {[.ed.pw.r.t edit modified]} { set ::ws2_dirty 1; .ed.pw.r.t edit modified false }
+    if {[.ed.pw.r.t edit modified]} {
+        if {$::ws_n == 1} { set ::ws2_dirty 1 } else { set ::ws1_dirty 1 }
+        .ed.pw.r.t edit modified false
+    }
     ed-status
 }
 
 proc split-ws2-save {} {
-    if {$::ws2_filename eq ""} { split-ws2-save-as; return }
-    set fh [open $::ws2_filename w]; chan configure $fh -encoding utf-8
+    set fn [expr {$::ws_n == 1 ? $::ws2_filename : $::ws1_filename}]
+    if {$fn eq ""} { split-ws2-save-as; return }
+    set fh [open $fn w]; chan configure $fh -encoding utf-8
     puts -nonewline $fh [.ed.pw.r.t get 1.0 {end - 1 chars}]; close $fh
-    set ::ws2_dirty 0
+    if {$::ws_n == 1} {
+        set ::ws2_dirty 0; set ::ws2_file_mtime [file mtime $fn]
+    } else {
+        set ::ws1_dirty 0; set ::ws1_file_mtime [file mtime $fn]
+    }
     .ed.pw.r.t edit modified false
-    set ::ws2_file_mtime [file mtime $::ws2_filename]
     ed-status
 }
 
 proc split-ws2-save-as {} {
-    set dir [expr {$::ws2_filename ne "" ? [file dirname $::ws2_filename] : $::DOCS_DIR_DEFAULT}]
+    set cur_fn [expr {$::ws_n == 1 ? $::ws2_filename : $::ws1_filename}]
+    set dir [expr {$cur_fn ne "" ? [file dirname $cur_fn] : $::DOCS_DIR_DEFAULT}]
     set name [string trim [input-dialog "Save as" "Save as:"]]
     if {$name eq ""} return
     if {[file extension $name] eq ""} { append name $::FILE_EXT }
     set new_path [file join $dir $name]
-    if {[file exists $new_path] && $new_path ne $::ws2_filename} {
+    if {[file exists $new_path] && $new_path ne $cur_fn} {
         if {[confirm-dialog "\"$name\" already exists. Overwrite?"] ne "yes"} return
     }
-    set ::ws2_filename $new_path
-    set ::ws2_scratchpad 0
+    if {$::ws_n == 1} { set ::ws2_filename $new_path; set ::ws2_scratchpad 0
+    } else              { set ::ws1_filename $new_path; set ::ws1_scratchpad 0 }
     split-ws2-save
 }
 
@@ -2734,8 +2797,13 @@ proc split-ws2-load-file {path} {
     }
     .ed.pw.r.t edit reset; .ed.pw.r.t edit modified false
     .ed.pw.r.t configure -undo 1
-    set ::ws2_filename $path; set ::ws2_scratchpad 0; set ::ws2_dirty 0
-    set ::ws2_file_mtime [expr {[file exists $path] ? [file mtime $path] : 0}]
+    if {$::ws_n == 1} {
+        set ::ws2_filename $path; set ::ws2_scratchpad 0; set ::ws2_dirty 0
+        set ::ws2_file_mtime [expr {[file exists $path] ? [file mtime $path] : 0}]
+    } else {
+        set ::ws1_filename $path; set ::ws1_scratchpad 0; set ::ws1_dirty 0
+        set ::ws1_file_mtime [expr {[file exists $path] ? [file mtime $path] : 0}]
+    }
     recent-push $path
     .ed.pw.r.t mark set insert 1.0; .ed.pw.r.t see insert
     ed-status
@@ -2743,8 +2811,13 @@ proc split-ws2-load-file {path} {
 
 proc split-ws2-save-state {} {
     if {![winfo exists .ed.pw.r.t]} return
-    set ::ws2_content [.ed.pw.r.t get 1.0 end-1c]
-    set ::ws2_cursor  [.ed.pw.r.t index insert]
+    if {$::ws_n == 1} {
+        set ::ws2_content [.ed.pw.r.t get 1.0 end-1c]
+        set ::ws2_cursor  [.ed.pw.r.t index insert]
+    } else {
+        set ::ws1_content [.ed.pw.r.t get 1.0 end-1c]
+        set ::ws1_cursor  [.ed.pw.r.t index insert]
+    }
 }
 
 proc workspace-toggle {} {
@@ -2874,7 +2947,6 @@ proc ini-reload {} {
 }
 
 proc open-scratchpad {} {
-    set ::ws_n 1
     pack forget .br
     pack .ed -fill both -expand 1
     ini-reload
@@ -2896,7 +2968,6 @@ proc open-scratchpad {} {
 }
 
 proc show-editor {path} {
-    if {[winfo ismapped .br]} { set ::ws_n 1 }
     set ::scratchpad 0
     pack forget .br
     pack .ed -fill both -expand 1

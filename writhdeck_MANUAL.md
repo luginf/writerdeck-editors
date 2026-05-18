@@ -365,7 +365,8 @@ Activated via `--no-gui` / `--tui` / `--ng`, or when no windowing system is avai
 ### Second workspace notes (TUI)
 
 - **F10** switches between WS1 and WS2; WS2 starts as an empty scratchpad
-- The status bar shows `[1]` or `[2]` once both workspaces are active
+- **F3** opens a split view with WS1 on the left and WS2 on the right (display only); **F4** swaps which workspace is the active (left) editor; **F3** again closes the split
+- The status bar shows `[1]` or `[2]` once both workspaces are active; the right pane shows a reverse-video header with the workspace number and filename
 - **Ctrl+O in WS2**: saves the current WS2 file, opens the browser to select a new file; the chosen file loads into WS2 (WS1 is unaffected)
 - On quit (`q` in browser), both workspaces are prompted for unsaved changes
 

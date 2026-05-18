@@ -422,7 +422,7 @@ set ::cfg_blink_cursor         0
 set ::cfg_line_spacing   100
 set ::cfg_bar_height     18
 set ::cfg_lang           "en"
-set ::cfg_help_bar       "^S save   ^Q close   ^H help"
+set ::cfg_help_bar       "^S save   ^Q close   F10 workspace   ^H help"
 set ::cfg_word_goal      500
 # status bar zones - tokens: filename dirty sel ln col words chars goal clock help_bar space
 set ::cfg_status_left   "workspace filename dirty sel ln col words chars"
@@ -1001,6 +1001,7 @@ proc keys-init {} {
     set ::cfg_tui_typewriter   [tk-key-to-tui $::cfg_key_typewriter]
     set ::cfg_tui_dark_toggle  [tk-key-to-tui $::cfg_key_dark_toggle]
     set ::cfg_tui_split        [tk-key-to-tui $::cfg_key_split]
+    set ::cfg_tui_split_focus  [tk-key-to-tui $::cfg_key_split_focus]
     set ::cfg_tui_workspace    [tk-key-to-tui $::cfg_key_workspace]
     set ::cfg_tui_timer        [tk-key-to-tui $::cfg_key_timer]
     set ::cfg_tui_cmd_mode     [tk-key-to-tui $::cfg_key_cmd_mode]
@@ -1025,6 +1026,10 @@ proc keys-init {} {
     set ::cfg_lbl_split_focus [key-label $::cfg_key_split_focus]
     set ::cfg_lbl_workspace  [key-label $::cfg_key_workspace]
     set ::cfg_lbl_cmd_mode    [key-label $::cfg_key_cmd_mode]
+    # migrate old help_bar default to include workspace shortcut
+    if {$::cfg_help_bar eq "^S save   ^Q close   ^H help"} {
+        set ::cfg_help_bar "^S save   ^Q close   $::cfg_lbl_workspace workspace   ^H help"
+    }
     # conflict detection
     set pairs [list \
         key_save $::cfg_tui_save \
@@ -2240,7 +2245,10 @@ proc status-build {tokens state} {
     set result ""
     foreach tok $tokens {
         switch -- $tok {
-            workspace { if {$::ws_dual_mode} { append result "\[$::ws_n\] " } }
+            workspace { if {$::ws_dual_mode} {
+                set _wsn [expr {[dict exists $state ws] ? [dict get $state ws] : $::ws_n}]
+                append result "\[$_wsn\] "
+            } }
             filename { append result $fn }
             dirty    { if {$dirty}      { append result " \[+\]" } }
             sel      { if {$sel}        { append result " \[sel\]" } }
@@ -3203,13 +3211,21 @@ proc gui-status-state {} {
     set timer_display [expr {$::cfg_timer_duration * 60}]
     if {$::timer_active} { set timer_display $::timer_remaining; timer-tick }
     if {$::split_ws2_mode && $t eq ".ed.pw.r.t"} {
-        set fn [expr {$::ws2_scratchpad ? "** scratchpad **" : \
-                     ($::ws2_filename eq "" ? "\[new\]" : [file tail $::ws2_filename])}]
+        if {$::ws_n == 1} {
+            set fn [expr {$::ws2_scratchpad ? "** scratchpad **" : \
+                         ($::ws2_filename eq "" ? "\[new\]" : [file tail $::ws2_filename])}]
+            set _r_dirty $::ws2_dirty
+        } else {
+            set fn [expr {$::ws1_scratchpad ? "** scratchpad **" : \
+                         ($::ws1_filename eq "" ? "\[new\]" : [file tail $::ws1_filename])}]
+            set _r_dirty $::ws1_dirty
+        }
         lassign [split [$t index insert] .] ln col
         set total [expr {[lindex [split [$t index end] .] 0] - 1}]
-        return [dict create fn $fn dirty $::ws2_dirty sel 0 ln $ln total $total \
+        set _r_ws [expr {$::ws_n == 1 ? 2 : 1}]
+        return [dict create fn $fn dirty $_r_dirty sel 0 ln $ln total $total \
                     col [expr {$col+1}] words $::gui_wc chars $::gui_cc \
-                    clock $clk timer $timer_display]
+                    clock $clk timer $timer_display ws $_r_ws]
     }
     set fn [expr {$::scratchpad ? "** scratchpad **" : \
                  ($::filename eq "" ? "\[new\]" : [file tail $::filename])}]
@@ -3217,7 +3233,7 @@ proc gui-status-state {} {
     set total [expr {[lindex [split [$t index end] .] 0] - 1}]
     return [dict create fn $fn dirty $::dirty sel 0 ln $ln total $total \
                 col [expr {$col+1}] words $::gui_wc chars $::gui_cc \
-                clock $clk timer $timer_display]
+                clock $clk timer $timer_display ws $::ws_n]
 }
 
 proc gui-status-update {} {
@@ -3428,6 +3444,20 @@ proc ln-toggle {} {
 
 # --- file I/O -----------------------------------------------------------------
 proc ed-update-title {} {
+    if {$::split_ws2_mode && [focus] eq ".ed.pw.r.t"} {
+        set eff_ws [expr {$::ws_n == 1 ? 2 : 1}]
+        if {$::ws_n == 1} { set eff_sp $::ws2_scratchpad; set eff_fn $::ws2_filename
+        } else             { set eff_sp $::ws1_scratchpad; set eff_fn $::ws1_filename }
+        set ws " \[$eff_ws\]"
+        if {$eff_sp} {
+            wm title . "Writhdeck - ** scratchpad **$ws"
+        } elseif {$eff_fn ne ""} {
+            wm title . "Writhdeck - [file tail $eff_fn]$ws"
+        } else {
+            wm title . "Writhdeck$ws"
+        }
+        return
+    }
     set ws [expr {$::ws_dual_mode ? " \[$::ws_n\]" : ""}]
     if {$::scratchpad} {
         wm title . "Writhdeck - ** scratchpad **$ws"
@@ -3876,8 +3906,17 @@ proc highlight-headings {} {
 }
 
 proc toc-collect {} {
+    set t [active-ed]
     set result {}
-    if {$::hl_line_cache ne {}} {
+    if {$t eq ".ed.pw.r.t"} {
+        # WS2 right pane — independent widget, no cache, scan directly
+        set last [lindex [split [$t index end] .] 0]
+        for {set ln 1} {$ln < $last} {incr ln} {
+            set line [$t get $ln.0 "$ln.0 lineend"]
+            set hl [heading-level $line]
+            if {$hl ne ""} { lassign $hl title level; lappend result [list $ln $title $level] }
+        }
+    } elseif {$::hl_line_cache ne {}} {
         dict for {ln line} $::hl_line_cache {
             set hl [heading-level $line]
             if {$hl ne ""} { lassign $hl title level; lappend result [list $ln $title $level] }
@@ -3895,6 +3934,11 @@ proc toc-collect {} {
 
 proc toc-show {} {
     set ::toc_ed [active-ed]
+    if {$::split_ws2_mode && $::toc_ed eq ".ed.pw.r.t"} {
+        set ::toc_fn [expr {$::ws_n == 1 ? $::ws2_filename : $::ws1_filename}]
+    } else {
+        set ::toc_fn $::filename
+    }
     set headings [toc-collect]
     if {![llength $headings]} { set-msg [t toc_no_headings]; return }
 
@@ -3914,18 +3958,18 @@ proc toc-show {} {
     pack $w.lst -fill both -expand 1 -padx 2 -pady 2
 
     set presel 0
-    if {[dict exists $::session_headings $::filename]} {
-        set presel [dict get $::session_headings $::filename]
+    if {[dict exists $::session_headings $::toc_fn]} {
+        set presel [dict get $::session_headings $::toc_fn]
         if {$presel >= [llength $headings]} { set presel 0 }
     } else {
-        set curline [lindex [split [.ed.t index insert] .] 0]
+        set curline [lindex [split [$::toc_ed index insert] .] 0]
         set idx 0
         foreach item $headings {
             if {[lindex $item 0] <= $curline} { set presel $idx }
             incr idx
         }
     }
-    set lnw [string length [expr {[lindex [split [.ed.t index end] .] 0] - 1}]]
+    set lnw [string length [expr {[lindex [split [$::toc_ed index end] .] 0] - 1}]]
     foreach item $headings {
         lassign $item ln title level
         set indent [string repeat "- " [expr {$level - 1}]]
@@ -3951,7 +3995,7 @@ proc toc-jump {w headings} {
     if {![llength $sel]} return
     set selIdx [lindex $sel 0]
     lassign [lindex $headings $selIdx] ln title
-    dict set ::session_headings $::filename $selIdx
+    dict set ::session_headings $::toc_fn $selIdx
     destroy $w
     set t $::toc_ed
     $t mark set insert $ln.0
@@ -4948,6 +4992,7 @@ proc split-open {} {
 
     set ::split_mode 1
     focus .ed.pw.l.t
+    if {$::ws_dual_mode} { split-ws2-open; focus .ed.pw.l.t }
 }
 
 proc split-close {} {
@@ -4982,6 +5027,7 @@ proc split-cycle-focus {} {
     } else {
         focus .ed.pw.r.t
     }
+    if {$::split_ws2_mode} { ed-update-title }
 }
 
 proc split-ws2-open {} {
@@ -5006,16 +5052,23 @@ proc split-ws2-open {} {
     .ed.pw.r.sb configure -command ".ed.pw.r.t yview"
     pack .ed.pw.r.sb -side right -fill y
     pack .ed.pw.r.t  -fill both  -expand 1 -padx $_padx_out -pady $_pady_out
+    if {$::ws_n == 1} {
+        set _r_content $::ws2_content;  set _r_dirty $::ws2_dirty;  set _r_cursor $::ws2_cursor
+    } else {
+        set _r_content $::ws1_content;  set _r_dirty $::ws1_dirty;  set _r_cursor $::ws1_cursor
+    }
     .ed.pw.r.t configure -undo 0
     .ed.pw.r.t delete 1.0 end
-    if {$::ws2_content ne ""} { .ed.pw.r.t insert 1.0 $::ws2_content }
+    if {$_r_content ne ""} { .ed.pw.r.t insert 1.0 $_r_content }
     .ed.pw.r.t edit reset
     .ed.pw.r.t edit modified false
     .ed.pw.r.t configure -undo 1
-    if {$::ws2_dirty} { .ed.pw.r.t edit modified true }
-    catch { .ed.pw.r.t mark set insert $::ws2_cursor }
+    if {$_r_dirty} { .ed.pw.r.t edit modified true }
+    catch { .ed.pw.r.t mark set insert $_r_cursor }
     .ed.pw.r.t see insert
+    bind .ed.pw.l.t <FocusIn>               { if {$::split_ws2_mode} { ed-update-title } }
     bind .ed.pw.r.t <<Modified>>             { split-ws2-track-dirty }
+    bind .ed.pw.r.t <FocusIn>               { ed-update-title }
     bind .ed.pw.r.t <KeyRelease>             { ed-status }
     bind .ed.pw.r.t <ButtonRelease>          { ed-status }
     bind .ed.pw.r.t <$::cfg_key_save>        { split-ws2-save; break }
@@ -5030,7 +5083,17 @@ proc split-ws2-open {} {
     bind .ed.pw.r.t <$::cfg_key_undo>        { catch {.ed.pw.r.t edit undo}; ed-status; break }
     bind .ed.pw.r.t <$::cfg_key_redo>        { catch {.ed.pw.r.t edit redo}; ed-status; break }
     bind .ed.pw.r.t <$::cfg_key_find>        { search-open; break }
+    bind .ed.pw.r.t <$::cfg_key_replace>     { replace-open; break }
     bind .ed.pw.r.t <$::cfg_key_open>        { open-file-dialog; break }
+    bind .ed.pw.r.t <$::cfg_key_toc>         { toc-show; break }
+    bind .ed.pw.r.t <$::cfg_key_line_numbers> { ln-toggle; break }
+    bind .ed.pw.r.t <$::cfg_key_fullscreen>  { toggle-fullscreen; break }
+    bind .ed.pw.r.t <$::cfg_key_typewriter>  { typewriter-toggle; break }
+    bind .ed.pw.r.t <KeyRelease>            +[list typewriter-tick .ed.pw.r.t]
+    bind .ed.pw.r.t <ButtonRelease>         +[list typewriter-tick .ed.pw.r.t]
+    foreach _k {Left Right Up Down BackSpace Delete} {
+        bind .ed.pw.r.t <$_k> "if {\$::typewriter_mode && \$::cfg_hemingway_mode} break"
+    }
     bind .ed.pw.r.t <$::cfg_key_split>       { split-toggle; break }
     bind .ed.pw.r.t <$::cfg_key_split_focus> { split-cycle-focus; break }
     bind .ed.pw.r.t <$::cfg_key_workspace>   { workspace-toggle; break }
@@ -5045,31 +5108,39 @@ proc split-ws2-open {} {
 }
 
 proc split-ws2-track-dirty {} {
-    if {[.ed.pw.r.t edit modified]} { set ::ws2_dirty 1; .ed.pw.r.t edit modified false }
+    if {[.ed.pw.r.t edit modified]} {
+        if {$::ws_n == 1} { set ::ws2_dirty 1 } else { set ::ws1_dirty 1 }
+        .ed.pw.r.t edit modified false
+    }
     ed-status
 }
 
 proc split-ws2-save {} {
-    if {$::ws2_filename eq ""} { split-ws2-save-as; return }
-    set fh [open $::ws2_filename w]; chan configure $fh -encoding utf-8
+    set fn [expr {$::ws_n == 1 ? $::ws2_filename : $::ws1_filename}]
+    if {$fn eq ""} { split-ws2-save-as; return }
+    set fh [open $fn w]; chan configure $fh -encoding utf-8
     puts -nonewline $fh [.ed.pw.r.t get 1.0 {end - 1 chars}]; close $fh
-    set ::ws2_dirty 0
+    if {$::ws_n == 1} {
+        set ::ws2_dirty 0; set ::ws2_file_mtime [file mtime $fn]
+    } else {
+        set ::ws1_dirty 0; set ::ws1_file_mtime [file mtime $fn]
+    }
     .ed.pw.r.t edit modified false
-    set ::ws2_file_mtime [file mtime $::ws2_filename]
     ed-status
 }
 
 proc split-ws2-save-as {} {
-    set dir [expr {$::ws2_filename ne "" ? [file dirname $::ws2_filename] : $::DOCS_DIR_DEFAULT}]
+    set cur_fn [expr {$::ws_n == 1 ? $::ws2_filename : $::ws1_filename}]
+    set dir [expr {$cur_fn ne "" ? [file dirname $cur_fn] : $::DOCS_DIR_DEFAULT}]
     set name [string trim [input-dialog "Save as" "Save as:"]]
     if {$name eq ""} return
     if {[file extension $name] eq ""} { append name $::FILE_EXT }
     set new_path [file join $dir $name]
-    if {[file exists $new_path] && $new_path ne $::ws2_filename} {
+    if {[file exists $new_path] && $new_path ne $cur_fn} {
         if {[confirm-dialog "\"$name\" already exists. Overwrite?"] ne "yes"} return
     }
-    set ::ws2_filename $new_path
-    set ::ws2_scratchpad 0
+    if {$::ws_n == 1} { set ::ws2_filename $new_path; set ::ws2_scratchpad 0
+    } else              { set ::ws1_filename $new_path; set ::ws1_scratchpad 0 }
     split-ws2-save
 }
 
@@ -5082,8 +5153,13 @@ proc split-ws2-load-file {path} {
     }
     .ed.pw.r.t edit reset; .ed.pw.r.t edit modified false
     .ed.pw.r.t configure -undo 1
-    set ::ws2_filename $path; set ::ws2_scratchpad 0; set ::ws2_dirty 0
-    set ::ws2_file_mtime [expr {[file exists $path] ? [file mtime $path] : 0}]
+    if {$::ws_n == 1} {
+        set ::ws2_filename $path; set ::ws2_scratchpad 0; set ::ws2_dirty 0
+        set ::ws2_file_mtime [expr {[file exists $path] ? [file mtime $path] : 0}]
+    } else {
+        set ::ws1_filename $path; set ::ws1_scratchpad 0; set ::ws1_dirty 0
+        set ::ws1_file_mtime [expr {[file exists $path] ? [file mtime $path] : 0}]
+    }
     recent-push $path
     .ed.pw.r.t mark set insert 1.0; .ed.pw.r.t see insert
     ed-status
@@ -5091,8 +5167,13 @@ proc split-ws2-load-file {path} {
 
 proc split-ws2-save-state {} {
     if {![winfo exists .ed.pw.r.t]} return
-    set ::ws2_content [.ed.pw.r.t get 1.0 end-1c]
-    set ::ws2_cursor  [.ed.pw.r.t index insert]
+    if {$::ws_n == 1} {
+        set ::ws2_content [.ed.pw.r.t get 1.0 end-1c]
+        set ::ws2_cursor  [.ed.pw.r.t index insert]
+    } else {
+        set ::ws1_content [.ed.pw.r.t get 1.0 end-1c]
+        set ::ws1_cursor  [.ed.pw.r.t index insert]
+    }
 }
 
 proc workspace-toggle {} {
@@ -5222,7 +5303,6 @@ proc ini-reload {} {
 }
 
 proc open-scratchpad {} {
-    set ::ws_n 1
     pack forget .br
     pack .ed -fill both -expand 1
     ini-reload
@@ -5244,7 +5324,6 @@ proc open-scratchpad {} {
 }
 
 proc show-editor {path} {
-    if {[winfo ismapped .br]} { set ::ws_n 1 }
     set ::scratchpad 0
     pack forget .br
     pack .ed -fill both -expand 1
@@ -6340,6 +6419,11 @@ proc tui-editor {filepath {init_state {}}} {
     set layout_cache {}
     set prev_rows -1; set prev_cols -1
     set dirty_line -1
+    set split 0; set split_ws2_mode 0; set split_focus 1
+    set split_r_lines [list ""]; set split_r_cy 1; set split_r_cx 0
+    set split_r_scroll 0; set split_r_dirty 0; set split_r_fp ""
+    set split_r_vrows {}; set split_r_ish {}; set split_r_isd {}
+    set split_r_layout {}; set split_r_prev_tw -1; set split_r_wrap_dirty 1
 
     while 1 {
         set ::tui_size_n 14
@@ -6358,6 +6442,12 @@ proc tui-editor {filepath {init_state {}}} {
         set tw    [expr {max(1, $cols - $coff - $marg - 1)}]   ;# -1 for scroll indicator
         set _hm_bar [expr {$::typewriter_mode && $::cfg_hemingway_mode}]
         set th    [expr {max(1, $rows - ($::typewriter_mode && $::cfg_hemingway_mode ? 0 : 2) - 2*$roff)}]
+        if {$split} {
+            set half  [expr {($cols - 1) / 2}]
+            set tw    [expr {max(1, $half - $coff - $marg)}]
+            set rcoff [expr {$half + 1 + $marg}]
+            set tw_r  [expr {max(1, $cols - $rcoff - $marg)}]
+        }
 
         set cy [expr {max(1, min($cy, [llength $lines]))}]
         set cx [expr {max(0, min($cx, [string length [lindex $lines [expr {$cy-1}]]]))}]
@@ -6365,21 +6455,36 @@ proc tui-editor {filepath {init_state {}}} {
         if {$wrap_dirty || $tw != $prev_tw} {
             lassign [tui-build-layout $lines $tw layout_cache] vrows ish_cache isd_cache
             set prev_tw $tw; set wrap_dirty 0; set dirty_line -1
+            if {$split && !$split_ws2_mode} { set split_r_wrap_dirty 1 }
         } elseif {$dirty_line > 0} {
             if {![tui-patch-vrows $dirty_line]} {
                 lassign [tui-build-layout $lines $tw layout_cache] vrows ish_cache isd_cache
                 set dirty_line -1
+                if {$split && !$split_ws2_mode} { set split_r_wrap_dirty 1 }
             }
+        }
+        if {$split && ($split_r_wrap_dirty || $tw_r != $split_r_prev_tw)} {
+            set _rsrc [expr {$split_ws2_mode ? $split_r_lines : $lines}]
+            lassign [tui-build-layout $_rsrc $tw_r split_r_layout] \
+                split_r_vrows split_r_ish split_r_isd
+            set split_r_prev_tw $tw_r; set split_r_wrap_dirty 0
         }
         lassign [tui-l2v $vrows $cy $cx] vi scx
 
+        set _cth [expr {$split ? $th - 1 : $th}]
         if {$toc_jumped} { set scroll_y $vi; set toc_jumped 0 } elseif {$::typewriter_mode} {
-            set scroll_y [expr {$vi - $th/2}]
+            set scroll_y [expr {$vi - $_cth/2}]
         } else {
-            if {$vi < $scroll_y}        { set scroll_y $vi }
-            if {$vi >= $scroll_y + $th} { set scroll_y [expr {$vi - $th + 1}] }
+            if {$vi < $scroll_y}          { set scroll_y $vi }
+            if {$vi >= $scroll_y + $_cth} { set scroll_y [expr {$vi - $_cth + 1}] }
         }
-        set scroll_y [expr {max(0, min($scroll_y, max(0, [llength $vrows] - $th)))}]
+        set scroll_y [expr {max(0, min($scroll_y, max(0, [llength $vrows] - $_cth)))}]
+        if {$split} {
+            set _rv [lindex [tui-l2v $split_r_vrows $split_r_cy $split_r_cx] 0]
+            if {$_rv < $split_r_scroll}              { set split_r_scroll $_rv }
+            if {$_rv >= $split_r_scroll + $_cth}     { set split_r_scroll [expr {$_rv - $_cth + 1}] }
+            set split_r_scroll [expr {max(0, min($split_r_scroll, max(0, [llength $split_r_vrows] - $_cth)))}]
+        }
 
         # -- draw --------------------------------------------------------------
         set sel_r [tui-sel-range $sel_anchor $cy $cx]
@@ -6393,12 +6498,19 @@ proc tui-editor {filepath {init_state {}}} {
             while {$_para_e < $_nl && [string trim [lindex $lines $_para_e]] ne ""} { incr _para_e }
         }
 
-        for {set i 0} {$i < $th} {incr i} {
-            set vi2 [expr {$scroll_y + $i}]
+        if {$split} {
+            set _l_fn [expr {$filepath eq "" ? "scratchpad" : [file tail $filepath]}]
+            tui-move $roff 0
+            tui-attr reverse
+            puts -nonewline [format "%-*s" $half " \[$::ws_n\] $_l_fn"]
+            tui-attr off
+        }
+        for {set i [expr {$split ? 1 : 0}]} {$i < $th} {incr i} {
+            set vi2 [expr {$scroll_y + $i - ($split ? 1 : 0)}]
             set srow [expr {$i + $roff}]
             tui-move $srow 0
             if {$vi2 >= [llength $vrows]} {
-                puts -nonewline [string repeat { } $cols]
+                puts -nonewline [string repeat { } [expr {$split ? $half : $cols}]]
                 continue
             }
             lassign [lindex $vrows $vi2] li scol ecol
@@ -6456,12 +6568,12 @@ proc tui-editor {filepath {init_state {}}} {
             }
             # right padding - fill to end of line with spaces (no \033[K)
             tui-attr off
-            puts -nonewline [string repeat { } [expr {$tw - $seg_len + $marg + 1}]]
+            puts -nonewline [string repeat { } [expr {$tw - $seg_len + $marg + ($split ? 0 : 1)}]]
         }
 
         # -- scroll indicator --------------------------------------------------
         set nvrows [llength $vrows]
-        if {$nvrows > $th} {
+        if {!$split && $nvrows > $th} {
             set bar_h [expr {max(1, int(double($th) * $th / $nvrows))}]
             set bar_p [expr {int(double($scroll_y) * ($th - $bar_h) / ($nvrows - $th))}]
             for {set i 0} {$i < $th} {incr i} {
@@ -6470,6 +6582,37 @@ proc tui-editor {filepath {init_state {}}} {
                     puts -nonewline "\u2590"
                 } else {
                     tui-attr dim; puts -nonewline "\u2502"; tui-attr off
+                }
+            }
+        }
+        if {$split} {
+            # divider
+            for {set i 0} {$i < $th} {incr i} {
+                tui-move [expr {$i + $roff}] $half
+                tui-attr dim; puts -nonewline "|"; tui-attr off
+            }
+            # right pane
+            set _r_fn [expr {$split_r_fp eq "" ? "scratchpad" : [file tail $split_r_fp]}]
+            set _r_ws [expr {$::ws_n == 1 ? 2 : 1}]
+            tui-move $roff $rcoff
+            tui-attr reverse
+            puts -nonewline [string range " \[$_r_ws\] $_r_fn" 0 [expr {$tw_r - 1}]]
+            tui-attr off; puts -nonewline "\033\[K"
+            set _rsrc_lines [expr {$split_ws2_mode ? $split_r_lines : $lines}]
+            for {set i 1} {$i < $th} {incr i} {
+                set row_y [expr {$i + $roff}]
+                set vr [expr {$split_r_scroll + $i - 1}]
+                tui-move $row_y $rcoff
+                if {$vr < [llength $split_r_vrows]} {
+                    lassign [lindex $split_r_vrows $vr] li scol ecol
+                    set rseg [string range [lindex $_rsrc_lines [expr {$li-1}]] $scol [expr {$ecol-1}]]
+                    set rish [lindex $split_r_ish [expr {$li-1}]]
+                    set risd [lindex $split_r_isd [expr {$li-1}]]
+                    if {$rish} { tui-attr heading } elseif {$risd} { tui-attr dim }
+                    puts -nonewline "[string range $rseg 0 [expr {$tw_r-1}]]\033\[K"
+                    if {$rish || $risd} { tui-attr off }
+                } else {
+                    puts -nonewline "\033\[K"
                 }
             }
         }
@@ -6500,7 +6643,8 @@ proc tui-editor {filepath {init_state {}}} {
                 words $wc_cached \
                 chars $cc_cached \
                 clock [clock format [clock seconds] -format "%H:%M"] \
-                timer $timer_display]
+                timer $timer_display \
+                ws    $::ws_n]
             if {$::tui_cmd_mode} {
                 set bar_left " $message"
                 set bar_center ""
@@ -6515,7 +6659,12 @@ proc tui-editor {filepath {init_state {}}} {
             tui-bar [expr {$rows-1}] $bar_left $bar_right $cols $bar_center
         }
 
-        tui-move [expr {$vi - $scroll_y + $roff}] [expr {$scx + $coff}]
+        if {$split && $split_focus == 2 && [llength $split_r_vrows] > 0} {
+            lassign [tui-l2v $split_r_vrows $split_r_cy $split_r_cx] _vi_r _scx_r
+            tui-move [expr {$_vi_r - $split_r_scroll + $roff + 1}] [expr {$_scx_r + $rcoff}]
+        } else {
+            tui-move [expr {$vi - $scroll_y + $roff + ($split ? 1 : 0)}] [expr {$scx + $coff}]
+        }
         puts -nonewline "\033\[?25h"; flush stdout
 
         set key [tui-getch]; puts -nonewline "\033\[?25l"
@@ -6545,6 +6694,32 @@ proc tui-editor {filepath {init_state {}}} {
                 }
             }
         }
+
+        # ws2 split + right focus: redirect all key handling to right pane state
+        set _fswap 0
+        if {$split && $split_ws2_mode && $split_focus == 2} {
+            foreach {_v _r} {lines split_r_lines  cy split_r_cy  cx split_r_cx  dirty split_r_dirty  filepath split_r_fp} {
+                set _tmp [set $_v]; set $_v [set $_r]; set $_r $_tmp
+            }
+            set _fswap 1
+        }
+        # same-file split + right focus: compute right cursor pos for navigation
+        set _rvi -1; set _rscx 0
+        if {$split && !$split_ws2_mode && $split_focus == 2 && [llength $split_r_vrows] > 0} {
+            lassign [tui-l2v $split_r_vrows $split_r_cy $split_r_cx] _rvi _rscx
+        }
+        if {$_rvi >= 0} {
+            switch -- $key {
+                UP    { if {$_rvi > 0} { lassign [tui-v2l $split_r_vrows [expr {$_rvi-1}] $_rscx] split_r_cy split_r_cx }; set rst 0 }
+                DOWN  { if {$_rvi < [llength $split_r_vrows]-1} { lassign [tui-v2l $split_r_vrows [expr {$_rvi+1}] $_rscx] split_r_cy split_r_cx }; set rst 0 }
+                LEFT  { if {$split_r_cx > 0} { incr split_r_cx -1 } elseif {$split_r_cy > 1} { incr split_r_cy -1; set split_r_cx [string length [lindex $lines [expr {$split_r_cy-1}]]] } }
+                RIGHT { set _ll [string length [lindex $lines [expr {$split_r_cy-1}]]]; if {$split_r_cx < $_ll} { incr split_r_cx } elseif {$split_r_cy < [llength $lines]} { incr split_r_cy; set split_r_cx 0 } }
+                HOME  { set split_r_cx [lindex [lindex $split_r_vrows $_rvi] 1] }
+                END   { set split_r_cx [lindex [lindex $split_r_vrows $_rvi] 2] }
+                PPAGE { lassign [tui-v2l $split_r_vrows [expr {max(0,$_rvi-$_cth)}] $_rscx] split_r_cy split_r_cx; set rst 0 }
+                NPAGE { lassign [tui-v2l $split_r_vrows [expr {min([llength $split_r_vrows]-1,$_rvi+$_cth)}] $_rscx] split_r_cy split_r_cx; set rst 0 }
+            }
+        } else {
 
         switch -- $key {
             UP {
@@ -6735,6 +6910,7 @@ proc tui-editor {filepath {init_state {}}} {
                     } elseif {$key eq "q"} {
                         # Quit/close file, exit command mode first
                         set ::tui_cmd_mode 0
+                        tui-split-save-right $split $::ws_n $split_r_lines $split_r_dirty $split_r_fp
                         lassign [tui-size] rows cols
                         if {$dirty} {
                             set r [tui-yesnocancel [t ed_save_before_tui] $rows $cols]
@@ -6793,6 +6969,7 @@ proc tui-editor {filepath {init_state {}}} {
                     set msg_time [clock seconds]
                     set clear_sel 0
                 } elseif {$key eq $::cfg_tui_close} {
+                    tui-split-save-right $split $::ws_n $split_r_lines $split_r_dirty $split_r_fp
                     lassign [tui-size] rows cols
                     if {$dirty} {
                         set r [tui-yesnocancel [t ed_save_before_tui] $rows $cols]
@@ -6818,6 +6995,7 @@ proc tui-editor {filepath {init_state {}}} {
                         }
                     }
                 } elseif {$key eq $::cfg_tui_open} {
+                    tui-split-save-right $split $::ws_n $split_r_lines $split_r_dirty $split_r_fp
                     if {$filepath ne ""} { tui-save-file $filepath $lines; daily-update $wc_cached; cursor-put $filepath $cy $cx }
                     set ::session_file ""; set dirty 0
                     if {$::ws_n == 2} { return "__ws2_open__" }
@@ -6973,10 +7151,56 @@ proc tui-editor {filepath {init_state {}}} {
                     timer-reset
                     set clear_sel 0
                 } elseif {$key eq $::cfg_tui_workspace} {
-                    if {$filepath ne ""} { cursor-put $filepath $cy $cx }
-                    set ::tui_ws_save [dict create \
-                        filepath $filepath lines $lines cy $cy cx $cx dirty $dirty]
-                    set ::session_file ""; return "__ws_toggle__"
+                    if {$split && $split_ws2_mode == 0} {
+                        # F10 in same-file split: load WS2 into right pane
+                        set ::ws_dual_mode 1
+                        if {$::ws_n == 1} {
+                            set split_r_fp $::ws2_filename; set split_r_dirty $::ws2_dirty; set _c $::ws2_content
+                        } else {
+                            set split_r_fp $::ws1_filename; set split_r_dirty $::ws1_dirty; set _c $::ws1_content
+                        }
+                        set split_r_lines [expr {$_c ne "" ? [split $_c "\n"] : [list ""]}]
+                        set split_r_cy 1; set split_r_cx 0; set split_r_scroll 0
+                        set split_r_wrap_dirty 1; set split_r_layout {}
+                        set split_ws2_mode 1; set split_focus 1
+                        set wrap_dirty 1; set prev_tw -1
+                        puts -nonewline "\033\[2J"; flush stdout
+                        set clear_sel 0
+                    } elseif {$split && $split_ws2_mode == 1} {
+                        # F10 in WS2 split: cycle focus (like F4)
+                        set split_focus [expr {$split_focus == 1 ? 2 : 1}]
+                        set clear_sel 0
+                    } else {
+                        # No split: normal workspace toggle
+                        tui-split-save-right $split $::ws_n $split_r_lines $split_r_dirty $split_r_fp
+                        if {$filepath ne ""} { cursor-put $filepath $cy $cx }
+                        set ::tui_ws_save [dict create \
+                            filepath $filepath lines $lines cy $cy cx $cx dirty $dirty]
+                        set ::session_file ""; return "__ws_toggle__"
+                    }
+                } elseif {$key eq $::cfg_tui_split} {
+                    if {$split} {
+                        # Close split
+                        if {$split_ws2_mode} {
+                            tui-split-save-right 1 $::ws_n $split_r_lines $split_r_dirty $split_r_fp
+                        }
+                        set split 0; set split_ws2_mode 0; set split_focus 1
+                        set wrap_dirty 1; set prev_tw -1
+                    } else {
+                        # Open same-file split
+                        set split_r_cy $cy; set split_r_cx $cx; set split_r_scroll $scroll_y
+                        set split_r_dirty 0; set split_r_fp $filepath
+                        set split_r_lines $lines
+                        set split_r_wrap_dirty 1; set split_r_layout {}
+                        set split_ws2_mode 0; set split_focus 1
+                        set split 1; set wrap_dirty 1; set prev_tw -1
+                    }
+                    puts -nonewline "\033\[2J"; flush stdout
+                    set clear_sel 0
+                } elseif {$split && $key eq $::cfg_tui_split_focus} {
+                    # F4: toggle focus between left and right pane
+                    set split_focus [expr {$split_focus == 1 ? 2 : 1}]
+                    set clear_sel 0
                 } elseif {[string match "F*" $key]} {                          ;# ignore unknown F-keys
                     set clear_sel 0
                 } elseif {[string length $key] >= 1 && ($c eq "" || $c >= 32)} {
@@ -6986,6 +7210,12 @@ proc tui-editor {filepath {init_state {}}} {
                     lset lines [expr {$cy-1}] "[string range $l 0 [expr {$cx-1}]]${key}[string range $l $cx end]"
                     incr cx [string length $key]; tui-mark-line-dirty
                 }
+            }
+        }
+        } ;# end else (_rvi < 0)
+        if {$_fswap} {
+            foreach {_v _r} {lines split_r_lines  cy split_r_cy  cx split_r_cx  dirty split_r_dirty  filepath split_r_fp} {
+                set _tmp [set $_v]; set $_v [set $_r]; set $_r $_tmp
             }
         }
         if {$rst}       { set sticky -1 }
@@ -7218,6 +7448,15 @@ proc tui-config-dialog {rows cols} {
                 q - "\x1B" { break }
             }
         }
+    }
+}
+
+proc tui-split-save-right {split ws_n r_lines r_dirty r_fp} {
+    if {!$split} return
+    if {$ws_n == 1} {
+        set ::ws2_content [join $r_lines "\n"]; set ::ws2_dirty $r_dirty; set ::ws2_filename $r_fp
+    } else {
+        set ::ws1_content [join $r_lines "\n"]; set ::ws1_dirty $r_dirty; set ::ws1_filename $r_fp
     }
 }
 

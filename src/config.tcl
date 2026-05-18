@@ -139,7 +139,7 @@ set ::cfg_blink_cursor         0
 set ::cfg_line_spacing   100
 set ::cfg_bar_height     18
 set ::cfg_lang           "en"
-set ::cfg_help_bar       "^S save   ^Q close   ^H help"
+set ::cfg_help_bar       "^S save   ^Q close   F10 workspace   ^H help"
 set ::cfg_word_goal      500
 # status bar zones - tokens: filename dirty sel ln col words chars goal clock help_bar space
 set ::cfg_status_left   "workspace filename dirty sel ln col words chars"
@@ -718,6 +718,7 @@ proc keys-init {} {
     set ::cfg_tui_typewriter   [tk-key-to-tui $::cfg_key_typewriter]
     set ::cfg_tui_dark_toggle  [tk-key-to-tui $::cfg_key_dark_toggle]
     set ::cfg_tui_split        [tk-key-to-tui $::cfg_key_split]
+    set ::cfg_tui_split_focus  [tk-key-to-tui $::cfg_key_split_focus]
     set ::cfg_tui_workspace    [tk-key-to-tui $::cfg_key_workspace]
     set ::cfg_tui_timer        [tk-key-to-tui $::cfg_key_timer]
     set ::cfg_tui_cmd_mode     [tk-key-to-tui $::cfg_key_cmd_mode]
@@ -742,6 +743,10 @@ proc keys-init {} {
     set ::cfg_lbl_split_focus [key-label $::cfg_key_split_focus]
     set ::cfg_lbl_workspace  [key-label $::cfg_key_workspace]
     set ::cfg_lbl_cmd_mode    [key-label $::cfg_key_cmd_mode]
+    # migrate old help_bar default to include workspace shortcut
+    if {$::cfg_help_bar eq "^S save   ^Q close   ^H help"} {
+        set ::cfg_help_bar "^S save   ^Q close   $::cfg_lbl_workspace workspace   ^H help"
+    }
     # conflict detection
     set pairs [list \
         key_save $::cfg_tui_save \
