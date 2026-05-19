@@ -298,6 +298,7 @@ Scheme files live in `src/schemes/` — one `.tcl` file per scheme, auto-detecte
 | `nord` | Arctic Ice Studio — nordtheme.com | Fully canonical (nord0–nord10 palette) |
 | `alt01` | WrithDeck built-in | Dark red/bordeaux palette |
 | `alt02` | WrithDeck built-in | Warm brown/orange palette (derived from alt01 variant) |
+| `retro` | WrithDeck built-in | Dark: phosphor green (#33ff33) on near-black (#0a0a0a); light: black on white |
 
 **RULE — never modify color values without asking the user explicitly.** Color choices are deliberate aesthetic decisions. When working on scheme files, only change what the user has explicitly approved.
 
