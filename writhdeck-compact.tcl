@@ -5860,8 +5860,21 @@ split_r_vrows split_r_ish split_r_isd
 set split_r_prev_tw $tw_r; set split_r_wrap_dirty 0
 }
 lassign [tui-l2v $vrows $cy $cx] vi scx
-set split_r_vi 0; set split_r_scx 0
-if {$split} { lassign [tui-l2v $split_r_vrows $split_r_cy $split_r_cx] split_r_vi split_r_scx }
+if {$vi < [llength $vrows]} {
+lassign [lindex $vrows $vi] _vi_li _vi_scol _vi_ecol
+set vis_scx [string length [string map [list "\t" "    "] \
+[string range [lindex $lines [expr {$cy-1}]] $_vi_scol [expr {$cx-1}]]]]
+} else { set vis_scx $scx }
+set split_r_vi 0; set split_r_scx 0; set vis_split_r_scx 0
+if {$split} {
+lassign [tui-l2v $split_r_vrows $split_r_cy $split_r_cx] split_r_vi split_r_scx
+if {$split_r_vi < [llength $split_r_vrows]} {
+lassign [lindex $split_r_vrows $split_r_vi] _sri_li _sri_scol _sri_ecol
+set _rsrc_fc [expr {$split_ws2_mode ? $split_r_lines : $lines}]
+set vis_split_r_scx [string length [string map [list "\t" "    "] \
+[string range [lindex $_rsrc_fc [expr {$split_r_cy-1}]] $_sri_scol [expr {$split_r_cx-1}]]]]
+} else { set vis_split_r_scx $split_r_scx }
+}
 set _cth [expr {$split ? $th - 1 : $th}]
 if {$toc_jumped} { set scroll_y $vi; set toc_jumped 0 } elseif {$::typewriter_mode} {
 set scroll_y [expr {$vi - $_cth/2}]
@@ -5900,7 +5913,8 @@ puts -nonewline [string repeat { } [expr {$split ? $half : $cols}]]
 continue
 }
 lassign [lindex $vrows $vi2] li scol ecol
-set seg [string range [lindex $lines [expr {$li-1}]] $scol [expr {$ecol-1}]]
+set seg [string map [list "\t" "    "] \
+[string range [lindex $lines [expr {$li-1}]] $scol [expr {$ecol-1}]]]
 set ish [lindex $ish_cache [expr {$li-1}]]
 set isd [lindex $isd_cache [expr {$li-1}]]
 set seg_len [string length $seg]
@@ -6034,9 +6048,9 @@ if {$message ne "" && [clock seconds] - $msg_time < 4} { set bar_left " $message
 tui-bar [expr {$rows-1}] $bar_left $bar_right $cols $bar_center
 }
 if {$split && $split_focus == 2 && [llength $split_r_vrows] > 0} {
-tui-move [expr {$split_r_vi - $split_r_scroll + $roff + 1}] [expr {$split_r_scx + $rcoff}]
+tui-move [expr {$split_r_vi - $split_r_scroll + $roff + 1}] [expr {$vis_split_r_scx + $rcoff}]
 } else {
-tui-move [expr {$vi - $scroll_y + $roff + ($split ? 1 : 0)}] [expr {$scx + $coff}]
+tui-move [expr {$vi - $scroll_y + $roff + ($split ? 1 : 0)}] [expr {$vis_scx + $coff}]
 }
 puts -nonewline "\033\[?25h"; flush stdout
 set key [tui-getch]; puts -nonewline "\033\[?25l"
