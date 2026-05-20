@@ -412,6 +412,15 @@ set ::cfg_timer_sound      1
 set ::cfg_timer_alert      1
 set ::cfg_chrono_show      1
 set ::cfg_timer_type       "countdown"
+# TUI colors - enabled = 1 by default
+set ::cfg_tui_colors       1
+set ::cfg_tui_256colors    0
+set ::cfg_tui_col_heading  "red"
+set ::cfg_tui_col_comment  "bright_black"
+set ::cfg_tui_col_markup   "green"
+set ::cfg_tui_col_bar_fg   "black"
+set ::cfg_tui_col_bar_bg   "yellow"
+set ::cfg_tui_col_sel_bg   ""
 set ::timer_active         0
 set ::timer_remaining      0
 set ::timer_last_tick      0
@@ -593,7 +602,7 @@ proc ini-load {} {
     set toplevel    {editor behaviour keys}
     while {[gets $fh line] >= 0} {
         set line [string trim $line]
-        if {$line eq "" || [string match "#*" $line]} continue
+        if {$line eq "" || [string match "#*" $line] || [string match "%*" $line]} continue
         # section header
         if {[regexp {^\[(\w+)\]$} $line -> hdr]} {
             if {$hdr eq "schemes"} {
@@ -616,7 +625,7 @@ proc ini-load {} {
             continue
         }
         if {[regexp {^(\w+)\s*=(.*)$} $line -> key val]} {
-            set v [string trim $val]
+            set v [regsub {\s+[#%].*$} [string trim $val] {}]
             # inside a named scheme block - store in dict
             if {$cur_scheme ne ""} {
                 dict set ::cfg_schemes $cur_scheme $key $v
@@ -676,8 +685,8 @@ proc ini-load {} {
                 key_dark_toggle      { set ::cfg_key_dark_toggle   $v }
                 browser              { set ::cfg_browser              [string is true $v] }
                 console_center_alert { set ::cfg_console_center_alert [string is true $v] }
-                line_numbers     { set ::cfg_line_numbers   $v }
-                cursor_restore   { set ::cfg_cursor_restore $v }
+                line_numbers     { set ::cfg_line_numbers   [string is true $v] }
+                cursor_restore   { set ::cfg_cursor_restore [string is true $v] }
                 block_cursor         { set ::cfg_block_cursor_gui     [string is true $v]
                                        set ::cfg_block_cursor_console [string is true $v] }
                 block_cursor_gui     { set ::cfg_block_cursor_gui     [string is true $v] }
@@ -722,6 +731,14 @@ proc ini-load {} {
                 timer_alert      { set ::cfg_timer_alert      [string is true $v] }
                 timer_type       { set ::cfg_timer_type       $v }
                 chrono_show      { set ::cfg_chrono_show      [string is true $v] }
+                tui_colors       { set ::cfg_tui_colors       [string is true $v] }
+                tui_256colors    { set ::cfg_tui_256colors    [string is true $v] }
+                tui_col_heading  { set ::cfg_tui_col_heading  $v }
+                tui_col_comment  { set ::cfg_tui_col_comment  $v }
+                tui_col_markup   { set ::cfg_tui_col_markup   $v }
+                tui_col_bar_fg   { set ::cfg_tui_col_bar_fg   $v }
+                tui_col_bar_bg   { set ::cfg_tui_col_bar_bg   $v }
+                tui_col_sel_bg   { set ::cfg_tui_col_sel_bg   $v }
             }
         }
     }
@@ -752,17 +769,17 @@ proc ini-save {} {
     puts $fh "strikethrough_marker = $::cfg_strikethrough_marker"
     puts $fh ""
     puts $fh "\[behaviour\]"
-    puts $fh "browser              = $::cfg_browser"
-    puts $fh "watch_file           = $::cfg_watch_file"
-    puts $fh "hemingway_mode       = $::cfg_hemingway_mode"
-    puts $fh "markdown_headings    = $::cfg_markdown_headings"
-    puts $fh "split_shrink_margin  = $::cfg_split_shrink_margin"
-    puts $fh "console_center_alert = $::cfg_console_center_alert"
-    puts $fh "line_numbers         = $::cfg_line_numbers"
-    puts $fh "cursor_restore = $::cfg_cursor_restore"
-    puts $fh "block_cursor_gui     = $::cfg_block_cursor_gui"
-    puts $fh "block_cursor_console = $::cfg_block_cursor_console"
-    puts $fh "blink_cursor         = $::cfg_blink_cursor"
+    puts $fh "browser              = [expr {$::cfg_browser              ? "yes" : "no"}]"
+    puts $fh "watch_file           = [expr {$::cfg_watch_file           ? "yes" : "no"}]"
+    puts $fh "hemingway_mode       = [expr {$::cfg_hemingway_mode       ? "yes" : "no"}]"
+    puts $fh "markdown_headings    = [expr {$::cfg_markdown_headings    ? "yes" : "no"}]"
+    puts $fh "split_shrink_margin  = [expr {$::cfg_split_shrink_margin  ? "yes" : "no"}]"
+    puts $fh "console_center_alert = [expr {$::cfg_console_center_alert ? "yes" : "no"}]"
+    puts $fh "line_numbers         = [expr {$::cfg_line_numbers         ? "yes" : "no"}]"
+    puts $fh "cursor_restore       = [expr {$::cfg_cursor_restore       ? "yes" : "no"}]"
+    puts $fh "block_cursor_gui     = [expr {$::cfg_block_cursor_gui     ? "yes" : "no"}]"
+    puts $fh "block_cursor_console = [expr {$::cfg_block_cursor_console ? "yes" : "no"}]"
+    puts $fh "blink_cursor         = [expr {$::cfg_blink_cursor         ? "yes" : "no"}]"
     puts $fh "# lang: interface language - en or fr"
     puts $fh "lang           = $::cfg_lang"
     puts $fh "# help_bar: text shown in the shortcuts bar, empty to hide"
@@ -773,13 +790,38 @@ proc ini-save {} {
     puts $fh "status_left    = $::cfg_status_left"
     puts $fh "status_center  = $::cfg_status_center"
     puts $fh "status_right   = $::cfg_status_right"
-    puts $fh "dark_mode      = $::cfg_dark_mode"
+    puts $fh "dark_mode      = [expr {$::cfg_dark_mode ? "yes" : "no"}]"
     puts $fh "# timer and stopwatch"
     puts $fh "timer_duration = $::cfg_timer_duration"
-    puts $fh "timer_sound    = $::cfg_timer_sound"
-    puts $fh "timer_alert    = $::cfg_timer_alert"
+    puts $fh "timer_sound    = [expr {$::cfg_timer_sound  ? "yes" : "no"}]"
+    puts $fh "timer_alert    = [expr {$::cfg_timer_alert  ? "yes" : "no"}]"
     puts $fh "timer_type     = $::cfg_timer_type"
-    puts $fh "chrono_show    = $::cfg_chrono_show"
+    puts $fh "chrono_show    = [expr {$::cfg_chrono_show  ? "yes" : "no"}]"
+    puts $fh ""
+    puts $fh "\[tui_colors\]"
+    puts $fh "# TUI color palette"
+    puts $fh "# Named colors: black red green yellow blue magenta cyan white"
+    puts $fh "#               bright_black bright_red bright_green bright_yellow"
+    puts $fh "#               bright_blue bright_magenta bright_cyan bright_white"
+    puts $fh "# With tui_256colors = yes: also accepts numeric values 0-255"
+    puts $fh "# Set tui_colors = yes to enable"
+    puts $fh "tui_colors      = [expr {$::cfg_tui_colors    ? "yes" : "no"}]"
+    puts $fh "# tui_256colors: use ANSI 256-color codes (brights distinct, numeric 0-255 accepted)"
+    puts $fh "tui_256colors   = [expr {$::cfg_tui_256colors ? "yes" : "no"}]"
+    puts $fh "tui_col_heading = $::cfg_tui_col_heading"
+    puts $fh "tui_col_comment = $::cfg_tui_col_comment"
+    puts $fh "tui_col_markup  = $::cfg_tui_col_markup"
+    puts $fh "tui_col_bar_fg  = $::cfg_tui_col_bar_fg"
+    puts $fh "tui_col_bar_bg  = $::cfg_tui_col_bar_bg"
+    puts $fh "# tui_col_sel_bg: selection background color (empty = reverse video)"
+    puts $fh "tui_col_sel_bg  = $::cfg_tui_col_sel_bg"
+    puts $fh "# example warm palette for tui_256colors = yes:"
+    puts $fh "#   tui_col_heading = 214   # amber  #ffaf00"
+    puts $fh "#   tui_col_comment = 136   # dark amber  #af8700"
+    puts $fh "#   tui_col_markup  = 172   # orange-brown  #d78700"
+    puts $fh "#   tui_col_bar_fg  = 220   # gold  #ffd700"
+    puts $fh "#   tui_col_bar_bg  = 94    # dark brown  #875f00"
+    puts $fh "#   tui_col_sel_bg  = 52    # dark burgundy  #5f0000"
     puts $fh ""
     puts $fh "\[keys\]"
     puts $fh "# Use Tk key names: Control-s, Alt-Return, F11, etc."
@@ -1709,14 +1751,73 @@ proc tui-size {} {
 
 proc tui-move {row col} { puts -nonewline "\033\[[expr {$row+1}];[expr {$col+1}]H" }
 
+# Returns ANSI color escape for a named or numeric color.
+# name: color name (black..white, bright_*) or numeric 0-255 (in 256-color mode).
+# is_bg: 1 for background, 0 for foreground.  Returns "" for unknown/empty.
+# In 16-color mode: fg=30-37/90-97, bg=40-47/100-107.
+# In 256-color mode (cfg_tui_256colors): fg=38;5;N, bg=48;5;N — brights always distinct.
+proc tui-ansi-color {name is_bg} {
+    switch [string tolower [string map {- _ " " _} $name]] {
+        black          { set n 0 }
+        red            { set n 1 }
+        green          { set n 2 }
+        yellow         { set n 3 }
+        blue           { set n 4 }
+        magenta        { set n 5 }
+        cyan           { set n 6 }
+        white          { set n 7 }
+        bright_black - gray - grey { set n 8 }
+        bright_red     { set n 9 }
+        bright_green   { set n 10 }
+        bright_yellow  { set n 11 }
+        bright_blue    { set n 12 }
+        bright_magenta { set n 13 }
+        bright_cyan    { set n 14 }
+        bright_white   { set n 15 }
+        default {
+            if {$::cfg_tui_256colors && [string is integer -strict $name] \
+                    && $name >= 0 && $name <= 255} {
+                set n $name
+            } else { return "" }
+        }
+    }
+    if {$::cfg_tui_256colors} {
+        return "\033\[[expr {$is_bg ? 48 : 38}];5;${n}m"
+    }
+    set base [expr {$is_bg ? 40 : 30}]
+    if {$n < 8} { return "\033\[[expr {$base + $n}]m" }
+    return "\033\[[expr {$base + 60 + $n - 8}]m"
+}
+
 proc tui-attr {a} {
     switch $a {
         bold     { puts -nonewline "\033\[1m" }
-        heading  { puts -nonewline "\033\[1m" }
-        dim-text { puts -nonewline "\033\[2m" }
+        heading  {
+            if {$::cfg_tui_colors && $::cfg_tui_col_heading ne ""} {
+                set _c [tui-ansi-color $::cfg_tui_col_heading 0]
+                puts -nonewline "\033\[1m${_c}"
+            } else {
+                puts -nonewline "\033\[1m"
+            }
+        }
+        dim-text {
+            if {$::cfg_tui_colors && $::cfg_tui_col_comment ne ""} {
+                set _c [tui-ansi-color $::cfg_tui_col_comment 0]
+                if {$_c ne ""} { puts -nonewline $_c } else { puts -nonewline "\033\[2m" }
+            } else {
+                puts -nonewline "\033\[2m"
+            }
+        }
         dim      { puts -nonewline "\033\[2m" }
         underline { puts -nonewline "\033\[4m" }
         reverse  { puts -nonewline "\033\[7m" }
+        sel {
+            if {$::cfg_tui_colors && $::cfg_tui_col_sel_bg ne ""} {
+                set _c [tui-ansi-color $::cfg_tui_col_sel_bg 1]
+                if {$_c ne ""} { puts -nonewline "\033\[0m${_c}"; return }
+            }
+            puts -nonewline "\033\[7m"
+        }
         off      { puts -nonewline "\033\[0m" }
     }
 }
@@ -1751,6 +1852,8 @@ proc tui-parse-inline-spans {line} {
 
 proc tui-inline-esc {style in_sel} {
     set codes {}
+    set color_esc ""
+    set sel_esc   ""
     switch $style {
         bold          { lappend codes 1 }
         italic        { lappend codes 3 }
@@ -1758,9 +1861,19 @@ proc tui-inline-esc {style in_sel} {
         strikethrough -
         marker        { lappend codes 2 }
     }
-    if {$in_sel} { lappend codes 7 }
-    if {$codes eq {}} { return [expr {$in_sel ? "\033\[7m" : ""}] }
-    return "\033\[[join $codes {;}]m"
+    if {$::cfg_tui_colors && $::cfg_tui_col_markup ne "" && $style ne ""} {
+        set color_esc [tui-ansi-color $::cfg_tui_col_markup 0]
+    }
+    if {$in_sel} {
+        if {$::cfg_tui_colors && $::cfg_tui_col_sel_bg ne ""} {
+            set sel_esc [tui-ansi-color $::cfg_tui_col_sel_bg 1]
+        } else {
+            lappend codes 7
+        }
+    }
+    if {$codes eq {} && $color_esc eq "" && $sel_esc eq ""} { return "" }
+    set esc [expr {$codes ne {} ? "\033\[[join $codes {;}]m" : ""}]
+    return "${esc}${color_esc}${sel_esc}"
 }
 
 proc tui-render-inline-seg {seg scol spans sf st} {
@@ -1795,7 +1908,13 @@ proc tui-fill {row text cols} {
 }
 
 proc tui-bar {row left right cols {center ""}} {
-    tui-attr reverse
+    if {$::cfg_tui_colors && ($::cfg_tui_col_bar_bg ne "" || $::cfg_tui_col_bar_fg ne "")} {
+        puts -nonewline "\033\[0m"
+        puts -nonewline [tui-ansi-color $::cfg_tui_col_bar_bg 1]
+        puts -nonewline [tui-ansi-color $::cfg_tui_col_bar_fg 0]
+    } else {
+        tui-attr reverse
+    }
     set llen [string length $left]
     set rlen [string length $right]
     set clen [string length $center]
@@ -2883,7 +3002,7 @@ proc tui-editor {filepath {init_state {}}} {
                 tui-attr dim
                 if {$sf >= 0} {
                     puts -nonewline [string range $seg 0 [expr {$sf-1}]]
-                    tui-attr reverse; puts -nonewline [string range $seg $sf [expr {$st-1}]]; tui-attr off
+                    tui-attr sel; puts -nonewline [string range $seg $sf [expr {$st-1}]]; tui-attr off
                     tui-attr dim; puts -nonewline [string range $seg $st end]
                 } else {
                     puts -nonewline $seg
@@ -2893,7 +3012,7 @@ proc tui-editor {filepath {init_state {}}} {
                 set _a [expr {$ish ? "heading" : "dim-text"}]
                 if {$sf >= 0} {
                     if {$sf > 0} { tui-attr $_a; puts -nonewline [string range $seg 0 [expr {$sf-1}]]; tui-attr off }
-                    tui-attr reverse; puts -nonewline [string range $seg $sf [expr {$st-1}]]; tui-attr off
+                    tui-attr sel; puts -nonewline [string range $seg $sf [expr {$st-1}]]; tui-attr off
                     if {$st < $seg_len} { tui-attr $_a; puts -nonewline [string range $seg $st end]; tui-attr off }
                 } else {
                     tui-attr $_a; puts -nonewline $seg; tui-attr off

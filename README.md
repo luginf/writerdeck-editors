@@ -13,6 +13,7 @@ WrithDeck is a distraction-free text editor designed for writers using a dedicat
 - Second workspace (F10) for side-by-side editing of two independent files (GUI and TUI)
 - Table of contents with heading navigation
 - Fully themeable interface (dark/light mode, 6 built-in color schemes)
+- ANSI color support in TUI (16-color and 256-color, TTY-compatible, configurable in INI)
 - Multi-language support (English, French, German, Spanish, Korean, Norwegian)
 - Clickable toolbar shortcuts
 - Writing statistics and daily progress tracking
@@ -157,9 +158,15 @@ scheme = dark
 lang = en
 
 [behaviour]
-line_numbers = true
-cursor_restore = true
-dark_mode = true
+line_numbers = yes    # inline comments are supported
+cursor_restore = yes
+dark_mode = yes
+
+[tui_colors]
+tui_colors = yes      # enable ANSI colors in TUI/TTY
+tui_256colors = yes   # 256-color mode (numeric 0-255 accepted)
+tui_col_heading = 214
+tui_col_bar_bg = 94
 
 [keys]
 key_save = Control-s

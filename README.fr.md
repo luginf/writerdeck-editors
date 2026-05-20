@@ -13,6 +13,7 @@ WrithDeck est un éditeur de texte sans distraction conçu pour les auteurs util
 - Second espace de travail (F10) pour éditer deux fichiers indépendants côte à côte (GUI et TUI)
 - Table des matières avec navigation par en-têtes
 - Interface entièrement thémable (mode sombre/clair, 6 schémas de couleurs)
+- Couleurs ANSI en mode TUI (16 couleurs et 256 couleurs, compatible TTY, configurables dans le INI)
 - Support multi-langue (Anglais, Français, Allemand, Espagnol, Coréen, Norvégien)
 - Raccourcis cliquables dans la barre d'outils
 - Statistiques d'écriture et suivi du progrès quotidien

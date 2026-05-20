@@ -101,23 +101,23 @@ All keyboard shortcuts are configurable via the `[keys]` section.
 
 | Key                       | Default   | Description                                                                                         |
 | ------------------------- | --------- | --------------------------------------------------------------------------------------------------- |
-| `browser`                 | `1`       | Return to file browser after closing a file                                                         |
-| `watch_file`              | `1`       | Detect external file modifications and prompt to reload; `0` to disable                             |
-| `split_shrink_margin`     | `1`       | Halve `margin_width` in split view (GUI); `0` to keep the full margin                               |
-| `hemingway_mode`          | `0`       | When typewriter mode is active: block arrows, backspace and undo; hide status bar; double margins   |
-| `console_center_alert`    | `1`       | Center confirm dialogs (TUI); `0` = bottom bar                                                      |
-| `block_cursor_gui`        | `1`       | Block cursor in GUI mode                                                                            |
-| `block_cursor_console`    | `1`       | Block cursor in TUI mode                                                                            |
-| `blink_cursor`            | `0`       | Blinking cursor                                                                                     |
-| `line_numbers`            | `0`       | Show line numbers                                                                                   |
-| `cursor_restore`          | `1`       | Restore cursor position on reopen                                                                   |
+| `browser`                 | `yes`     | Return to file browser after closing a file                                                         |
+| `watch_file`              | `yes`     | Detect external file modifications and prompt to reload; `no` to disable                            |
+| `split_shrink_margin`     | `yes`     | Halve `margin_width` in split view (GUI); `no` to keep the full margin                              |
+| `hemingway_mode`          | `no`      | When typewriter mode is active: block arrows, backspace and undo; hide status bar; double margins   |
+| `console_center_alert`    | `yes`     | Center confirm dialogs (TUI); `no` = bottom bar                                                     |
+| `block_cursor_gui`        | `yes`     | Block cursor in GUI mode                                                                            |
+| `block_cursor_console`    | `yes`     | Block cursor in TUI mode                                                                            |
+| `blink_cursor`            | `no`      | Blinking cursor                                                                                     |
+| `line_numbers`            | `no`      | Show line numbers                                                                                   |
+| `cursor_restore`          | `yes`     | Restore cursor position on reopen                                                                   |
 | `lang`                    | `en`      | Interface language: `en`, `fr`, `de`, `es`, `ko`, `no`; also selectable in config dialog (c key)    |
-| `dark_mode`               | `1`       | Dark theme; `0` = light                                                                             |
+| `dark_mode`               | `yes`     | Dark theme; `no` = light                                                                            |
 | `word_goal`               | `500`     | Daily word goal shown by the `goal` status token; `0` to disable                                    |
 | `timer_duration`          | `25`      | Timer duration in minutes (countdown mode)                                                          |
-| `timer_sound`             | `1`       | Play bell sound when timer finishes; `0` to disable                                                 |
-| `timer_alert`             | `1`       | Show alert dialog when timer finishes; `0` to disable                                               |
-| `timer_type`              | `countdown` | Timer mode: `countdown` or `stopwatch`                                                              |
+| `timer_sound`             | `yes`     | Play bell sound when timer finishes; `no` to disable                                                |
+| `timer_alert`             | `yes`     | Show alert dialog when timer finishes; `no` to disable                                              |
+| `timer_type`              | `countdown` | Timer mode: `countdown` or `stopwatch`                                                            |
 
 ### `[keys]`
 
@@ -395,13 +395,68 @@ Activated via `--no-gui` / `--tui` / `--ng`, or when no windowing system is avai
 
 ---
 
+## TUI Colors
+
+The TUI editor supports ANSI colors compatible with terminal emulators and Linux TTY. Colors are disabled by default.
+
+### Enabling colors
+
+Add the `[tui_colors]` section to `~/.writhdeck.ini`, then restart WrithDeck:
+
+```ini
+[tui_colors]
+tui_colors      = yes
+tui_col_heading = cyan
+tui_col_comment = green
+tui_col_markup  = magenta
+tui_col_bar_fg  = black
+tui_col_bar_bg  = cyan
+tui_col_sel_bg  =          # empty = reverse video (default)
+```
+
+### Available color names
+
+`black` `red` `green` `yellow` `blue` `magenta` `cyan` `white`
+and their bright variants: `bright_black` `bright_red` `bright_green` `bright_yellow` `bright_blue` `bright_magenta` `bright_cyan` `bright_white`
+
+### 256-color mode
+
+Enable with `tui_256colors = yes`. This uses `\033[38;5;N]` codes that guarantee distinct bright variants and accept numeric values 0–255:
+
+```ini
+tui_256colors   = yes
+tui_col_heading = 214    # amber  #ffaf00
+tui_col_comment = 136    # dark amber  #af8700
+tui_col_markup  = 172    # orange-brown  #d78700
+tui_col_bar_fg  = 220    # gold  #ffd700
+tui_col_bar_bg  = 94     # dark brown  #875f00
+tui_col_sel_bg  = 52     # dark burgundy  #5f0000
+```
+
+Useful warm-tone indices: `52` (dark burgundy), `94` (dark brown), `130` (warm brown), `136` (dark amber), `166` (rust), `172` (orange-brown), `178` (gold), `202` (red-orange), `208` (orange), `214` (amber), `220` (gold), `230` (cream).
+
+> Note: WrithDeck has no `z` (reload) key in TUI mode. Any INI change requires a full restart.
+
+### INI inline comments
+
+Comments are supported on the same line as a key, after a space and `#`:
+
+```ini
+tui_colors = yes   # enable TUI colors
+tui_col_heading = 214   # amber
+```
+
+Values starting with `#` (hex colors) are not affected.
+
+---
+
 ## Known bugs and limitations
 
-- In GUI mode, word-wrapped line endings can cause inconsistent block cursor display. Fix: set `block_cursor_gui = 0` in the INI.
+- In GUI mode, word-wrapped line endings can cause inconsistent block cursor display. Fix: set `block_cursor_gui = no` in the INI.
 - In TUI mode, resizing the terminal window may produce artifacts. Opening help with Ctrl+H twice refreshes the screen.
 - No no-wrap mode (not planned).
 - No tab mode (not planned).
-- Split view is GUI only (TUI adaptation not planned yet).
+- TUI split view: the right pane shares the undo history with the left pane and has no independent syntax highlighting.
 - On very long texts (over 80,000 words) on a slow CPU, cursor and typing may slow down. If needed, remove the `words` and `chars` tokens from the status bar zones.
 
 ---
@@ -613,7 +668,7 @@ L'éditeur inclut une minuterie compte à rebours et un mode chronomètre config
 Quand le compte à rebours atteint zéro :
 1. **GUI** : Dialogue popup avec le message "Timer finished!"
 2. **TUI** : Overlay plein écran avec "TIMER FINISHED!"
-3. **Son** : Bip (si `timer_sound = 1` dans le INI)
+3. **Son** : Bip (si `timer_sound = yes` dans le INI)
 
 L'alerte respecte le réglage `timer_alert` du INI. Si désactivée, la minuterie s'arrête sans rétroaction visuelle/sonore.
 
@@ -798,9 +853,53 @@ Activé via `--no-gui` / `--tui` / `--ng`, ou si aucun système de fenêtrage n'
 
 ## Bugs connus et limitations
 
-- En mode GUI, les fins de ligne dans un texte avec retour à la ligne automatique peuvent entraîner un affichage incohérent du curseur bloc. Correctif : `block_cursor_gui = 0` dans le INI.
+## Couleurs TUI
+
+L'éditeur TUI supporte les couleurs ANSI compatibles avec les émulateurs de terminal et le TTY Linux. Les couleurs sont désactivées par défaut.
+
+### Activer les couleurs
+
+Ajouter la section `[tui_colors]` dans `~/.writhdeck.ini`, puis relancer WrithDeck :
+
+```ini
+[tui_colors]
+tui_colors      = yes
+tui_col_heading = cyan
+tui_col_comment = green
+tui_col_markup  = magenta
+tui_col_bar_fg  = black
+tui_col_bar_bg  = cyan
+tui_col_sel_bg  =          # vide = vidéo inverse (défaut)
+```
+
+### Noms de couleurs disponibles
+
+`black` `red` `green` `yellow` `blue` `magenta` `cyan` `white`
+et leurs variantes lumineuses : `bright_black` `bright_red` `bright_green` `bright_yellow` `bright_blue` `bright_magenta` `bright_cyan` `bright_white`
+
+### Mode 256 couleurs
+
+Activer avec `tui_256colors = yes`. Garantit des variantes bright distinctes et accepte les valeurs numériques 0–255 :
+
+```ini
+tui_256colors   = yes
+tui_col_heading = 214    # ambre  #ffaf00
+tui_col_comment = 136    # ambre sombre  #af8700
+tui_col_markup  = 172    # orange brun  #d78700
+tui_col_bar_fg  = 220    # or  #ffd700
+tui_col_bar_bg  = 94     # brun sombre  #875f00
+tui_col_sel_bg  = 52     # bordeaux sombre  #5f0000
+```
+
+> Note : WrithDeck n'a pas de touche `z` (rechargement) en mode TUI. Tout changement de INI nécessite un redémarrage complet.
+
+---
+
+## Bugs connus et limitations
+
+- En mode GUI, les fins de ligne dans un texte avec retour à la ligne automatique peuvent entraîner un affichage incohérent du curseur bloc. Correctif : `block_cursor_gui = no` dans le INI.
 - En mode TUI, lors du redimensionnement de la fenêtre de terminal, des artefacts peuvent apparaître. Ouvrir l'aide avec Ctrl+H deux fois rafraîchit l'écran.
 - Pas de mode sans retour à la ligne (non prévu).
 - Pas de mode tabulation (non prévu).
-- La vue fractionnée est uniquement disponible en GUI (adaptation TUI non prévue pour l'instant).
+- Vue fractionnée TUI : le volet droit partage l'historique d'annulation avec le volet gauche et n'a pas de coloration syntaxique indépendante.
 - Sur des textes très longs (plus de 80 000 mots) et un CPU lent, le curseur et la frappe peuvent ralentir. Si nécessaire, retirer les jetons `words` et `chars` des zones de la barre de statut.

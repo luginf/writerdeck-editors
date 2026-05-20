@@ -164,6 +164,14 @@ Section order: `DOCS_DIR_DEFAULT` → `DOCS_DIR` (if custom) → Favorites → R
 
 **Reload (z key)** — closes current editor/scratchpad and returns to browser. Always relaunches the program without arguments, even if a file was open. Uses platform-specific process launching (Windows `start` command, Unix shell background execution). Configuration apply button also triggers reload.
 
+**GUI copy/cut** — `bind $w <c>` in `bind-cmd-mode` intercepted Ctrl+C because in Tk a modifier-less binding matches all modifier states, and widget-level bindings override class-level `<<Copy>>`. Fix: explicit `<$::cfg_key_copy>` and `<$::cfg_key_cut>` bindings registered both on `.ed.t` (main section) and inside `bind-cmd-mode` (covers split/WS2 panes). Uses `tk_textCopy %W` / `tk_textCut %W`.
+
+## INI parser
+
+**Inline comments** — `regsub {\s+#.*$}` is applied on the already-trimmed value: `set v [regsub {\s+#.*$} [string trim $val] {}]`. Trim first, then strip — this preserves values that start with `#` (hex colors like `#1a1a1a`) while stripping `# comment` that follows whitespace.
+
+**Boolean values** — `ini-save` writes `yes`/`no` for all 17 boolean settings using `[expr {$::cfg_xxx ? "yes" : "no"}]`. All forms are accepted on load via `string is true $v`: `yes`, `no`, `1`, `0`, `true`, `false`, `on`, `off`.
+
 ## Timer and stopwatch
 
 Configurable countdown timer and stopwatch accessible via modal command mode or ALT+t keybinding:
@@ -310,6 +318,33 @@ Scheme files live in `src/schemes/` — one `.tcl` file per scheme, auto-detecte
 **RULE — never modify color values without asking the user explicitly.** Color choices are deliberate aesthetic decisions. When working on scheme files, only change what the user has explicitly approved.
 
 **Selection text color** — always pair `-selectbackground $bg_sel` with `-selectforeground $fg` on every Tk Text widget. Without `-selectforeground`, Tk inverts the text color in dark mode, making selected text unreadable. Required on all Text widget creations: `.br.mid.lst`, `.br.bar.help`, `.ed.t`, `.ed.ln`, dialog text widgets (`$w.t` in info/stats/help dialogs), `split-make-pane` peer widgets, `split-ws2-open` independent widget. Also needed in `theme-reload` configure calls (~lines 1303, 1336).
+
+## TUI colors (`[tui_colors]` INI section)
+
+ANSI 16-color palette for TUI/TTY mode. Disabled by default (`tui_colors = no`).
+
+**Config keys** (`src/config.tcl` defaults, `[tui_colors]` section in INI):
+- `tui_colors` — `yes`/`no` master switch
+- `tui_col_heading` — heading lines (`#` marker) → default `cyan`
+- `tui_col_comment` — comment/dim lines (`//`, `>`) → default `green`
+- `tui_col_markup` — inline bold/italic markers → default `magenta`
+- `tui_col_bar_fg` / `tui_col_bar_bg` — status bar fg/bg → default `black` / `cyan`
+- `tui_col_sel_bg` — selection background (empty = reverse video) → default empty
+
+**Color names**: `black red green yellow blue magenta cyan white` + `bright_black bright_red bright_green bright_yellow bright_blue bright_magenta bright_cyan bright_white`.
+
+**Implementation** (`src/tui.tcl`):
+- `tui-ansi-color {name is_bg}` — converts color name or numeric index to ANSI escape. In 16-color mode: `3x`/`9x` fg, `4x`/`10x` bg. In 256-color mode: `38;5;N` fg, `48;5;N` bg. Returns `""` for unknown names.
+- `tui-attr heading` / `tui-attr dim-text` — emit color when `cfg_tui_colors` is on
+- `tui-attr sel` — emits `sel_bg` color or falls back to reverse video (`\033[7m`)
+- `tui-bar` — uses `bar_fg`/`bar_bg` colors instead of reverse video
+- `tui-inline-esc` — includes `markup` color in inline span escapes; uses `sel_bg` for selection instead of code 7
+
+**256-color mode** (`tui_256colors = yes`): uses `\033[38;5;Nm]` / `\033[48;5;Nm]`. Named colors map to indices 0-15 (same palette, always distinct). Numeric values 0-255 accepted directly in INI (e.g. `tui_col_heading = 214` for orange). Note: `bright_*` in 16-color mode may look identical to the normal variant on some TTY (terminal-palette dependent); 256-color mode guarantees the distinction.
+
+**RULE** — `tui-attr dim` (typewriter focus, line numbers, separators) is always dim regardless of color settings. Only `dim-text` (comment marker lines) uses the comment color.
+
+**Activation** — éditer `~/.writhdeck.ini` manuellement (`tui_colors = yes`) puis relancer le programme. La touche `z` (reload) n'existe que dans le browser GUI ; le TUI n'a pas d'équivalent — tout changement INI nécessite un redémarrage complet.
 
 ## Known limitations
 

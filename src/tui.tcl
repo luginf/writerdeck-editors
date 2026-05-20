@@ -44,14 +44,73 @@ proc tui-size {} {
 
 proc tui-move {row col} { puts -nonewline "\033\[[expr {$row+1}];[expr {$col+1}]H" }
 
+# Returns ANSI color escape for a named or numeric color.
+# name: color name (black..white, bright_*) or numeric 0-255 (in 256-color mode).
+# is_bg: 1 for background, 0 for foreground.  Returns "" for unknown/empty.
+# In 16-color mode: fg=30-37/90-97, bg=40-47/100-107.
+# In 256-color mode (cfg_tui_256colors): fg=38;5;N, bg=48;5;N — brights always distinct.
+proc tui-ansi-color {name is_bg} {
+    switch [string tolower [string map {- _ " " _} $name]] {
+        black          { set n 0 }
+        red            { set n 1 }
+        green          { set n 2 }
+        yellow         { set n 3 }
+        blue           { set n 4 }
+        magenta        { set n 5 }
+        cyan           { set n 6 }
+        white          { set n 7 }
+        bright_black - gray - grey { set n 8 }
+        bright_red     { set n 9 }
+        bright_green   { set n 10 }
+        bright_yellow  { set n 11 }
+        bright_blue    { set n 12 }
+        bright_magenta { set n 13 }
+        bright_cyan    { set n 14 }
+        bright_white   { set n 15 }
+        default {
+            if {$::cfg_tui_256colors && [string is integer -strict $name] \
+                    && $name >= 0 && $name <= 255} {
+                set n $name
+            } else { return "" }
+        }
+    }
+    if {$::cfg_tui_256colors} {
+        return "\033\[[expr {$is_bg ? 48 : 38}];5;${n}m"
+    }
+    set base [expr {$is_bg ? 40 : 30}]
+    if {$n < 8} { return "\033\[[expr {$base + $n}]m" }
+    return "\033\[[expr {$base + 60 + $n - 8}]m"
+}
+
 proc tui-attr {a} {
     switch $a {
         bold     { puts -nonewline "\033\[1m" }
-        heading  { puts -nonewline "\033\[1m" }
-        dim-text { puts -nonewline "\033\[2m" }
+        heading  {
+            if {$::cfg_tui_colors && $::cfg_tui_col_heading ne ""} {
+                set _c [tui-ansi-color $::cfg_tui_col_heading 0]
+                puts -nonewline "\033\[1m${_c}"
+            } else {
+                puts -nonewline "\033\[1m"
+            }
+        }
+        dim-text {
+            if {$::cfg_tui_colors && $::cfg_tui_col_comment ne ""} {
+                set _c [tui-ansi-color $::cfg_tui_col_comment 0]
+                if {$_c ne ""} { puts -nonewline $_c } else { puts -nonewline "\033\[2m" }
+            } else {
+                puts -nonewline "\033\[2m"
+            }
+        }
         dim      { puts -nonewline "\033\[2m" }
         underline { puts -nonewline "\033\[4m" }
         reverse  { puts -nonewline "\033\[7m" }
+        sel {
+            if {$::cfg_tui_colors && $::cfg_tui_col_sel_bg ne ""} {
+                set _c [tui-ansi-color $::cfg_tui_col_sel_bg 1]
+                if {$_c ne ""} { puts -nonewline "\033\[0m${_c}"; return }
+            }
+            puts -nonewline "\033\[7m"
+        }
         off      { puts -nonewline "\033\[0m" }
     }
 }
@@ -86,6 +145,8 @@ proc tui-parse-inline-spans {line} {
 
 proc tui-inline-esc {style in_sel} {
     set codes {}
+    set color_esc ""
+    set sel_esc   ""
     switch $style {
         bold          { lappend codes 1 }
         italic        { lappend codes 3 }
@@ -93,9 +154,19 @@ proc tui-inline-esc {style in_sel} {
         strikethrough -
         marker        { lappend codes 2 }
     }
-    if {$in_sel} { lappend codes 7 }
-    if {$codes eq {}} { return [expr {$in_sel ? "\033\[7m" : ""}] }
-    return "\033\[[join $codes {;}]m"
+    if {$::cfg_tui_colors && $::cfg_tui_col_markup ne "" && $style ne ""} {
+        set color_esc [tui-ansi-color $::cfg_tui_col_markup 0]
+    }
+    if {$in_sel} {
+        if {$::cfg_tui_colors && $::cfg_tui_col_sel_bg ne ""} {
+            set sel_esc [tui-ansi-color $::cfg_tui_col_sel_bg 1]
+        } else {
+            lappend codes 7
+        }
+    }
+    if {$codes eq {} && $color_esc eq "" && $sel_esc eq ""} { return "" }
+    set esc [expr {$codes ne {} ? "\033\[[join $codes {;}]m" : ""}]
+    return "${esc}${color_esc}${sel_esc}"
 }
 
 proc tui-render-inline-seg {seg scol spans sf st} {
@@ -130,7 +201,13 @@ proc tui-fill {row text cols} {
 }
 
 proc tui-bar {row left right cols {center ""}} {
-    tui-attr reverse
+    if {$::cfg_tui_colors && ($::cfg_tui_col_bar_bg ne "" || $::cfg_tui_col_bar_fg ne "")} {
+        puts -nonewline "\033\[0m"
+        puts -nonewline [tui-ansi-color $::cfg_tui_col_bar_bg 1]
+        puts -nonewline [tui-ansi-color $::cfg_tui_col_bar_fg 0]
+    } else {
+        tui-attr reverse
+    }
     set llen [string length $left]
     set rlen [string length $right]
     set clen [string length $center]
@@ -1218,7 +1295,7 @@ proc tui-editor {filepath {init_state {}}} {
                 tui-attr dim
                 if {$sf >= 0} {
                     puts -nonewline [string range $seg 0 [expr {$sf-1}]]
-                    tui-attr reverse; puts -nonewline [string range $seg $sf [expr {$st-1}]]; tui-attr off
+                    tui-attr sel; puts -nonewline [string range $seg $sf [expr {$st-1}]]; tui-attr off
                     tui-attr dim; puts -nonewline [string range $seg $st end]
                 } else {
                     puts -nonewline $seg
@@ -1228,7 +1305,7 @@ proc tui-editor {filepath {init_state {}}} {
                 set _a [expr {$ish ? "heading" : "dim-text"}]
                 if {$sf >= 0} {
                     if {$sf > 0} { tui-attr $_a; puts -nonewline [string range $seg 0 [expr {$sf-1}]]; tui-attr off }
-                    tui-attr reverse; puts -nonewline [string range $seg $sf [expr {$st-1}]]; tui-attr off
+                    tui-attr sel; puts -nonewline [string range $seg $sf [expr {$st-1}]]; tui-attr off
                     if {$st < $seg_len} { tui-attr $_a; puts -nonewline [string range $seg $st end]; tui-attr off }
                 } else {
                     tui-attr $_a; puts -nonewline $seg; tui-attr off

@@ -1449,6 +1449,8 @@ proc ed-paste {} {
 bind .ed.t <$::cfg_key_save>    { save-file;         break }
 bind .ed.t <$::cfg_key_save_as> { save-as;           break }
 bind .ed.t <$::cfg_key_close>   { close-editor;      break }
+bind .ed.t <$::cfg_key_copy>         { tk_textCopy %W;    break }
+bind .ed.t <$::cfg_key_cut>         { tk_textCut  %W;    break }
 bind .ed.t <$::cfg_key_paste>        { ed-paste;          break }
 bind .ed.t <$::cfg_key_select_all>  { .ed.t tag add sel 1.0 end; break }
 bind .ed.t <$::cfg_key_dark_toggle> { toggle-dark-mode;  break }
@@ -1786,6 +1788,8 @@ proc gui-handle-keypress {key} {
 
 proc bind-cmd-mode {w} {
     bind $w <$::cfg_key_cmd_mode>  { gui-handle-esc; break }
+    bind $w <$::cfg_key_copy>      { tk_textCopy %W; break }
+    bind $w <$::cfg_key_cut>       { tk_textCut  %W; break }
     bind $w <t>     { if {![gui-handle-keypress t]} { %W insert insert t; ed-status }; break }
     bind $w <T>     { if {![gui-handle-keypress T]} { %W insert insert T; ed-status }; break }
     bind $w <c>     { if {![gui-handle-keypress c]} { %W insert insert c; ed-status }; break }
