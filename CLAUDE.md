@@ -192,11 +192,18 @@ Configurable countdown timer and stopwatch accessible via modal command mode or 
 - Handled by `status-build` proc in `src/common.tcl` (token: "timer")
 
 **Timer control procs** (`src/config.tcl`):
-- `timer-start` — start countdown/stopwatch
-- `timer-pause` — pause timer (resume with timer-start)
-- `timer-reset` — reset to configured duration
+- `timer-start` — start from the beginning (resets `timer_remaining`)
+- `timer-pause` — pause, preserving `timer_remaining`
+- `timer-resume` — resume from current `timer_remaining` without resetting it
+- `timer-reset` — stop and reset `timer_remaining` to full duration; sets `timer_last_tick = 0`
 - `timer-tick` — background update (called by `after` every second)
 - `timer-alert` — show alert when countdown reaches zero
+
+**Timer display state** — `timer_last_tick` distinguishes "never started / reset" from "paused":
+- `timer_active=1` → running → show `timer_remaining`
+- `timer_active=0, timer_last_tick≠0` → paused → show `timer_remaining`
+- `timer_active=0, timer_last_tick=0` → fresh/reset → show `cfg_timer_duration * 60`
+- Condition used in all three display sites: `$::timer_active || $::timer_last_tick != 0`
 
 **Alert implementation:**
 - **GUI** (`timer-alert-gui`): Toplevel dialog with "Timer finished!" message + `bell` command
@@ -211,6 +218,8 @@ TUI dialogs (config, help, stats, words) must not clear the screen on each redra
 3. No `\033\[2J` after the loop — the caller (browser or editor) redraws its own content
 
 **`tui-getch` blocking** — when called with default argument (no timer active), performs a true blocking `read stdin 1` instead of returning `""` immediately. This keeps the cursor visible until the user types. When timer is active (`cfg_chrono_show`), uses 50ms poll to allow timer display updates.
+
+**TUI timer tick fast path** — when `tui-getch` returns `""` (timer tick, no key) and `!$wrap_dirty && $dirty_line < 0`, the editor skips the full text redraw and only updates the status bar using ANSI cursor save/restore (`\033[s` / `\033[u`). This eliminates cursor flicker caused by 20 full redraws per second. Full redraw only happens after real key presses or content changes. The `\033[?25l` hide is placed just before `tui-move` + `\033[?25h` at the end of the draw loop so hide and show are always in the same buffer flush.
 
 **TUI dialog procs** (defined in `src/tui.tcl`):
 - `tui-info-dialog {text rows cols}` — centered reverse-video overlay, waits for any key. Used by browser `i` key (full path) and `tui-word-occurrences` (no words found).
@@ -227,7 +236,8 @@ Editor mode activated by pressing the command-mode key (default: ESC) in the edi
 
 **Modal mode features:**
 - **cmd-mode key** — toggle modal on/off (press again to exit)
-- **t** — toggle timer on/off
+- **t** — start timer if inactive; reset (stop + return to full duration) if active
+- **p** — pause if running; resume from saved `timer_remaining` if paused (uses `timer-resume`)
 - **s** — show daily writing statistics (calls `daily-update` first to include unsaved words, then `tui-stats-dialog` / `file-stats-dialog`)
 - **w** — show word occurrences — calls `tui-word-occurrences` (same overlay as browser `w`)
 - **q** — quit/close current file (with save prompt if dirty)
@@ -235,8 +245,8 @@ Editor mode activated by pressing the command-mode key (default: ESC) in the edi
 
 **Implementation details:**
 - State tracked by `$::gui_cmd_mode` (GUI) and `$::tui_cmd_mode` (TUI)
-- Status message: `"$::cfg_lbl_cmd_mode: exit mode  t: timer  q: quit  s: stats  w: words"`
-- GUI binding: `proc bind-cmd-mode {w}` in `src/gui.tcl` — sets all command-mode bindings (cfg_key_cmd_mode, t/T/c/C/q/Q/s/S/w/W, Alt-t, Any-KeyPress) on widget `$w`. Called for `.ed.t`, `split-make-pane` peer panes, and `split-ws2-open` independent pane.
+- Status message: `"$::cfg_lbl_cmd_mode: exit mode  t/p: timer/pause  q: quit  s: stats  w: words"`
+- GUI binding: `proc bind-cmd-mode {w}` in `src/gui.tcl` — sets all command-mode bindings (cfg_key_cmd_mode, p/P/t/T/c/C/q/Q/s/S/w/W, Alt-t, Any-KeyPress) on widget `$w`. Called for `.ed.t`, `split-make-pane` peer panes, and `split-ws2-open` independent pane.
 - TUI: `$key eq $::cfg_tui_cmd_mode` in editor key handler
 - After closing `s`/`w` overlay: `set wrap_dirty 1` forces editor redraw (TUI)
 
