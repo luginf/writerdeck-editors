@@ -7209,6 +7209,8 @@ proc tui-editor {filepath {init_state {}}} {
                     set clear_sel 0
                 } elseif {[string match "F*" $key]} {                          ;# ignore unknown F-keys
                     set clear_sel 0
+                } elseif {$key eq ""} {                                          ;# timer tick, no key pressed
+                    set clear_sel 0
                 } elseif {[string length $key] == 1 && ($c eq "" || $c >= 32)} {
                     tui-push-undo
                     if {$sel_anchor ne ""} { lassign [tui-sel-delete $lines $sel_anchor $cy $cx] lines cy cx; tui-mark-dirty }
