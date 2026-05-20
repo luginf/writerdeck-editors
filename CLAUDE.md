@@ -452,3 +452,7 @@ See `src/i18n/README.md` for adding new languages and comprehensive i18n documen
 ## SKILLS.md
 
 `SKILLS.md` in the repo root is the developer reference in French. It contains detailed rules, patterns, and a list of ideas not yet implemented — consult it before adding features.
+
+## ANDROID.md
+
+`ANDROID.md` in the repo root is the technical roadmap for building an Android app (Kotlin + Jetpack Compose) that embeds the WrithDeck Tcl engine via a JNI/NDK bridge. It covers: cross-compiling Tcl 8.6 for Android, the JNI C bridge, adapting `state.tcl` / `config.tcl` / `common.tcl` for Android, the Kotlin wrapper class, Gradle configuration, and known constraints.
